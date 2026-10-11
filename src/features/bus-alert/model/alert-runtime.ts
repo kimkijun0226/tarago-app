@@ -80,6 +80,7 @@ export async function ensureProximityPermission() {
 
 /** 원격 푸시 준비 실패는 저장 자체를 막지 않고 UI에서 준비 상태로 표시한다. */
 export async function preparePush():Promise<string|null> {
+  if (Platform.OS === 'ios' && Constants.expoConfig?.extra?.iosPushDisabled) return '이 개발 빌드에서는 예약 푸시 알림을 사용할 수 없어요.';
   if (!Device.isDevice) return '예약 푸시 알림은 실기기에서 설정해주세요. 시뮬레이터에서는 화면과 접근 알림을 확인할 수 있어요.';
   const projectId = Constants.expoConfig?.extra?.eas?.projectId ?? Constants.easConfig?.projectId ?? process.env.EXPO_PUBLIC_EAS_PROJECT_ID;
   if (!projectId) return '예약 알림을 받으려면 EAS 프로젝트 연결과 APNs/FCM 푸시 설정이 필요해요.';

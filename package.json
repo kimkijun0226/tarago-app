@@ -53,7 +53,8 @@
     "ios": "expo run:ios",
     "web": "expo start --web",
     "lint": "expo lint",
-    "test": "node --experimental-strip-types --test src/**/*.test.ts"
+    "test": "node --experimental-strip-types --test src/**/*.test.ts",
+    "ios:device": "TARAGO_IOS_LOCAL=1 expo prebuild --platform ios --no-install && TARAGO_IOS_LOCAL=1 expo run:ios --device"
   },
   "private": true
 }
