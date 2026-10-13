@@ -5,12 +5,13 @@ import { useMapTabVisibility } from '@/components/map-tab-visibility';
 import {
   ActivityIndicator,
   Pressable,
-  ScrollView,
   StyleSheet,
   Text,
   View,
 } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { BottomSheetFlatList } from '@gorhom/bottom-sheet';
+import { MapBottomSheet } from './map-bottom-sheet';
+import { openStopDirections } from '../model/open-stop-directions';
 
 import type { BusStop } from '@/features/bus-stop/api/get-nearby-bus-stops';
 import {
@@ -45,7 +46,6 @@ export const BusStopBottomSheet = memo(function BusStopBottomSheet({
   onHeightChange,
   onSelectRoute,
 }: BusStopBottomSheetProps) {
-  const insets = useSafeAreaInsets();
   const { setMapTabHidden } = useMapTabVisibility();
   const {
     data: arrivals = EMPTY_ARRIVALS,
@@ -60,13 +60,7 @@ export const BusStopBottomSheet = memo(function BusStopBottomSheet({
     .filter((group) => group.first.etaSeconds !== null && group.first.etaSeconds <= 60)
     .map((group) => group.busNumber), [arrivalGroups]);
 
-  return (
-    <View
-      onLayout={({ nativeEvent }) => onHeightChange(nativeEvent.layout.height)}
-      style={[styles.sheet, { bottom: insets.bottom + 8 }]}
-    >
-      <View style={styles.handle} />
-
+  const header=(<View style={{backgroundColor:'#FFFFFF'}}>
       <View style={styles.header}>
         <View style={styles.stationText}>
           <Text style={styles.title}>{busStop.name}</Text>
@@ -90,6 +84,14 @@ export const BusStopBottomSheet = memo(function BusStopBottomSheet({
       </View>
 
       <View style={styles.refreshRow}>
+        <Pressable onPress={()=>void openStopDirections(busStop,'walk')} accessibilityRole="button" accessibilityLabel="네이버지도에서 정류장까지 도보 길찾기">
+          <Text style={styles.refreshText}>도보 길찾기 ↗</Text>
+        </Pressable>
+        <Pressable onPress={()=>void openStopDirections(busStop,'public')} accessibilityRole="button" accessibilityLabel="네이버지도에서 정류장까지 대중교통 길찾기">
+          <Text style={styles.refreshText}>대중교통 ↗</Text>
+        </Pressable>
+      </View>
+      <View style={styles.refreshRow}>
         <Text style={styles.updatedAt}>
           {dataUpdatedAt
             ? `${new Date(dataUpdatedAt).toLocaleTimeString('ko-KR', {
@@ -110,36 +112,23 @@ export const BusStopBottomSheet = memo(function BusStopBottomSheet({
         </Pressable>
       </View>
 
-      {isPending ? (
-        <View style={styles.stateContainer}>
-          <ActivityIndicator color="#1769E0" />
-          <Text style={styles.stateText}>도착정보를 불러오고 있습니다.</Text>
-        </View>
-      ) : isError ? (
-        <View style={styles.stateContainer}>
-          <Text style={styles.stateText}>도착정보를 불러오지 못했습니다.</Text>
-          <Pressable onPress={() => void refetch()}>
-            <Text style={styles.retryText}>다시 시도</Text>
-          </Pressable>
-        </View>
-      ) : arrivalGroups.length === 0 ? (
-        <View style={styles.stateContainer}>
-          <Text style={styles.stateText}>현재 도착 예정인 버스가 없습니다.</Text>
-        </View>
-      ) : (
-        <>
-          {soonBusNumbers.length > 0 ? (
-            <View style={styles.soonRow}>
-              <Text style={styles.soonBadge}>곧 도착</Text>
-              <Text style={styles.soonNumbers}>{soonBusNumbers.join(', ')}</Text>
-            </View>
-          ) : null}
-          <ScrollView
-            contentContainerStyle={styles.arrivalList}
-            showsVerticalScrollIndicator={false}
-            style={styles.arrivalScroll}
-          >
-            {arrivalGroups.map((group) => (
+
+      {soonBusNumbers.length>0 ? <View style={styles.soonRow}><Text style={styles.soonBadge}>곧 도착</Text><Text style={styles.soonNumbers}>{soonBusNumbers.join(', ')}</Text></View> : null}
+    </View>);
+  const empty=(<View style={styles.stateContainer}>
+    {isPending ? <ActivityIndicator color="#1769E0" /> : null}
+    <Text style={styles.stateText}>{isPending ? '도착정보를 불러오고 있습니다.' : isError ? '도착정보를 불러오지 못했습니다.' : '현재 도착 예정인 버스가 없습니다.'}</Text>
+    {isError ? <Pressable onPress={()=>void refetch()}><Text style={styles.retryText}>다시 시도</Text></Pressable> : null}
+  </View>);
+  return <MapBottomSheet onHeightChange={onHeightChange}>
+    <BottomSheetFlatList<BusArrivalGroup>
+      data={arrivalGroups}
+      keyExtractor={(group)=>`${group.routeId}:${group.stationSeq ?? ''}`}
+      ListHeaderComponent={header}
+      ListEmptyComponent={empty}
+      contentContainerStyle={styles.arrivalList}
+      showsVerticalScrollIndicator={false}
+            renderItem={({item:group}) => (
               <View key={`${group.routeId}:${group.stationSeq ?? ''}`} style={styles.arrivalRow}>
               <Pressable
                 accessibilityRole="button"
@@ -179,38 +168,12 @@ export const BusStopBottomSheet = memo(function BusStopBottomSheet({
                 <SymbolView name={{ios:'bell',android:'notifications',web:'notifications'}} size={21} tintColor="#1769E0" />
               </Pressable>
               </View>
-            ))}
-          </ScrollView>
-        </>
-      )}
-    </View>
-  );
+            )}
+    />
+  </MapBottomSheet>;
 });
 
 const styles = StyleSheet.create({
-  sheet: {
-    position: 'absolute',
-    right: 12,
-    left: 12,
-    height: '47%',
-    paddingTop: 12,
-    paddingBottom: 12,
-    backgroundColor: '#FFFFFF',
-    borderRadius: 28,
-    shadowColor: '#000000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.12,
-    shadowRadius: 10,
-    elevation: 12,
-  },
-  handle: {
-    alignSelf: 'center',
-    width: 44,
-    height: 4,
-    marginBottom: 12,
-    borderRadius: 2,
-    backgroundColor: '#AEB4BC',
-  },
   header: {
     flexDirection: 'row',
     alignItems: 'flex-start',
@@ -277,9 +240,6 @@ const styles = StyleSheet.create({
     color: '#1769E0',
     fontSize: 14,
     fontWeight: '600',
-  },
-  arrivalScroll: {
-    flexShrink: 1,
   },
   soonRow: {
     flexDirection: 'row',

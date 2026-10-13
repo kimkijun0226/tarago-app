@@ -3,18 +3,16 @@ import { SymbolView } from "expo-symbols";
 import {
   ActivityIndicator,
   Pressable,
-  ScrollView,
   StyleSheet,
   Text,
-  useWindowDimensions,
   View,
 } from "react-native";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { BottomSheetFlatList, type BottomSheetFlatListMethods } from '@gorhom/bottom-sheet';
+import { MapBottomSheet } from './map-bottom-sheet';
+import type { BusRouteDetail } from '../api/get-bus-route-detail';
 
 import { formatEta, formatRemainingStops } from "../model/bus-arrival";
 import {
-  getSelectedStopScrollOffset,
-  nextRouteSheetSnap,
   type RouteSheetSnap,
 } from "../model/bus-route-presentation";
 import { useBusArrivals } from "../model/use-bus-arrivals";
@@ -42,32 +40,7 @@ export const BusRouteBottomSheet = memo(function BusRouteBottomSheet({
   onClose,
   onHeightChange,
 }: Props) {
-  const insets = useSafeAreaInsets();
-  const { height: screenHeight } = useWindowDimensions();
-  const dragStartY = useRef<number | null>(null);
-  const handledDrag = useRef(false);
-  const listRef = useRef<ScrollView>(null);
-  const selectedRowLayout = useRef<{ y: number; height: number } | null>(null);
-  const listLayout = useRef({ height: 0, contentHeight: 0 });
-  const centeredSnap = useRef<RouteSheetSnap | null>(null);
-
-  const centerSelectedStop = useCallback(() => {
-    const row = selectedRowLayout.current;
-    const { height, contentHeight } = listLayout.current;
-    if (
-      !row ||
-      height <= 0 ||
-      contentHeight <= 0 ||
-      snap === "compact" ||
-      centeredSnap.current === snap
-    )
-      return;
-    listRef.current?.scrollTo({
-      y: getSelectedStopScrollOffset(row.y, row.height, height, contentHeight),
-      animated: false,
-    });
-    centeredSnap.current = snap;
-  }, [snap]);
+  const listRef=useRef<BottomSheetFlatListMethods>(null);
   const {
     data,
     isPending,
@@ -76,6 +49,13 @@ export const BusRouteBottomSheet = memo(function BusRouteBottomSheet({
   } = useBusRouteDetail(stationId, routeId, stationSeq);
   const { data: arrivals = EMPTY_ARRIVALS, refetch: refetchArrivals } =
     useBusArrivals(stationId);
+  const centeredSnap=useRef<RouteSheetSnap|null>(null);
+  const centerSelectedStop=useCallback(()=>{
+    if(snap==='compact'){centeredSnap.current=null;return;}
+    if(centeredSnap.current===snap)return;
+    const index=data?.stops.findIndex(stop=>stop.stationSeq===stationSeq && stop.stationId===stationId) ?? -1;
+    if(index>=0) {centeredSnap.current=snap;listRef.current?.scrollToIndex({index,viewPosition:.5,animated:false});}
+  },[snap,data,stationSeq,stationId]);
   const arriving = useMemo(() => arrivals
     .filter(
       (item) =>
@@ -94,46 +74,7 @@ export const BusRouteBottomSheet = memo(function BusRouteBottomSheet({
     }
     return grouped;
   }, [data?.vehicles]);
-  const height =
-    snap === "full"
-      ? screenHeight * 0.83
-      : snap === "half"
-        ? screenHeight * 0.47
-        : 150;
-
-  return (
-    <View
-      onLayout={({ nativeEvent }) => {
-        if (snap === "compact") centeredSnap.current = null;
-        onHeightChange(nativeEvent.layout.height);
-      }}
-      style={[styles.sheet, { bottom: insets.bottom + 8, height }]}
-    >
-      <Pressable
-        onPress={() => {
-          if (!handledDrag.current)
-            onChangeSnap(nextRouteSheetSnap(snap, "up"));
-        }}
-        onTouchStart={(event) => {
-          handledDrag.current = false;
-          dragStartY.current = event.nativeEvent.pageY;
-        }}
-        onTouchEnd={(event) => {
-          if (dragStartY.current === null) return;
-          const distance = event.nativeEvent.pageY - dragStartY.current;
-          dragStartY.current = null;
-          if (Math.abs(distance) > 40) {
-            handledDrag.current = true;
-            onChangeSnap(
-              nextRouteSheetSnap(snap, distance < 0 ? "up" : "down"),
-            );
-          }
-        }}
-        accessibilityRole="button"
-        accessibilityLabel="노선 시트 높이 변경"
-      >
-        <View style={styles.handle} />
-      </Pressable>
+  const header=<View style={{backgroundColor:'#FFFFFF'}}>
       <View style={styles.header}>
         <View style={styles.routeTitle}>
           <Text style={styles.routeBadge}>
@@ -160,46 +101,42 @@ export const BusRouteBottomSheet = memo(function BusRouteBottomSheet({
           <Text style={styles.close}>×</Text>
         </Pressable>
       </View>
-      {snap === "compact" ? (
-        <Text style={styles.compactHint}>
-          선택 정류장 ·{" "}
-          {arriving[0]
-            ? formatEta(
-                arriving[0].etaSeconds,
-                arriving[0].serviceStatus,
-                arriving[0].etaPrecision,
-                arriving[0].etaSource,
-              )
-            : "도착정보 확인 중"}
-        </Text>
-      ) : isPending ? (
-        <ActivityIndicator color="#1769E0" />
-      ) : isError ? (
-        <Pressable onPress={() => void refetchRoute()}>
-          <Text style={styles.notice}>
-            노선 정보를 불러오지 못했습니다. 다시 시도
-          </Text>
-        </Pressable>
-      ) : data ? (
-        <>
-          {data.geometry.source === "unavailable" ? (
-            <Text style={styles.notice}>공식 도로 경로 정보가 없습니다.</Text>
-          ) : null}
-          <ScrollView
-            ref={listRef}
-            onLayout={({ nativeEvent }) => {
-              listLayout.current.height = nativeEvent.layout.height;
-              centerSelectedStop();
-            }}
-            onContentSizeChange={(_, height) => {
-              listLayout.current.contentHeight = height;
-              centerSelectedStop();
-            }}
-            style={styles.list}
-            contentContainerStyle={styles.listContent}
-            showsVerticalScrollIndicator={false}
-          >
-            {data.stops.map((stop, index) => {
+    {snap!=='compact' && data?.geometry.source==='unavailable' ? <Text style={styles.notice}>공식 도로 경로 정보가 없습니다.</Text> : null}
+  </View>;
+  const empty=snap==='compact' ? <Text style={styles.compactHint}>선택 정류장 · {arriving[0] ? formatEta(arriving[0].etaSeconds,arriving[0].serviceStatus,arriving[0].etaPrecision,arriving[0].etaSource) : '도착정보 확인 중'}</Text>
+    : isPending ? <ActivityIndicator color="#1769E0" /> : isError ? <Pressable onPress={()=>void refetchRoute()}><Text style={styles.notice}>노선 정보를 불러오지 못했습니다. 다시 시도</Text></Pressable> : null;
+  return <MapBottomSheet snap={snap} onChangeSnap={onChangeSnap} onHeightChange={onHeightChange}>
+    <BottomSheetFlatList<BusRouteDetail['stops'][number]>
+      ref={listRef}
+      data={snap==='compact' ? [] : data?.stops ?? []}
+      keyExtractor={(stop)=>`${stop.stationId}:${stop.stationSeq}`}
+      ListHeaderComponent={header}
+      ListEmptyComponent={empty}
+      ListFooterComponent={snap!=='compact' && data ? (
+          <View style={styles.footer}>
+            <Text style={styles.footerHint}>차량 위치는 정류장 순번 기준</Text>
+            <Pressable
+              onPress={() => {
+                void refetchRoute();
+                void refetchArrivals();
+              }}
+              accessibilityRole="button"
+              accessibilityLabel="노선 정보 새로고침"
+            >
+              <Text style={styles.action}>새로고침 ↻</Text>
+            </Pressable>
+          </View>
+      ) : null}
+      onLayout={centerSelectedStop}
+      onContentSizeChange={centerSelectedStop}
+      onScrollToIndexFailed={({index,averageItemLength})=>{
+        listRef.current?.scrollToOffset({offset:index*averageItemLength,animated:false});
+        centeredSnap.current=null;
+      }}
+      contentContainerStyle={styles.listContent}
+      showsVerticalScrollIndicator={false}
+            renderItem={({item:stop,index})=>{
+              if(!data)return null;
               const vehicles = vehiclesByStop.get(stop.stationSeq) ?? [];
               const selected =
                 stop.stationSeq === stationSeq &&
@@ -212,14 +149,7 @@ export const BusRouteBottomSheet = memo(function BusRouteBottomSheet({
                 <View
                   key={`${stop.stationId}:${stop.stationSeq}`}
                   style={[styles.row, selected && styles.selectedRow]}
-                  onLayout={
-                    selected
-                      ? ({ nativeEvent }) => {
-                          selectedRowLayout.current = nativeEvent.layout;
-                          centerSelectedStop();
-                        }
-                      : undefined
-                  }
+
                 >
                   <View style={styles.rail}>
                     <View
@@ -290,48 +220,12 @@ export const BusRouteBottomSheet = memo(function BusRouteBottomSheet({
                   </View>
                 </View>
               );
-            })}
-          </ScrollView>
-          <View style={styles.footer}>
-            <Text style={styles.footerHint}>차량 위치는 정류장 순번 기준</Text>
-            <Pressable
-              onPress={() => {
-                void refetchRoute();
-                void refetchArrivals();
-              }}
-              accessibilityRole="button"
-              accessibilityLabel="노선 정보 새로고침"
-            >
-              <Text style={styles.action}>새로고침 ↻</Text>
-            </Pressable>
-          </View>
-        </>
-      ) : null}
-    </View>
-  );
+            }}
+    />
+  </MapBottomSheet>;
 });
 
 const styles = StyleSheet.create({
-  sheet: {
-    position: "absolute",
-    left: 12,
-    right: 12,
-    backgroundColor: "#FFF",
-    borderRadius: 28,
-    overflow: "hidden",
-    elevation: 12,
-    shadowColor: "#000",
-    shadowOpacity: 0.12,
-    shadowRadius: 10,
-  },
-  handle: {
-    alignSelf: "center",
-    width: 44,
-    height: 5,
-    marginVertical: 12,
-    borderRadius: 3,
-    backgroundColor: "#AEB4BC",
-  },
   header: {
     flexDirection: "row",
     alignItems: "center",

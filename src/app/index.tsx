@@ -56,7 +56,7 @@ const ROUTE_DIRECTION_PATTERN = require("../../assets/images/route-direction-tri
  *
  * 초기 카메라는 역곡 인근을 가리킨다. 실제 위치를 얻으면 현재 위치로 이동하며,
  * 위치 조회에 실패해도 사용자는 기본 지도에서 정류장을 탐색할 수 있다.
- * 카메라 이동 중 이벤트는 150ms로 제한하고, 이동 종료 시 최종 영역을 반영한다.
+ * 카메라 이동 종료 이벤트에서만 조회·표시 영역을 반영한다.
  */
 export default function MapScreen() {
   const params = useLocalSearchParams<{stationId?:string;latitude?:string;longitude?:string;notificationId?:string}>();
@@ -65,7 +65,6 @@ export default function MapScreen() {
   const selectionRequest = useRef(0);
   const queryClient = useQueryClient();
   const initializedRef = useRef(false);
-  const lastTileUpdateRef = useRef(0);
   const [busStopTiles, setBusStopTiles] = useState<BusStopTile[]>([]);
   const [directionCamera, setDirectionCamera] = useState<{
     zoom: number;
@@ -91,12 +90,14 @@ export default function MapScreen() {
     Boolean(selectedRoute),
   );
 
+  const geometry=routeDetail?.geometry;
+  const stops=routeDetail?.stops;
   const routeCoordinates = useMemo(
     () =>
-      routeDetail?.geometry.source === "official"
-        ? alignRouteToStops(routeDetail.geometry.points, routeDetail.stops)
+      geometry?.source === "official" && stops
+        ? alignRouteToStops(geometry.points, stops)
         : [],
-    [routeDetail],
+    [geometry, stops],
   );
   const directionMarkers = useMemo(
     () =>
@@ -110,9 +111,15 @@ export default function MapScreen() {
     [routeCoordinates, directionCamera],
   );
 
-  const visibleBusStops = useMemo(() => busStops.filter((stop) =>
-    !selectedRoute || !routeDetail || !isRouteBusStop(stop, routeDetail.stops)
-  ), [busStops, selectedRoute, routeDetail]);
+  const visibleBusStops = useMemo(() => {
+    const region=directionCamera?.region;
+    return busStops.filter(stop=>stop.id!==selectedBusStop?.id &&
+      (!selectedRoute || !routeDetail || !isRouteBusStop(stop,routeDetail.stops)) && (!region || (
+        stop.latitude>=region.latitude-region.latitudeDelta*.15 &&
+        stop.latitude<=region.latitude+region.latitudeDelta*1.15 &&
+        stop.longitude>=region.longitude-region.longitudeDelta*.15 &&
+        stop.longitude<=region.longitude+region.longitudeDelta*1.15)));
+  }, [busStops,selectedRoute,routeDetail,selectedBusStop?.id,directionCamera]);
   const routeStops = useMemo(() => {
     const ids = new Set<string>();
     return (routeDetail?.stops ?? []).filter((stop) => {
@@ -186,6 +193,7 @@ export default function MapScreen() {
       selectedRoute.stationSeq,
     );
     if (!occurrence) return;
+    mapRef.current?.animateCameraTo({latitude:stop.latitude,longitude:stop.longitude,duration:250});
     try {
       let station = busStops.find((item) => isRouteBusStop(item, [stop]));
       if (!station) {
@@ -259,16 +267,12 @@ export default function MapScreen() {
     });
   }, [getCurrentLocation]);
 
-  const onCameraChanged = useCallback(({ zoom, region }: {
-    zoom?: number; region: Parameters<typeof getVisibleBusStopTiles>[1];
-  }) => {
-    if (Date.now() - lastTileUpdateRef.current < 150) return;
-    lastTileUpdateRef.current = Date.now();
-    updateVisibleTiles(zoom, region);
-  }, [updateVisibleTiles]);
   const onCameraIdle = useCallback(({ zoom, region }: {
     zoom?: number; region: Parameters<typeof getVisibleBusStopTiles>[1];
-  }) => updateVisibleTiles(zoom, region), [updateVisibleTiles]);
+  }) => {
+    updateVisibleTiles(zoom,region);
+  }, [updateVisibleTiles]);
+
   const onMapInitialized = useCallback(() => {
     if (initializedRef.current) return;
     initializedRef.current = true;
@@ -305,16 +309,15 @@ export default function MapScreen() {
           position: position ?? DEFAULT_CAMERA,
         }}
         onInitialized={onMapInitialized}
-        onCameraChanged={onCameraChanged}
         onCameraIdle={onCameraIdle}
       >
         {selectedRoute && routeCoordinates.length > 1 ? (
           <NaverMapPathOverlay
             key={`route:${selectedRoute.routeId}`}
             coords={routeCoordinates}
-            color="#12A6AF"
-            passedColor="#12A6AF"
-            width={8}
+            color="#00A86B"
+            passedColor="#00A86B"
+            width={6}
             outlineColor="#FFFFFF"
             passedOutlineColor="#FFFFFF"
             outlineWidth={2}
@@ -329,8 +332,8 @@ export default function MapScreen() {
               latitude={marker.latitude}
               longitude={marker.longitude}
               image={ROUTE_DIRECTION_PATTERN}
-              width={8}
-              height={8}
+              width={12}
+              height={12}
               anchor={{ x: 0.5, y: 0.5 }}
               angle={marker.angle}
               isFlatEnabled
@@ -355,6 +358,14 @@ export default function MapScreen() {
         {selectedRoute && routeStops.map((stop) => (
           <RouteBusStopMarker key={stop.stationId} stop={stop} onSelect={selectRouteStop} />
         ))}
+        {routeDetail?.vehicles.map(vehicle=>{
+          const stop=routeDetail.stops.find(item=>item.stationSeq===vehicle.stationSeq);
+          if(!stop || !Number.isFinite(stop.latitude) || !Number.isFinite(stop.longitude)) return null;
+          return <NaverMapMarkerOverlay key={`vehicle:${vehicle.vehicleId}`} latitude={stop.latitude} longitude={stop.longitude}
+            image={require('../../assets/images/bus-stop-selected-marker.png')} width={30} height={36}
+            caption={{text:`${routeDetail.busNumber} · 마지막 확인`,textSize:11,color:'#1769E0',haloColor:'#FFFFFF'}}
+            globalZIndex={200001} zIndex={20} />;
+        })}
         {selectedBusStop ? (
           <BusStopMarker
             key={`selected-stop:${selectedBusStop.id}`}
