@@ -13,6 +13,8 @@ import {
   Alert,
   Pressable,
   StyleSheet,
+  Text,
+  Linking,
   View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -30,6 +32,7 @@ import {
 import { RouteBusStopMarker } from "@/features/bus-stop/ui/route-bus-stop-marker";
 import { BusStopMarker } from "@/features/bus-stop/ui/bus-stop-marker";
 import { BusStopBottomSheet } from "@/features/bus-stop/ui/bus-stop-bottom-sheet";
+import { MapSearchBar } from '@/features/bus-stop/ui/map-search-bar';
 import { BusRouteBottomSheet } from "@/features/bus-stop/ui/bus-route-bottom-sheet";
 import { useBusRouteDetail } from "@/features/bus-stop/model/use-bus-route-detail";
 import {
@@ -44,22 +47,20 @@ import {
 import { useMapTabVisibility } from "@/components/map-tab-visibility";
 import { useCurrentLocation } from "@/hooks/use-current-location";
 
-const DEFAULT_CAMERA = {
-  latitude: 37.4883019,
-  longitude: 126.8168934,
-  zoom: 17,
-};
 const ROUTE_DIRECTION_PATTERN = require("../../assets/images/route-direction-triangle.png");
 
 /**
  * 지도 카메라의 보이는 영역으로 정류장 타일을 조회하고 선택한 정류장을 연다.
  *
- * 초기 카메라는 역곡 인근을 가리킨다. 실제 위치를 얻으면 현재 위치로 이동하며,
- * 위치 조회에 실패해도 사용자는 기본 지도에서 정류장을 탐색할 수 있다.
+ * 현재 위치를 준비한 후 해당 좌표를 초기 카메라로 사용한다.
+ * 위치 조회 실패 시 임의의 지역 대신 재시도 화면을 제공한다.
  * 카메라 이동 종료 이벤트에서만 조회·표시 영역을 반영한다.
  */
 export default function MapScreen() {
   const params = useLocalSearchParams<{stationId?:string;latitude?:string;longitude?:string;notificationId?:string}>();
+  const [initialPosition,setInitialPosition]=useState<{latitude:number;longitude:number}|null>(null);
+  const [preparingLocation,setPreparingLocation]=useState(true);
+  const startupRequested=useRef(false);
   const [mapReady,setMapReady] = useState(false);
   const mapRef = useRef<NaverMapViewRef>(null);
   const selectionRequest = useRef(0);
@@ -81,6 +82,21 @@ export default function MapScreen() {
   const [sheetHeight, setSheetHeight] = useState(0);
   const { setMapTabHidden } = useMapTabVisibility();
   const { getCurrentLocation, loading, position } = useCurrentLocation();
+  const prepareInitialPosition=useCallback(async()=>{
+    setPreparingLocation(true);
+    try {
+      const latitude=Number(params.latitude),longitude=Number(params.longitude);
+      if(params.notificationId && Number.isFinite(latitude) && Number.isFinite(longitude) && Math.abs(latitude)<=90 && Math.abs(longitude)<=180) {
+        setInitialPosition({latitude,longitude});return;
+      }
+      const coordinate=await getCurrentLocation();
+      if(coordinate) setInitialPosition(coordinate);
+    } finally {setPreparingLocation(false);}
+  },[getCurrentLocation,params.notificationId,params.latitude,params.longitude]);
+  useEffect(()=>{
+    if(startupRequested.current)return;
+    startupRequested.current=true;void prepareInitialPosition();
+  },[prepareInitialPosition]);
   const busStops = useNearbyBusStops(busStopTiles);
   const insets = useSafeAreaInsets();
   const { data: routeDetail } = useBusRouteDetail(
@@ -277,8 +293,7 @@ export default function MapScreen() {
     if (initializedRef.current) return;
     initializedRef.current = true;
     setMapReady(true);
-    if (!params.notificationId) void moveToMyLocation();
-  }, [moveToMyLocation,params.notificationId]);
+  }, []);
 
   const selectSelectedStop = useCallback((station: BusStop) => {
     const routeStop = selectedRoute && routeDetail?.stops.find((stop) => isRouteBusStop(station, [stop]));
@@ -292,21 +307,29 @@ export default function MapScreen() {
     setRouteSheetSnap("half");
   }, [selectedBusStop]);
 
+  if(!initialPosition) return <View style={{flex:1,backgroundColor:'#208AEF',justifyContent:'center',alignItems:'center',gap:20,padding:32}}>
+    <Text style={{color:'#FFFFFF',fontSize:40,fontWeight:'800'}}>타라고</Text>
+    {preparingLocation ? <><ActivityIndicator color="#FFFFFF" /><Text style={{color:'#FFFFFF'}}>현재 위치를 찾고 있어요</Text></> : <>
+      <Text style={{color:'#FFFFFF'}}>현재 위치를 확인하지 못했어요.</Text>
+      <Pressable onPress={()=>void prepareInitialPosition()}><Text style={{color:'#FFFFFF',fontSize:18,padding:12}}>다시 찾기</Text></Pressable>
+      <Pressable onPress={()=>void Linking.openSettings().catch(()=>Alert.alert('설정을 열지 못했어요','기기 설정에서 타라고의 위치 권한을 확인해주세요.'))}><Text style={{color:'#FFFFFF',padding:12}}>위치 설정 열기</Text></Pressable>
+    </>}
+  </View>;
   return (
     <View style={styles.container}>
       <NaverMapView
         ref={mapRef}
         style={styles.container}
-        initialCamera={DEFAULT_CAMERA}
+        initialCamera={{...initialPosition,zoom:17}}
         mapPadding={{
-          top: insets.top,
+          top: insets.top+72,
           bottom: selectedBusStop ? sheetHeight + insets.bottom + 8 : 0,
         }}
         isShowLocationButton={false}
         isShowZoomControls={false}
         locationOverlay={{
           isVisible: position !== null,
-          position: position ?? DEFAULT_CAMERA,
+          position: position ?? initialPosition,
         }}
         onInitialized={onMapInitialized}
         onCameraIdle={onCameraIdle}
@@ -380,6 +403,8 @@ export default function MapScreen() {
           />
         ) : null}
       </NaverMapView>
+
+      <MapSearchBar position={position??initialPosition} top={insets.top+12} left={selectedRoute ? 76 : 16} onSelect={selectBusStop} />
 
       {selectedRoute ? (
         <Pressable
