@@ -18,6 +18,7 @@ type Draft = BusAlertInput & { id?:string; stop:AlertStop; busNumber:string };
 
 /** 알림 목록과 정류소·노선별 편집기를 같은 탭에서 보여준다. */
 export default function AlertsScreen() {
+  const [openedAt] = useState(() => Date.now());
   const params = useLocalSearchParams<{stationId?:string;stationName?:string;latitude?:string;longitude?:string;routeId?:string;busNumber?:string;stationSeq?:string;requestId?:string;alertId?:string}>();
   const {data:alerts=[]} = useAlerts();
   const saved = params.alertId ? alerts.find(a => a.id === params.alertId) : undefined;
@@ -25,11 +26,15 @@ export default function AlertsScreen() {
   const latitude=Number(params.latitude),longitude=Number(params.longitude);
   if (!params.alertId && params.requestId && params.stationId && params.routeId && Number.isFinite(latitude) && Number.isFinite(longitude)
     && Math.abs(latitude)<=90 && Math.abs(longitude)<=180) {
+    const requestedAt = Number(params.requestId);
+    const now = Number.isFinite(requestedAt) && requestedAt > 0 ? requestedAt : openedAt;
+    const startTime = new Date(now + 9 * 60 * 60_000).toISOString().slice(11,16);
+    const endTime = new Date(now + 11 * 60 * 60_000).toISOString().slice(11,16);
     initialDraft={stationId:params.stationId,routeId:params.routeId,busNumber:params.busNumber ?? params.routeId,
       ...(params.stationSeq ? {stationSeq:Number(params.stationSeq)} : {}),
       stop:{id:params.stationId,name:params.stationName ?? '정류소',latitude,longitude},
-      days:[1,2,3,4,5],startTime:'07:00',endTime:'09:00',thresholdMinutes:5,scheduledEnabled:true,
-      enabled:true,proximityEnabled:true,radius:200};
+      days:[1,2,3,4,5],startTime,endTime,thresholdMinutes:5,scheduledEnabled:true,
+      enabled:true,proximityEnabled:false,radius:200};
   }
   return <AlertsScreenContent key={`${params.requestId ?? ''}:${params.alertId ?? ''}:${Boolean(saved)}`} initialDraft={initialDraft} />;
 }

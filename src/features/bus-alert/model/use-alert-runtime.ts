@@ -56,7 +56,7 @@ export function useAlertRuntime() {
     const response = Notifications.getLastNotificationResponse();
     if (response) open(response);
     const listener = Notifications.addNotificationResponseReceivedListener(open);
-    const tokenListener = Notifications.addPushTokenListener(() => { void preparePush().then(() => queryClient.invalidateQueries({queryKey:['alerts','push-status']})); });
+    const tokenListener = Notifications.addPushTokenListener(token => { void preparePush(token).then(() => queryClient.invalidateQueries({queryKey:['alerts','push-status']})); });
     const appListener = AppState.addEventListener('change',state => {
       if (state !== 'active') return;
       void queryClient.invalidateQueries({queryKey:['alerts']});

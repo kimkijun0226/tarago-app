@@ -31,7 +31,30 @@ npx expo run:android --no-bundler
 npm run start:simulator
 ```
 
-실기기에서는 `EXPO_PUBLIC_API_BASE_URL`에 접근 가능한 서버 주소를 지정한다. 운영 서버는 HTTPS를 사용한다.
+시뮬레이터·실기기의 API 서버는 `https://api.tarago.cloud`를 사용한다. `npm run start:simulator`와 `npm run start:device`, EAS 빌드 프로필에 이 주소를 지정한다. Metro 개발 서버의 localhost/LAN 연결은 API 서버 주소와 별개다.
+
+## iPhone 빌드 준비
+
+무료 계정용 푸시 비활성화 설정은 제거했다. 예약 푸시에는 유료 Apple Developer Program 가입과 EAS 프로젝트 연결, APNs 키가 필요하다.
+
+Expo 계정 로그인을 완료한 뒤 기존 프로젝트를 연결하거나 생성하고 iPhone을 등록한다.
+
+```sh
+npx eas-cli@latest login
+npx eas-cli@latest init
+npx eas-cli@latest device:create
+npx eas-cli@latest credentials --platform ios
+```
+
+자격 증명 화면에서 사용할 빌드 프로필을 선택하고 iOS 푸시용 APNs 키를 설정한다. 프로젝트 연결 후 `app.json`의 `extra.eas.projectId`가 실제 EAS 프로젝트 ID인지 확인한다.
+
+컴퓨터의 Metro 없이 실행할 설치 파일은 `preview` 프로필을 사용한다. 다음 명령은 실제 클라우드 빌드를 시작하므로 준비가 끝난 뒤 실행한다.
+
+```sh
+npx eas-cli@latest build --platform ios --profile preview
+```
+
+개발하면서 코드를 바로 반영하려면 `development` 프로필로 빌드하고 `npm run start:device`를 실행한 컴퓨터와 iPhone을 같은 네트워크에 연결한다.
 
 예약 푸시에는 EAS 프로젝트 연결 및 플랫폼별 APNs/FCM 자격 증명이 필요하다. 연결된 프로젝트의 `extra.eas.projectId` 또는 `EXPO_PUBLIC_EAS_PROJECT_ID`를 사용한다. 알림 설정 저장 시 Expo 푸시 토큰을 서버에 등록하며, 앱의 토큰 변경 이벤트에도 재등록한다. 프로젝트·자격 증명이 없으면 예약 알림을 설정해 둘 수 있지만 **푸시 연결 필요**로 표시되고 전송은 시작되지 않는다. 연결 완료 후 알림 화면의 **푸시 다시 연결**을 누른다. 실제 외부 프로젝트 생성·계정 로그인·푸시 자격 증명 등록은 이 코드 변경에 포함되지 않는다.
 

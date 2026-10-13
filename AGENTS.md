@@ -23,6 +23,8 @@ npx expo install --fix      # fix incompatible package versions
 
 Run lint and typecheck before declaring any task done.
 
+Do not create or add test code unless the user explicitly requests it. Use lint, typecheck, and relevant configuration checks for current verification.
+
 ## Navigation & Routing
 
 - Use **Expo Router** for all navigation. Routes live in `src/app/` — every file there is a screen, `_layout.tsx` files define navigators. Keep non-route code (components, hooks, utils) outside `src/app/`.
@@ -52,6 +54,17 @@ Use EAS to build, sign, and submit the app in the cloud (`eas build`, `eas submi
 Docs: https://docs.expo.dev/eas/index.md
 
 ## Rules
+
+### Git 커밋 메시지
+
+- 커밋 제목과 본문은 한국어로 작성한다.
+- 제목은 `이모지 타입: 기능별 변경 요약` 형식을 사용한다. 예: `✨ feat: 버스 도착 알림 설정 추가`.
+- 타입별 이모지는 `✨ feat`(기능 추가), `🐛 fix`(버그 수정), `🎨 art`(UI·스타일 개선), `♻️ refactor`(구조 개선), `📝 docs`(문서), `🔧 chore`(설정·관리), `⚡️ perf`(성능 개선), `✅ test`(테스트)를 사용한다.
+- 서로 독립적인 기능은 가능한 한 커밋을 분리한다. 관련 변경을 함께 커밋할 때는 본문에서 기능별로 구분한다.
+- 본문에는 각 기능에서 무엇을 왜 변경했는지, 동작이 어떻게 달라졌는지 자세히 적는다. 실제 실행한 검증과 미확인 사항도 기록한다.
+- 사용자의 요청 없이 이미 푸시한 커밋을 수정하거나 Git 이력을 재작성하지 않는다.
+
+### 구현 규칙
 
 - Add concise `/** ... */` comments to non-obvious modules, public functions, and data-flow boundaries; explain their purpose or reason, not syntax. Do not add comments to trivial code.
 - Before adding a service, parser, hook, or test, check whether the same behavior already exists and whether it is called by the running app.

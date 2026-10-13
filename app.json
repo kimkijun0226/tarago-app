@@ -14,7 +14,8 @@
         "NSAppTransportSecurity": {
           "NSAllowsArbitraryLoads": false,
           "NSAllowsLocalNetworking": true
-        }
+        },
+        "ITSAppUsesNonExemptEncryption": false
       },
       "appleTeamId": "V6BDRRK4FQ"
     },
@@ -84,6 +85,13 @@
     "experiments": {
       "typedRoutes": true,
       "reactCompiler": true
-    }
+    },
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "9d8a0d3c-cae6-4394-8490-90a9cd6864ca"
+      }
+    },
+    "owner": "kimkijun"
   }
 }

@@ -73,22 +73,30 @@ export async function ensureNotificationPermission() {
 }
 export async function ensureProximityPermission() {
   if (!(await Location.hasServicesEnabledAsync())) throw new Error('기기의 위치 서비스를 켜주세요.');
-  if (!(await Location.requestForegroundPermissionsAsync()).granted) throw new Error('정류소 접근 알림을 위해 위치 권한이 필요해요.');
-  if (!(await Location.requestBackgroundPermissionsAsync()).granted) throw new Error('위치 권한을 항상 허용해주세요. Android에서는 위치 권한 설정에서 모든 시간 허용을 선택해주세요.');
+  let foreground = await Location.getForegroundPermissionsAsync();
+  if (!foreground.granted) foreground = await Location.requestForegroundPermissionsAsync();
+  if (!foreground.granted) throw new Error('정류소 접근 알림을 위해 위치 권한이 필요해요.');
+  let background = await Location.getBackgroundPermissionsAsync();
+  if (!background.granted) {
+    await Location.requestBackgroundPermissionsAsync();
+    background = await Location.getBackgroundPermissionsAsync();
+  }
+  if (!background.granted) throw new Error('위치 권한을 항상 허용해주세요. Android에서는 위치 권한 설정에서 모든 시간 허용을 선택해주세요.');
   if (!(await TaskManager.isAvailableAsync())) throw new Error('접근 알림은 새 개발 빌드에서 사용할 수 있어요.');
 }
 
 /** 원격 푸시 준비 실패는 저장 자체를 막지 않고 UI에서 준비 상태로 표시한다. */
-export async function preparePush():Promise<string|null> {
-  if (Platform.OS === 'ios' && Constants.expoConfig?.extra?.iosPushDisabled) return '이 개발 빌드에서는 예약 푸시 알림을 사용할 수 없어요.';
+export async function preparePush(devicePushToken?: Notifications.DevicePushToken):Promise<string|null> {
   if (!Device.isDevice) return '예약 푸시 알림은 실기기에서 설정해주세요. 시뮬레이터에서는 화면과 접근 알림을 확인할 수 있어요.';
   const projectId = Constants.expoConfig?.extra?.eas?.projectId ?? Constants.easConfig?.projectId ?? process.env.EXPO_PUBLIC_EAS_PROJECT_ID;
   if (!projectId) return '예약 알림을 받으려면 EAS 프로젝트 연결과 APNs/FCM 푸시 설정이 필요해요.';
   try {
-    const token = await Notifications.getExpoPushTokenAsync({projectId});
+    // 리스너가 전달한 토큰을 사용해야 네이티브 토큰 요청이 리스너를 다시 실행하지 않는다.
+    const token = await Notifications.getExpoPushTokenAsync({projectId, devicePushToken});
     await registerPushToken(token.data);
     return null;
-  } catch {
+  } catch (error) {
+    console.warn('예약 푸시 등록 실패', error instanceof Error ? error.message : 'unknown error');
     return '예약 푸시를 등록하지 못했어요. 네트워크와 앱의 푸시 설정을 확인한 뒤 다시 연결해주세요.';
   }
 }

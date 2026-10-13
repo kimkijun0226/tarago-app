@@ -45,7 +45,8 @@
   },
   "scripts": {
     "start": "expo start",
-    "start:simulator": "REACT_NATIVE_PACKAGER_HOSTNAME=localhost NODE_OPTIONS=--dns-result-order=ipv4first expo start --dev-client --localhost --port 8083",
+    "start:simulator": "EXPO_PUBLIC_API_BASE_URL=https://api.tarago.cloud REACT_NATIVE_PACKAGER_HOSTNAME=localhost NODE_OPTIONS=--dns-result-order=ipv4first expo start --dev-client --localhost --port 8083",
+    "start:device": "EXPO_PUBLIC_API_BASE_URL=https://api.tarago.cloud expo start --dev-client --lan",
     "simulator:build": "expo prebuild && expo run:android --no-bundler && expo run:ios --no-bundler && npm run start:simulator",
     "simulator:open": "expo run:android --no-bundler && expo run:ios --no-bundler && npm run start:simulator",
     "reset-project": "node ./scripts/reset-project.js",
@@ -54,7 +55,7 @@
     "web": "expo start --web",
     "lint": "expo lint",
     "test": "node --experimental-strip-types --test src/**/*.test.ts",
-    "ios:device": "TARAGO_IOS_LOCAL=1 expo prebuild --platform ios --no-install && TARAGO_IOS_LOCAL=1 expo run:ios --device"
+    "ios:device": "EXPO_PUBLIC_API_BASE_URL=https://api.tarago.cloud expo prebuild --platform ios --no-install && EXPO_PUBLIC_API_BASE_URL=https://api.tarago.cloud expo run:ios --device"
   },
   "private": true
 }
