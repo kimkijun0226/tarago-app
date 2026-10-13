@@ -12,6 +12,7 @@ export type BusArrival = {
   remainingStops: number | null;
   vehicleType: string;
   vehicleId?: string;
+  vehicleNumber?: string;
   serviceStatus?: 'turnaround_waiting' | 'before_turnaround' | 'on_route';
 };
 

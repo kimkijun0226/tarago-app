@@ -5,6 +5,7 @@ import {
   type NaverMapViewRef,
 } from "@mj-studio/react-native-naver-map";
 import { SymbolView } from "expo-symbols";
+import { useLocalSearchParams } from 'expo-router';
 import { useQueryClient } from "@tanstack/react-query";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
@@ -58,6 +59,8 @@ const ROUTE_DIRECTION_PATTERN = require("../../assets/images/route-direction-tri
  * 카메라 이동 중 이벤트는 150ms로 제한하고, 이동 종료 시 최종 영역을 반영한다.
  */
 export default function MapScreen() {
+  const params = useLocalSearchParams<{stationId?:string;latitude?:string;longitude?:string;notificationId?:string}>();
+  const [mapReady,setMapReady] = useState(false);
   const mapRef = useRef<NaverMapViewRef>(null);
   const selectionRequest = useRef(0);
   const queryClient = useQueryClient();
@@ -149,6 +152,29 @@ export default function MapScreen() {
     setSelectedBusStop(busStop);
     setMapTabHidden(true);
   }, [setMapTabHidden]);
+
+  /** 알림으로 연 정류장을 서버 데이터로 선택하고 해당 좌표로 지도를 이동한다. */
+  useEffect(() => {
+    if (!mapReady || !params.notificationId || !params.stationId) return;
+    const latitude = Number(params.latitude), longitude = Number(params.longitude);
+    if (!Number.isFinite(latitude) || !Number.isFinite(longitude) || Math.abs(latitude)>90 || Math.abs(longitude)>180) return;
+    const abort = new AbortController();
+    void queryClient.fetchQuery({
+      queryKey:['bus-stops','notification',params.stationId],
+      queryFn:() => getNearbyBusStops({latitude,longitude,radius:100,signal:abort.signal}),
+      staleTime:30*60_000,
+    }).then(stops => {
+      if (abort.signal.aborted) return;
+      const stop = stops.find(item => item.id === params.stationId);
+      if (!stop) throw new Error('알림의 정류장을 찾을 수 없습니다.');
+      setSelectedRoute(null);
+      selectBusStop(stop);
+      mapRef.current?.animateCameraTo({latitude,longitude,zoom:17,duration:350});
+    }).catch(error => {
+      if (!abort.signal.aborted) Alert.alert('정류장을 열 수 없습니다',error instanceof Error ? error.message : '서버 연결을 확인해주세요.');
+    });
+    return () => abort.abort();
+  },[mapReady,params.notificationId,params.stationId,params.latitude,params.longitude,selectBusStop,queryClient]);
 
   /** 활성화 정류소의 전체 버스 목록을 열면서 지도에는 현재 노선을 유지한다. */
   const selectRouteStop = useCallback(async (stop: BusRouteDetail["stops"][number]) => {
@@ -246,8 +272,9 @@ export default function MapScreen() {
   const onMapInitialized = useCallback(() => {
     if (initializedRef.current) return;
     initializedRef.current = true;
-    void moveToMyLocation();
-  }, [moveToMyLocation]);
+    setMapReady(true);
+    if (!params.notificationId) void moveToMyLocation();
+  }, [moveToMyLocation,params.notificationId]);
 
   const selectSelectedStop = useCallback((station: BusStop) => {
     const routeStop = selectedRoute && routeDetail?.stops.find((stop) => isRouteBusStop(station, [stop]));

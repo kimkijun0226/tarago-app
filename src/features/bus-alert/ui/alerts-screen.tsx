@@ -11,6 +11,7 @@ import { useAlerts, useAlertMutations, usePushStatus } from '../model/use-alerts
 import { ensureNotificationPermission, ensureProximityPermission, preparePush } from '../model/alert-runtime';
 import { useAlertRuntimeError } from './alert-runtime-provider';
 import type { AlertStop, BusAlert, BusAlertInput } from '../model/bus-alert';
+import { AlertTimeField } from './alert-time-field';
 
 const EMPTY_ARRIVALS: import('../../bus-stop/api/get-bus-arrivals').BusArrival[] = [];
 const WEEKDAYS = ['일','월','화','수','목','금','토'];
@@ -34,7 +35,7 @@ export default function AlertsScreen() {
       ...(params.stationSeq ? {stationSeq:Number(params.stationSeq)} : {}),
       stop:{id:params.stationId,name:params.stationName ?? '정류소',latitude,longitude},
       days:[1,2,3,4,5],startTime,endTime,thresholdMinutes:5,scheduledEnabled:true,
-      enabled:true,proximityEnabled:false,radius:200};
+      enabled:true,proximityEnabled:false,radius:200,notificationStages:[5,3,2,1,0],showVehicleNumber:true};
   }
   return <AlertsScreenContent key={`${params.requestId ?? ''}:${params.alertId ?? ''}:${Boolean(saved)}`} initialDraft={initialDraft} />;
 }
@@ -84,7 +85,13 @@ function AlertsScreenContent({initialDraft}:{initialDraft:Draft|null}) {
     }
     setBusy(true);
     try {
-      const input = {...draft,thresholdMinutes:minutes};
+      const stages = draft.notificationStages ?? [Number(threshold),3,2,1,0];
+      const notificationStages = [...new Set(stages)].filter(stage => stage <= minutes);
+      if (draft.scheduledEnabled && !notificationStages.length) {
+        Alert.alert('알림 단계를 선택해주세요','최소 한 개의 알림 시점을 선택해주세요.');
+        return;
+      }
+      const input = {...draft,thresholdMinutes:minutes,notificationStages:notificationStages.length ? notificationStages : [minutes]};
       await prepare(input);
       await saveAsync({input,id:draft.id});
       setDraft(null);
@@ -140,16 +147,25 @@ function AlertsScreenContent({initialDraft}:{initialDraft:Draft|null}) {
             <Text style={styles.label}>반복 요일</Text>
             <View style={styles.chips}>{[1,2,3,4,5,6,0].map(day => <Choice key={day} label={WEEKDAYS[day]} selected={draft.days.includes(day)} value={day} onSelect={toggleDay} />)}</View>
             <Text style={styles.label}>감시 시간 · 한국 시간</Text>
-            <View style={styles.timeRow}>
-              <View style={styles.timeField}><Text style={styles.help}>시작</Text><TextInput accessibilityLabel="감시 시작 시간" value={draft.startTime} onChangeText={value => setDraft({...draft,startTime:value})} placeholder="07:00" maxLength={5} style={styles.timeInput} /></View>
-              <Text style={styles.help}>~</Text>
-              <View style={styles.timeField}><Text style={styles.help}>종료</Text><TextInput accessibilityLabel="감시 종료 시간" value={draft.endTime} onChangeText={value => setDraft({...draft,endTime:value})} placeholder="09:00" maxLength={5} style={styles.timeInput} /></View>
+            <View style={{gap:12}}>
+              <AlertTimeField label="시작" value={draft.startTime} onChange={value => setDraft({...draft,startTime:value})} />
+              <AlertTimeField label="종료" value={draft.endTime} onChange={value => setDraft({...draft,endTime:value})} />
             </View>
             <Text style={styles.help}>종료가 시작보다 이르면 다음 날까지 감시해요.</Text>
             <Text style={styles.label}>버스 도착 몇 분 전에 알려드릴까요?</Text>
             <View style={styles.chips}>{[1,3,5,10].map(value => <Choice key={value} label={`${value}분 전`} selected={threshold === String(value)} value={value} onSelect={changeThreshold} />)}</View>
             <View style={styles.inline}><TextInput accessibilityLabel="직접 입력한 도착 알림 기준 분" value={threshold} onChangeText={setThreshold} keyboardType="number-pad" maxLength={2} style={styles.numberInput} /><Text style={styles.help}>분 전 · 1~30분 직접 입력</Text></View>
             <Text style={styles.help}>앱을 닫아도 서버가 감시해요. 푸시 연결이 완료되어야 예약 알림을 받을 수 있어요.</Text>
+            <Text style={styles.label}>단계별 알림 · 도착 예정 두 대</Text>
+            <View style={styles.chips}>{[...new Set([Number(threshold),3,2,1,0])].filter(stage => Number.isInteger(stage) && stage >= 0 && stage <= Number(threshold)).map(stage =>
+              <Pressable key={stage} onPress={() => setDraft(current => {
+                if (!current) return current;
+                const selected = current.notificationStages ?? [Number(threshold),3,2,1,0];
+                return {...current,notificationStages:selected.includes(stage) ? selected.filter(s => s !== stage) : [...selected,stage]};
+              })}><Text style={styles.link}>{(draft.notificationStages ?? [Number(threshold),3,2,1,0]).includes(stage) ? '✓ ' : ''}{stage === 0 ? '곧 도착' : `${stage}분`}</Text></Pressable>
+            )}</View>
+            <Text style={styles.help}>두 대를 한 알림에 표시하고 첫 번째 버스의 단계가 바뀔 때만 알려드려요. 첫 차량이 지나가면 다음 차량으로 이어져요. 곧 도착은 예상 30초 이내예요.</Text>
+            <Toggle title="차량번호 표시" description="공급자가 제공하는 번호판 정보를 알림에 표시해요." value={draft.showVehicleNumber !== false} onChange={value => setDraft({...draft,showVehicleNumber:value})} />
           </> : null}
         </View>
         <View style={styles.card}>
@@ -207,7 +223,6 @@ const styles = StyleSheet.create({
   sectionTitle:{fontSize:16,fontWeight:'700',color:'#15171A'},label:{fontSize:14,fontWeight:'600',color:'#343A40',marginTop:6},
   chips:{flexDirection:'row',flexWrap:'wrap',gap:7},chip:{minWidth:36,minHeight:44,borderRadius:12,backgroundColor:'#F0F2F5',paddingHorizontal:10,alignItems:'center',justifyContent:'center'},
   selectedChip:{backgroundColor:'#1769E0'},chipText:{color:'#596270',fontSize:14,fontWeight:'600'},selectedChipText:{color:'#FFF'},
-  timeRow:{flexDirection:'row',alignItems:'center',gap:12},timeField:{flex:1,backgroundColor:'#F5F7FA',borderRadius:12,padding:12},timeInput:{fontSize:24,color:'#15171A',paddingVertical:4},
   inline:{flexDirection:'row',alignItems:'center',gap:10},numberInput:{minWidth:65,padding:12,borderRadius:10,backgroundColor:'#F5F7FA',fontSize:18,color:'#15171A'},
   saveButton:{backgroundColor:'#1769E0',minHeight:54,borderRadius:16,alignItems:'center',justifyContent:'center'},saveText:{color:'#FFF',fontSize:17,fontWeight:'700'},
   iconButton:{minWidth:44,minHeight:44,justifyContent:'center',alignItems:'center'},dim:{opacity:0.55},detail:{fontSize:14,color:'#596270',lineHeight:21},

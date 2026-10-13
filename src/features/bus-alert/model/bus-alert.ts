@@ -6,6 +6,8 @@ export type BusAlertInput = {
   stationId: string; routeId: string; stationSeq?: number; days: number[];
   startTime: string; endTime: string; thresholdMinutes: number;
   scheduledEnabled: boolean; proximityEnabled: boolean; radius: number; enabled: boolean;
+  notificationStages?: number[];
+  showVehicleNumber?: boolean;
 };
 export type BusAlert = BusAlertInput & { id: string; stop: AlertStop; busNumber: string };
 

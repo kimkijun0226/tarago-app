@@ -2,16 +2,18 @@ import { useEffect, useRef, useState } from 'react';
 import { AppState, Platform } from 'react-native';
 import * as Location from 'expo-location';
 import * as Notifications from 'expo-notifications';
-import { router } from 'expo-router';
+import { router, useRootNavigationState } from 'expo-router';
 import { useQueryClient } from '@tanstack/react-query';
 import { checkNearbyStops, preparePush, syncGeofences } from './alert-runtime';
 import { alertStorage, cacheAlerts, readCachedAlerts } from './alert-storage';
 import { useMapTabVisibility } from '@/components/map-tab-visibility';
 import { useAlerts } from './use-alerts';
 import type { BusAlert } from './bus-alert';
+import { getAlerts } from '../api/alerts';
 
 /** 감시 등록은 화면 수와 무관하게 루트에서 한 번 수행한다. */
 export function useAlertRuntime() {
+  const navigation = useRootNavigationState();
   const {data:alerts} = useAlerts();
   const {setMapTabHidden} = useMapTabVisibility();
   const queryClient = useQueryClient();
@@ -42,20 +44,32 @@ export function useAlertRuntime() {
     return () => { disposed=true; subscription?.remove(); };
   },[alerts]);
   useEffect(() => {
-    if (Platform.OS === 'web') return;
+    if (Platform.OS === 'web' || !navigation?.key) return;
     let handled:string|undefined;
-    function open(response:Notifications.NotificationResponse) {
+    async function open(response:Notifications.NotificationResponse) {
       const data = response.notification.request.content.data;
       if (!data) return;
       const id = response.notification.request.identifier;
       if (handled === id || typeof data.alertId !== 'string') return;
       handled=id;
       setMapTabHidden(false);
-      router.push({pathname:'/alerts',params:{alertId:data.alertId,requestId:id,stationId:'',routeId:''}});
+      try {
+        const hasStop = typeof data.stationId === 'string' && typeof data.latitude === 'number' && typeof data.longitude === 'number';
+        const saved = hasStop ? undefined : (await queryClient.fetchQuery({queryKey:['alerts','list'],queryFn:()=>getAlerts()})).find(a => a.id === data.alertId);
+        const latitude = saved?.stop.latitude ?? Number(data.latitude);
+        const longitude = saved?.stop.longitude ?? Number(data.longitude);
+        const stationId = saved?.stationId ?? data.stationId;
+        if (typeof stationId !== 'string' || !Number.isFinite(latitude) || !Number.isFinite(longitude)) throw new Error('알림의 정류장 정보를 찾을 수 없습니다.');
+        router.navigate({pathname:'/',params:{stationId,latitude:String(latitude),longitude:String(longitude),notificationId:id}});
+        await Notifications.clearLastNotificationResponseAsync();
+      } catch (e) {
+        handled=undefined;
+        setError(e instanceof Error ? e.message : '알림 정류장을 열지 못했어요.');
+      }
     }
     const response = Notifications.getLastNotificationResponse();
-    if (response) open(response);
-    const listener = Notifications.addNotificationResponseReceivedListener(open);
+    if (response) void open(response);
+    const listener = Notifications.addNotificationResponseReceivedListener(response => { void open(response); });
     const tokenListener = Notifications.addPushTokenListener(token => { void preparePush(token).then(() => queryClient.invalidateQueries({queryKey:['alerts','push-status']})); });
     const appListener = AppState.addEventListener('change',state => {
       if (state !== 'active') return;
@@ -63,6 +77,6 @@ export function useAlertRuntime() {
       void alertStorage.getItem('tarago-proximity-error').then(setError);
     });
     return () => { listener.remove(); tokenListener.remove(); appListener.remove(); };
-  },[queryClient,setMapTabHidden]);
+  },[queryClient,setMapTabHidden,navigation?.key]);
   return error;
 }
