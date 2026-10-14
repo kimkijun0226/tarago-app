@@ -12,6 +12,7 @@ import { ensureNotificationPermission, ensureProximityPermission, preparePush } 
 import { useAlertRuntimeError } from './alert-runtime-provider';
 import type { AlertStop, BusAlert, BusAlertInput } from '../model/bus-alert';
 import { AlertTimeField } from './alert-time-field';
+import { MonitoringSessionsPanel } from './monitoring-sessions-panel';
 
 const EMPTY_ARRIVALS: import('../../bus-stop/api/get-bus-arrivals').BusArrival[] = [];
 const WEEKDAYS = ['일','월','화','수','목','금','토'];
@@ -20,9 +21,11 @@ type Draft = BusAlertInput & { id?:string; stop:AlertStop; busNumber:string };
 /** 알림 목록과 정류소·노선별 편집기를 같은 탭에서 보여준다. */
 export default function AlertsScreen() {
   const [openedAt] = useState(() => Date.now());
-  const params = useLocalSearchParams<{stationId?:string;stationName?:string;latitude?:string;longitude?:string;routeId?:string;busNumber?:string;stationSeq?:string;requestId?:string;alertId?:string}>();
+  const params = useLocalSearchParams<{stationId?:string;stationName?:string;latitude?:string;longitude?:string;routeId?:string;busNumber?:string;stationSeq?:string;requestId?:string;alertId?:string;sourceAlertId?:string;sourceAlertIds?:string;monitoringId?:string}>();
   const {data:alerts=[]} = useAlerts();
   const saved = params.alertId ? alerts.find(a => a.id === params.alertId) : undefined;
+  const sourceIds=(params.sourceAlertIds || params.sourceAlertId || '').split(',');
+  const sources=alerts.filter(a=>sourceIds.includes(a.id) && a.enabled && a.proximityEnabled);
   let initialDraft:Draft|null = saved ?? null;
   const latitude=Number(params.latitude),longitude=Number(params.longitude);
   if (!params.alertId && params.requestId && params.stationId && params.routeId && Number.isFinite(latitude) && Number.isFinite(longitude)
@@ -37,10 +40,10 @@ export default function AlertsScreen() {
       days:[1,2,3,4,5],startTime,endTime,thresholdMinutes:5,scheduledEnabled:true,
       enabled:true,proximityEnabled:false,radius:200,notificationStages:[5,3,2,1,0],showVehicleNumber:true};
   }
-  return <AlertsScreenContent key={`${params.requestId ?? ''}:${params.alertId ?? ''}:${Boolean(saved)}`} initialDraft={initialDraft} />;
+  return <AlertsScreenContent key={`${params.requestId ?? ''}:${params.alertId ?? ''}:${Boolean(saved)}`} initialDraft={initialDraft} sources={sources} />;
 }
 
-function AlertsScreenContent({initialDraft}:{initialDraft:Draft|null}) {
+function AlertsScreenContent({initialDraft,sources}:{initialDraft:Draft|null;sources:BusAlert[]}) {
   const {setMapTabHidden} = useMapTabVisibility();
   const {data:alerts=[],isPending,isError,refetch} = useAlerts();
   const {data:pushStatus} = usePushStatus();
@@ -50,15 +53,23 @@ function AlertsScreenContent({initialDraft}:{initialDraft:Draft|null}) {
   const runtimeError = useAlertRuntimeError();
   const client = useQueryClient();
   const [draft,setDraft] = useState<Draft|null>(initialDraft);
+  const [kind,setKind] = useState<'time'|'location'>(initialDraft?.proximityEnabled && !initialDraft.scheduledEnabled ? 'location' : 'time');
+  const [dismissedSource,setDismissedSource] = useState(false);
+  const visibleAlerts = alerts.filter(a=>!a.monitoringSourceId && (kind==='time' ? a.scheduledEnabled : a.proximityEnabled));
   const [busy,setBusy] = useState(false);
   const [pushWarning,setPushWarning] = useState<string|null>(null);
   const [threshold,setThreshold] = useState(String(initialDraft?.thresholdMinutes ?? 5));
-  const {data:arrivals=EMPTY_ARRIVALS,isError:arrivalError,isFetching:arrivalLoading,refetch:refreshArrivals} = useBusArrivals(draft?.stationId ?? '');
+  const {data:arrivals=EMPTY_ARRIVALS,isError:arrivalError,isFetching:arrivalLoading,refetch:refreshArrivals} = useBusArrivals(kind==='time' ? draft?.stationId ?? '' : '');
 
   const arrivalGroups = useMemo(() => groupBusArrivals(arrivals), [arrivals]);
 
-  const changeScheduled = useCallback((value: boolean) => setDraft(current => current && ({...current, scheduledEnabled: value})), []);
-  const changeProximity = useCallback((value: boolean) => setDraft(current => current && ({...current, proximityEnabled: value})), []);
+  const selectKind = (value:'time'|'location') => {
+    setKind(value);
+    setDraft(current=>current && ({...current,
+      // 방식이 다른 기존 설정은 그대로 두고 새 설정을 만든다.
+      id:value===kind ? current.id : undefined,
+      scheduledEnabled:value==='time',proximityEnabled:value==='location',monitoringStartedAt:undefined,monitoringEndsAt:undefined,monitoringSourceId:undefined}));
+  };
   const toggleDay = useCallback((day: number) => setDraft(current => current && ({...current,
     days: current.days.includes(day) ? current.days.filter(d => d !== day) : [...current.days, day].sort(),
   })), []);
@@ -91,13 +102,17 @@ function AlertsScreenContent({initialDraft}:{initialDraft:Draft|null}) {
         Alert.alert('알림 단계를 선택해주세요','최소 한 개의 알림 시점을 선택해주세요.');
         return;
       }
-      const input = {...draft,thresholdMinutes:minutes,notificationStages:notificationStages.length ? notificationStages : [minutes]};
+      const input = {...draft,scheduledEnabled:kind==='time',proximityEnabled:kind==='location',thresholdMinutes:minutes,notificationStages:notificationStages.length ? notificationStages : [minutes]};
+      // 기존 복합 설정을 편집할 때 다른 방식의 설정을 별도 레코드로 보존한다.
+      if (draft.id && draft.scheduledEnabled && draft.proximityEnabled) {
+        await saveAsync({input:{...draft,scheduledEnabled:kind!=='time',proximityEnabled:kind!=='location'}});
+      }
       await prepare(input);
       await saveAsync({input,id:draft.id});
       setDraft(null);
     } catch (error) { Alert.alert('알림을 저장하지 못했어요',errorMessage(error)); }
     finally { setBusy(false); }
-  }, [draft, busy, threshold, prepare, saveAsync]);
+  }, [draft, busy, threshold, prepare, saveAsync,kind]);
   const toggle = useCallback(async (alert:BusAlert, value:boolean) => {
     setBusy(true);
     try { const input={...alert,enabled:value};await prepare(input);await saveAsync({input,id:alert.id}); }
@@ -129,6 +144,10 @@ function AlertsScreenContent({initialDraft}:{initialDraft:Draft|null}) {
         <Pressable accessibilityRole="button" onPress={() => {setMapTabHidden(false);router.navigate('/');}}><Text style={styles.link}>지도</Text></Pressable>
       </View>
       <Text style={styles.help}>원하는 시간에, 정류소 가까이에서. 버스를 놓치지 않도록 알려드려요.</Text>
+      <MonitoringSessionsPanel sources={dismissedSource ? [] : sources} onDismiss={()=>setDismissedSource(true)} />
+      <View style={styles.chips}>
+        {(['time','location'] as const).map(value=><Pressable key={value} disabled={busy} accessibilityRole="button" accessibilityState={{selected:kind===value}} onPress={()=>selectKind(value)} style={[styles.chip,kind===value && styles.selectedChip]}><Text style={[styles.chipText,kind===value && styles.selectedChipText]}>{value==='time' ? '버스 시간 알림' : '위치 기반 알림'}</Text></Pressable>)}
+      </View>
       {runtimeError ? <View style={styles.warning}><Text style={styles.warningText}>{runtimeError}</Text><Pressable onPress={() => void Linking.openSettings()}><Text style={styles.link}>기기 설정 열기</Text></Pressable></View> : null}
       {(pushWarning || (alerts.some(a => a.enabled && a.scheduledEnabled) && pushStatus?.ready === false)) ? <View style={styles.warning}>
         <Text style={styles.warningText}>{pushWarning ?? (pushStatus?.error ? '서버의 푸시 자격 증명을 확인해주세요. 예약 알림이 중지되어 있어요.' : '예약 알림의 푸시 연결이 필요해요. 접근 알림은 별도로 동작합니다.')}</Text>
@@ -141,9 +160,9 @@ function AlertsScreenContent({initialDraft}:{initialDraft:Draft|null}) {
           <Text style={styles.busNumber}>{draft.busNumber}번 버스</Text>
           <Text style={styles.help}>선택한 정류소와 진행 방향으로 알림을 설정해요.</Text>
         </View>
-        <View style={styles.card}>
-          <Toggle title="예약 도착 알림" description="선택한 요일과 시간 안에서 도착 직전에 알려드려요." value={draft.scheduledEnabled} onChange={changeScheduled} />
-          {draft.scheduledEnabled ? <>
+        {kind==='time' && <View style={styles.card}>
+          <Text style={styles.sectionTitle}>버스 시간 알림</Text>
+          <>
             <Text style={styles.label}>반복 요일</Text>
             <View style={styles.chips}>{[1,2,3,4,5,6,0].map(day => <Choice key={day} label={WEEKDAYS[day]} selected={draft.days.includes(day)} value={day} onSelect={toggleDay} />)}</View>
             <Text style={styles.label}>감시 시간 · 한국 시간</Text>
@@ -166,35 +185,36 @@ function AlertsScreenContent({initialDraft}:{initialDraft:Draft|null}) {
             )}</View>
             <Text style={styles.help}>두 대를 한 알림에 표시하고 첫 번째 버스의 단계가 바뀔 때만 알려드려요. 첫 차량이 지나가면 다음 차량으로 이어져요. 곧 도착은 예상 30초 이내예요.</Text>
             <Toggle title="차량번호 표시" description="공급자가 제공하는 번호판 정보를 알림에 표시해요." value={draft.showVehicleNumber !== false} onChange={value => setDraft({...draft,showVehicleNumber:value})} />
-          </> : null}
-        </View>
-        <View style={styles.card}>
-          <Toggle title="정류소 접근 알림" description="예약 시간과 관계없이 가까워지면 버스별 남은 시간을 알려드려요." value={draft.proximityEnabled} onChange={changeProximity} />
-          {draft.proximityEnabled ? <>
+          </>
+        </View>}
+        {kind==='location' && <View style={styles.card}>
+          <Text style={styles.sectionTitle}>위치 기반 알림</Text>
+          <Text style={styles.label}>접근 알림을 받을 요일</Text>
+          <View style={styles.chips}>{[1,2,3,4,5,6,0].map(day=><Choice key={day} label={WEEKDAYS[day]} selected={draft.days.includes(day)} value={day} onSelect={toggleDay} />)}</View>
+          <>
             <Text style={styles.label}>정류소까지 거리</Text>
-            <View style={styles.chips}>{[100,200,300].map(radius => <Choice key={radius} label={`${radius}m`} selected={draft.radius===radius} value={radius} onSelect={changeRadius} />)}</View>
-            <Text style={styles.help}>설정한 정류소의 모든 버스를 알려드려요. 머무르는 동안 반복하지 않으며, 나갔다 다시 접근하면 재알림해요.</Text>
+            <View style={styles.chips}>{[100,200,300,500].map(radius => <Choice key={radius} label={`${radius}m`} selected={draft.radius===radius} value={radius} onSelect={changeRadius} />)}</View>
+            <Text style={styles.help}>선택한 요일에 이 정류장에 접근하면 {draft.busNumber}번 버스의 1시간 감시를 시작할지 묻습니다. 동의하기 전에는 감시하지 않습니다.</Text>
             <Text style={styles.help}>백그라운드 감지를 위해 위치 ‘항상 허용’이 필요해요. 감지 시점은 GPS와 기기 절전 설정에 따라 달라질 수 있어요.</Text>
-          </> : null}
-        </View>
-        <View style={styles.card}>
+          </>
+        </View>}
+        {kind==='time' && <View style={styles.card}>
           <View style={styles.heading}><Text style={styles.sectionTitle}>이 정류소의 현재 도착정보</Text><Pressable disabled={arrivalLoading} onPress={() => void refreshArrivals()}><Text style={styles.link}>새로고침</Text></Pressable></View>
           {arrivalError ? <Text style={styles.warningText}>도착정보를 불러오지 못했어요.</Text> : arrivalLoading && !arrivals.length ? <ActivityIndicator /> : !arrivals.length ? <Text style={styles.help}>현재 도착정보가 없습니다.</Text> : arrivalGroups.map(group => <View key={`${group.routeId}:${group.stationSeq}`} style={styles.liveRow}>
             <Text style={styles.liveNumber}>{group.busNumber}번</Text><Text style={styles.liveEta}>{formatEta(group.first.etaSeconds,group.first.serviceStatus,group.first.etaPrecision,group.first.etaSource)}</Text>
           </View>)}
-        </View>
+        </View>}
         <Pressable accessibilityRole="button" disabled={busy} onPress={() => void submit()} style={[styles.saveButton,busy && styles.dim]}>{busy ? <ActivityIndicator color="#FFF" /> : <Text style={styles.saveText}>{draft.id ? '변경 사항 저장' : '알림 저장'}</Text>}</Pressable>
       </> : <>
         {isPending ? <ActivityIndicator style={styles.loading} color="#1769E0" /> : isError ? <View style={styles.card}>
           <Text style={styles.warningText}>알림 목록을 불러오지 못했어요. 서버 연결을 확인해주세요.</Text><Pressable onPress={() => void refetch()}><Text style={styles.link}>다시 시도</Text></Pressable>
-        </View> : !alerts.length ? <View style={styles.empty}>
+        </View> : !visibleAlerts.length ? <View style={styles.empty}>
           <SymbolView name={{ios:'bell',android:'notifications',web:'notifications'}} size={42} tintColor="#1769E0" />
           <Text style={styles.stationName}>아직 설정한 알림이 없어요</Text><Text style={styles.help}>지도에서 정류소를 고르고 버스 시간 오른쪽의 종 버튼을 눌러주세요.</Text>
           <Pressable onPress={() => {setMapTabHidden(false);router.navigate('/');}}><Text style={styles.link}>지도에서 버스 선택하기</Text></Pressable>
-        </View> : alerts.map(alert => <View key={alert.id} style={[styles.card,!alert.enabled && styles.dim]}>
+        </View> : visibleAlerts.map(alert => <View key={alert.id} style={[styles.card,!alert.enabled && styles.dim]}>
           <View style={styles.heading}><View style={styles.flex}><Text style={styles.stationName}>{alert.stop.name}</Text><Text style={styles.busNumber}>{alert.busNumber}번 버스</Text></View><Switch accessibilityLabel={`${alert.busNumber}번 알림 사용`} disabled={busy || save.isPending || remove.isPending} value={alert.enabled} onValueChange={value => void toggle(alert,value)} trackColor={{true:'#1769E0'}} /></View>
-          {alert.scheduledEnabled ? <><Text style={styles.detail}>{alert.days.map(day => WEEKDAYS[day]).join(' · ')}  {alert.startTime}–{alert.endTime}</Text><Text style={styles.detail}>도착 {alert.thresholdMinutes}분 전 · {pushStatus?.ready ? '예약 감시' : '푸시 연결 필요'}</Text></> : null}
-          {alert.proximityEnabled ? <Text style={styles.detail}>정류소 {alert.radius}m 접근 시 전체 버스 알림</Text> : null}
+          {kind==='time' ? <><Text style={styles.detail}>{alert.days.map(day => WEEKDAYS[day]).join(' · ')}  {alert.startTime}–{alert.endTime}</Text><Text style={styles.detail}>도착 {alert.thresholdMinutes}분 전 · {pushStatus?.ready ? '예약 감시' : '푸시 연결 필요'}</Text></> : <Text style={styles.detail}>{alert.days.map(day=>WEEKDAYS[day]).join(' · ')} · 정류소 {alert.radius}m 접근 시 감시 시작 확인</Text>}
           <View style={styles.actions}><Pressable accessibilityRole="button" disabled={busy} onPress={() => {setDraft(alert);setThreshold(String(alert.thresholdMinutes));}}><Text style={styles.link}>수정</Text></Pressable><Pressable accessibilityRole="button" disabled={remove.isPending || busy} onPress={() => removeAlert(alert)}><Text style={styles.deleteText}>삭제</Text></Pressable></View>
         </View>)}
       </>}

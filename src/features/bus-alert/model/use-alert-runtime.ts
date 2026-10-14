@@ -8,12 +8,15 @@ import { checkNearbyStops, preparePush, syncGeofences } from './alert-runtime';
 import { alertStorage, cacheAlerts, readCachedAlerts } from './alert-storage';
 import { useMapTabVisibility } from '@/components/map-tab-visibility';
 import { useAlerts } from './use-alerts';
+import { useMonitoringSessions } from './use-monitoring-sessions';
 import type { BusAlert } from './bus-alert';
 import { getAlerts } from '../api/alerts';
 
 /** 감시 등록은 화면 수와 무관하게 루트에서 한 번 수행한다. */
 export function useAlertRuntime() {
   const navigation = useRootNavigationState();
+  const {begin,extend,stop} = useMonitoringSessions();
+  const handledResponse = useRef<string|undefined>(undefined);
   const {data:alerts} = useAlerts();
   const {setMapTabHidden} = useMapTabVisibility();
   const queryClient = useQueryClient();
@@ -45,15 +48,40 @@ export function useAlertRuntime() {
   },[alerts]);
   useEffect(() => {
     if (Platform.OS === 'web' || !navigation?.key) return;
-    let handled:string|undefined;
     async function open(response:Notifications.NotificationResponse) {
       const data = response.notification.request.content.data;
       if (!data) return;
       const id = response.notification.request.identifier;
-      if (handled === id || typeof data.alertId !== 'string') return;
-      handled=id;
+      const responseKey = `${id}:${data.promptId ?? data.monitoringEndsAt ?? ''}:${response.actionIdentifier}`;
+      if (handledResponse.current === responseKey || typeof data.alertId !== 'string') return;
+      handledResponse.current=responseKey;
       setMapTabHidden(false);
       try {
+        if (data.kind === 'proximity-prompt') {
+          const savedAlerts = await queryClient.fetchQuery({queryKey:['alerts','list'],queryFn:()=>getAlerts()});
+          const ids=Array.isArray(data.alertIds) ? data.alertIds.filter((value):value is string=>typeof value==='string') : [data.alertId];
+          const sources=savedAlerts.filter(a=>ids.includes(a.id) && a.enabled && a.proximityEnabled);
+          if(!sources.length)throw new Error('위치 기반 알림이 삭제되었거나 꺼져 있습니다.');
+          if(response.actionIdentifier==='START_MONITORING') {
+            for(const source of sources)await begin(source);
+            router.navigate({pathname:'/alerts',params:{requestId:responseKey,monitoringId:sources[0].id,sourceAlertId:'',sourceAlertIds:'',alertId:'',stationId:'',routeId:''}});
+          } else {
+            router.navigate({pathname:'/alerts',params:{sourceAlertId:sources[0].id,sourceAlertIds:sources.map(a=>a.id).join(','),requestId:responseKey,alertId:'',stationId:'',routeId:''}});
+          }
+          await Notifications.clearLastNotificationResponseAsync();
+          return;
+        }
+        if (data.kind === 'monitoring-extension') {
+          const all = await queryClient.fetchQuery({queryKey:['alerts','list'],queryFn:()=>getAlerts()});
+          const session = all.find(a=>a.id===data.alertId && a.enabled && a.monitoringSourceId && a.monitoringEndsAt===data.monitoringEndsAt);
+          if (session) {
+            if (response.actionIdentifier==='EXTEND_MONITORING') await extend(session);
+            if (response.actionIdentifier==='STOP_MONITORING') await stop(session);
+            router.navigate({pathname:'/alerts',params:{monitoringId:session.id,requestId:responseKey,sourceAlertId:'',sourceAlertIds:'',alertId:'',stationId:'',routeId:''}});
+          }
+          await Notifications.clearLastNotificationResponseAsync();
+          return;
+        }
         const hasStop = typeof data.stationId === 'string' && typeof data.latitude === 'number' && typeof data.longitude === 'number';
         const saved = hasStop ? undefined : (await queryClient.fetchQuery({queryKey:['alerts','list'],queryFn:()=>getAlerts()})).find(a => a.id === data.alertId);
         const latitude = saved?.stop.latitude ?? Number(data.latitude);
@@ -63,7 +91,7 @@ export function useAlertRuntime() {
         router.navigate({pathname:'/',params:{stationId,latitude:String(latitude),longitude:String(longitude),notificationId:id}});
         await Notifications.clearLastNotificationResponseAsync();
       } catch (e) {
-        handled=undefined;
+        handledResponse.current=undefined;
         setError(e instanceof Error ? e.message : '알림 정류장을 열지 못했어요.');
       }
     }
@@ -77,6 +105,6 @@ export function useAlertRuntime() {
       void alertStorage.getItem('tarago-proximity-error').then(setError);
     });
     return () => { listener.remove(); tokenListener.remove(); appListener.remove(); };
-  },[queryClient,setMapTabHidden,navigation?.key]);
+  },[queryClient,setMapTabHidden,navigation?.key,begin,extend,stop]);
   return error;
 }

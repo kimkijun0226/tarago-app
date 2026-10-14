@@ -8,6 +8,9 @@ export type BusAlertInput = {
   scheduledEnabled: boolean; proximityEnabled: boolean; radius: number; enabled: boolean;
   notificationStages?: number[];
   showVehicleNumber?: boolean;
+  monitoringStartedAt?: string;
+  monitoringEndsAt?: string;
+  monitoringSourceId?: string;
 };
 export type BusAlert = BusAlertInput & { id: string; stop: AlertStop; busNumber: string };
 
@@ -23,8 +26,22 @@ export function proximityRegions(alerts: Pick<BusAlert, 'stop' | 'enabled' | 'pr
   return [...stops.values()];
 }
 
-/** 접근 알림은 설정 노선에 한정하지 않고 정류소 전체의 최신 도착 정보를 요약한다. */
-export function proximityMessage(arrivals: BusArrival[]) {
+/** 선택 노선은 두 차량을 줄바꿈해 요약하고, 노선을 지정하지 않으면 정류장 전체를 요약한다. */
+export function proximityMessage(arrivals: BusArrival[],alert?:Pick<BusAlert,'routeId'|'stationSeq'|'busNumber'|'showVehicleNumber'>) {
+  if(alert) {
+    const seen=new Set<string>();
+    const selected=arrivals.filter(bus=>bus.routeId===alert.routeId && (alert.stationSeq===undefined || bus.stationSeq===alert.stationSeq))
+      .filter(bus=>{if(!bus.vehicleId)return true;if(seen.has(bus.vehicleId))return false;seen.add(bus.vehicleId);return true;});
+    const group=groupBusArrivals(selected)[0];
+    if(!group)return `${alert.busNumber}번 버스 · 도착정보 확인 중`;
+    const lines=[group.first,group.second].filter((bus):bus is BusArrival=>Boolean(bus)).map((bus,index)=>{
+      const time=bus.etaSeconds===null ? formatEta(null,bus.serviceStatus) : bus.etaSeconds<=30 ? '곧 도착' : `${bus.etaSource ? '예상 ' : ''}${Math.max(1,Math.ceil(bus.etaSeconds/60))}분 후`;
+      const stops=bus.remainingStops===null ? '' : ` (${bus.remainingStops}정거장 전)`;
+      const lastFour=alert.showVehicleNumber!==false ? bus.vehicleNumber?.match(/(\d{4})\s*$/)?.[1] : undefined;
+      return `${index ? '다음 ' : ''}${time}${stops}${lastFour ? ` ${lastFour}` : ''}`;
+    });
+    return `${alert.busNumber}번 버스\n${lines.join('\n')}`;
+  }
   const groups = groupBusArrivals(arrivals);
   if (!groups.length) return '현재 도착정보가 없습니다. 알림을 눌러 다시 확인하세요.';
   const summary = groups.slice(0,8).map(group => `${group.busNumber}번 ${formatEta(group.first.etaSeconds,group.first.serviceStatus,group.first.etaPrecision,group.first.etaSource)}`).join(' · ');

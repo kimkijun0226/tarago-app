@@ -4,42 +4,59 @@ import * as Location from 'expo-location';
 import * as Notifications from 'expo-notifications';
 import * as TaskManager from 'expo-task-manager';
 import { Platform } from 'react-native';
-import { getBusArrivals } from '@/features/bus-stop/api/get-bus-arrivals';
-import { queryClient } from '@/shared/lib/query-client';
 import { registerPushToken } from '../api/alerts';
 import { alertStorage, readCachedAlerts } from './alert-storage';
 import { proximityMessage, proximityRegions, shouldNotifyVisit, type BusAlert } from './bus-alert';
+import { getBusArrivals, type BusArrival } from '@/features/bus-stop/api/get-bus-arrivals';
+import { queryClient } from '@/shared/lib/query-client';
 
 const TASK = 'tarago-stop-proximity';
 const CHANNEL = 'bus-arrivals';
 const pendingStops = new Set<string>();
 
+/** 알림을 펼쳤을 때 사용자 동의로 감시를 시작하거나 설정 화면을 열 수 있다. */
+async function registerProximityActions() {
+  await Notifications.setNotificationCategoryAsync('TARAGO_PROXIMITY',[
+    {identifier:'START_MONITORING',buttonTitle:'실시간 알림 시작 (1시간)',options:{opensAppToForeground:true}},
+    {identifier:'OPEN_SETTINGS',buttonTitle:'설정하기',options:{opensAppToForeground:true}},
+  ]);
+}
+
 Notifications.setNotificationHandler({ handleNotification: async () => ({
   shouldShowBanner:true, shouldShowList:true, shouldPlaySound:true, shouldSetBadge:false,
 }) });
 
-/** 시간 설정과 관계없이 진입 시 정류소 전체 노선의 최신 도착정보를 알린다. */
+/** 정류장 접근 시 감시를 자동 시작하지 않고 사용자에게 1시간 감시를 제안한다. */
 export async function handleStopEntry(stationId: string) {
   if (pendingStops.has(stationId)) return;
   pendingStops.add(stationId);
   try {
     const alerts = await readCachedAlerts();
-    const alert = alerts.find(a => a.stop.id === stationId && a.enabled && a.proximityEnabled);
+    const day = new Date(Date.now()+9*60*60_000).getUTCDay();
+    const matching = [...new Map(alerts.filter(a => a.stop.id === stationId && a.enabled && a.proximityEnabled && a.days.includes(day)
+      && !alerts.some(session=>session.monitoringSourceId && session.stationId===a.stationId && session.routeId===a.routeId && session.stationSeq===a.stationSeq && session.enabled && Date.parse(session.monitoringEndsAt ?? '')>Date.now()))
+      .map(a=>[`${a.routeId}:${a.stationSeq ?? ''}`,a])).values()];
+    const alert = matching[0];
     if (!alert) return;
     const state = JSON.parse(await alertStorage.getItem(`visit:${stationId}`) ?? '{}') as { inside?:boolean; lastSent?:number };
     if (!shouldNotifyVisit(state,Date.now())) return;
-    let body: string;
+    await registerProximityActions();
+    let arrivals:BusArrival[]=[];
     try {
-      const arrivals = await queryClient.fetchQuery({ queryKey:['bus-stops',stationId,'arrivals'],
-        queryFn:({signal}) => getBusArrivals({stationId,signal}), staleTime:0, retry:1 });
-      body = proximityMessage(arrivals);
-    } catch (error) {
-      console.warn('접근 알림 도착정보 조회 실패', error instanceof Error ? error.message : 'network error');
-      body = '도착정보를 불러오지 못했어요. 알림을 눌러 다시 확인해주세요.';
+      arrivals=await queryClient.fetchQuery({queryKey:['bus-stops',stationId,'arrivals'],
+        queryFn:({signal})=>getBusArrivals({stationId,signal}),staleTime:10_000,retry:false});
+    } catch(error) {
+      console.warn('접근 알림 도착정보 조회 실패',error instanceof Error ? error.message : 'unknown');
+      await alertStorage.setItem('tarago-proximity-error','접근 알림의 도착정보를 조회하지 못했어요. 연결 상태를 확인해주세요.');
     }
-    if (!(await readCachedAlerts()).some(a => a.stop.id === stationId && a.enabled && a.proximityEnabled)) return;
-    await Notifications.scheduleNotificationAsync({ content:{ title:`${alert.stop.name} 근처에 도착했어요`, body,
-      sound:'default',data:{alertId:alert.id,stationId}},trigger:Platform.OS === 'android' ? {channelId:CHANNEL} : null });
+    const latest=await readCachedAlerts();
+    const valid=matching.filter(selected=>latest.some(a=>a.id===selected.id && a.enabled && a.proximityEnabled && a.days.includes(day)));
+    if(!valid.length)return;
+    const summary=valid.map(selected=>proximityMessage(arrivals,selected)).join('\n\n');
+    await Notifications.scheduleNotificationAsync({identifier:`proximity:${stationId}`,content:{title:`${alert.stop.name} 정류소 근처입니다`,
+      body:`${summary}\n\n실시간 도착 알림을 1시간 동안 시작할까요?`,categoryIdentifier:'TARAGO_PROXIMITY',
+      sound:'default',data:{kind:'proximity-prompt',promptId:String(Date.now()),alertId:valid[0].id,alertIds:valid.map(a=>a.id),stationId}},
+      trigger:Platform.OS==='android' ? {channelId:CHANNEL} : null});
     await alertStorage.setItem(`visit:${stationId}`,JSON.stringify({inside:true,lastSent:Date.now()}));
   } finally { pendingStops.delete(stationId); }
 }
@@ -67,6 +84,7 @@ if (!TaskManager.isTaskDefined(TASK)) {
 }
 
 export async function ensureNotificationPermission() {
+  await registerProximityActions();
   if (Platform.OS === 'android') await Notifications.setNotificationChannelAsync(CHANNEL,{name:'버스 도착 알림',importance:Notifications.AndroidImportance.HIGH,sound:'default'});
   const permission = await Notifications.requestPermissionsAsync();
   if (!permission.granted) throw new Error('기기 설정에서 TaraGo의 알림 권한을 허용해주세요.');
