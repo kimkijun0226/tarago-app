@@ -162,3 +162,16 @@ function getBusStopTileFromIndex(
     },
   };
 }
+
+/** 타일 식별자가 같으면 화면 이동으로 생긴 새 배열도 기존 조회 영역으로 재사용한다. */
+export function haveSameTiles(currentTiles: BusStopTile[], nextTiles: BusStopTile[]) {
+  return (
+    currentTiles.length === nextTiles.length &&
+    currentTiles.every(
+      (tile, index) =>
+        tile.tileX === nextTiles[index]?.tileX &&
+        tile.tileY === nextTiles[index]?.tileY &&
+        tile.sizeMeters === nextTiles[index]?.sizeMeters,
+    )
+  );
+}

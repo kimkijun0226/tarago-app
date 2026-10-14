@@ -1,7 +1,9 @@
 import { apiClient } from '@/shared/api/client';
 export type Point = { latitude: number; longitude: number };
 export type Place = Point & { entrance?: Point; id: string; name: string; address: string; category: string; distanceMeters: number | null };
-export type RouteStep = { mode: 'walk' | 'bus' | 'subway'; minutes: number; distanceMeters: number; startName: string; endName: string; lineNames: string[]; stationCount: number; geometry?: Point[][] };
+export type RouteStop = { id: string; name: string; sequence: number; latitude?: number; longitude?: number };
+export type WalkInstruction = { description: string; distanceMeters: number; geometry: Point[] };
+export type RouteStep = { mode: 'walk' | 'bus' | 'subway'; minutes: number; distanceMeters: number; startName: string; endName: string; lineNames: string[]; stationCount: number; geometry?: Point[][]; start?: Point; end?: Point; lineColor?: string; lineId?: string; stops?: RouteStop[]; walkInstructions?: WalkInstruction[] };
 export type Journey = { id: string; minutes: number; walkMeters: number; fare: number; transfers: number; steps: RouteStep[]; geometry: Point[][]; geometryStatus: 'available' | 'unavailable' };
 export type TravelMode = 'transit' | 'bus' | 'walk';
 

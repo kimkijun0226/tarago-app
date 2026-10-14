@@ -19,6 +19,7 @@ export function useBusArrivals(stationId: string) {
     queryKey: ['bus-stops', stationId, 'arrivals'],
     queryFn: ({ signal }) => getBusArrivals({ stationId, signal }),
     enabled: Boolean(stationId),
+    staleTime: 5_000,
     retry: (count,error) => !(isAxiosError(error) && [410,429,503].includes(error.response?.status ?? 0)) && count < 2,
     refetchInterval: current => isAxiosError(current.state.error) && current.state.error.response?.status===410 ? false : 10_000,
     refetchIntervalInBackground: false,

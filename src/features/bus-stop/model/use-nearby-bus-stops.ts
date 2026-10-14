@@ -1,9 +1,10 @@
-import { useMemo } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import { useQueries } from '@tanstack/react-query';
 
 import { getNearbyBusStops } from '@/features/bus-stop/api/get-nearby-bus-stops';
 import { combineBusStops } from './combine-bus-stops';
-import type { BusStopTile } from '@/features/bus-stop/model/bus-stop-tile';
+import { haveSameTiles, type BusStopTile } from '@/features/bus-stop/model/bus-stop-tile';
+import type { BusStop } from '../api/get-nearby-bus-stops';
 
 /**
  * 지도 타일마다 독립된 Query를 만들고 정류장 ID를 기준으로 결과를 합친다.
@@ -16,7 +17,13 @@ import type { BusStopTile } from '@/features/bus-stop/model/bus-stop-tile';
  * @returns 타일 응답을 합쳐 중복을 제거한 정류장 목록.
  */
 export function useNearbyBusStops(tiles: BusStopTile[]) {
-  const queries = useMemo(() => tiles.map((tile) => ({
+  // 서버 응답은 Query에만 두고, 이전 조회 영역의 타일 식별자만 유지한다.
+  const [previousTiles, setPreviousTiles] = useState<BusStopTile[]>([]);
+  const activeKeys = useMemo(() => new Set(tiles.map(tileKey)), [tiles]);
+  const observedTiles = useMemo(() => tiles.length
+    ? [...new Map([...previousTiles, ...tiles].map(tile => [tileKey(tile), tile])).values()]
+    : [], [previousTiles, tiles]);
+  const queries = useMemo(() => observedTiles.map((tile) => ({
       queryKey: [
         'bus-stops',
         'tile',
@@ -32,8 +39,17 @@ export function useNearbyBusStops(tiles: BusStopTile[]) {
           radius: tile.radiusMeters,
           signal,
         }),
+      enabled: activeKeys.has(tileKey(tile)),
       staleTime: 30 * 60_000,
       gcTime: 30 * 60_000,
-    })), [tiles]);
-  return useQueries({ queries, combine: combineBusStops });
+    })), [activeKeys, observedTiles]);
+  const combine = useCallback((results: { data?: BusStop[] }[]) => ({
+    stops: combineBusStops(results),
+    ready: results.every((result, index) => !activeKeys.has(tileKey(observedTiles[index])) || result.data !== undefined),
+  }), [activeKeys, observedTiles]);
+  const result = useQueries({ queries, combine });
+  if ((result.ready || previousTiles.length === 0) && !haveSameTiles(previousTiles, tiles)) setPreviousTiles(tiles);
+  return result.stops;
 }
+
+function tileKey(tile: BusStopTile) { return `${tile.sizeMeters}:${tile.tileX}:${tile.tileY}`; }

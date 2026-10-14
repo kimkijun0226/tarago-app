@@ -24,13 +24,16 @@ import type { BusRouteDetail } from "@/features/bus-stop/api/get-bus-route-detai
 import { useNearbyBusStops } from "@/features/bus-stop/model/use-nearby-bus-stops";
 import {
   getVisibleBusStopTiles,
+  haveSameTiles,
   type BusStopTile,
 } from "@/features/bus-stop/model/bus-stop-tile";
 import { BusStopBottomSheet } from "@/features/bus-stop/ui/bus-stop-bottom-sheet";
 import { MobilitySearch } from '@/features/mobility/ui/mobility-search';
 import { isBusStopPlace, stationSearchName } from '@/features/mobility/model/place-kind';
-import type { Place, Point } from '@/features/mobility/api/mobility';
+import { searchPlaces, type Place, type Point } from '@/features/mobility/api/mobility';
 import { useAppTheme } from '@/shared/ui/design-system';
+import { mapUi } from '@/shared/ui/map-design-tokens';
+import type { MapSheetSnap } from '@/shared/ui/map-bottom-sheet';
 import { BusRouteBottomSheet } from "@/features/bus-stop/ui/bus-route-bottom-sheet";
 import { useBusRouteDetail } from "@/features/bus-stop/model/use-bus-route-detail";
 import {
@@ -46,6 +49,7 @@ import { useMapTabVisibility } from "@/components/map-tab-visibility";
 import { useCurrentLocation } from "@/hooks/use-current-location";
 
 const ROUTE_DIRECTION_PATTERN = require("../../../assets/images/route-direction-triangle.png");
+const SUBWAY_STATION_MARKER = require('../../../assets/images/subway-station-marker.png');
 
 /**
  * 지도 카메라의 보이는 영역으로 정류장 타일을 조회하고 선택한 정류장을 연다.
@@ -57,8 +61,14 @@ const ROUTE_DIRECTION_PATTERN = require("../../../assets/images/route-direction-
 export default function MapScreen() {
   const {colors}=useAppTheme();
   const [subwayStation, setSubwayStation] = useState<string | null>(null);
+  const [subwayLineName, setSubwayLineName] = useState<string | undefined>();
+  const [subwaySheetSnap, setSubwaySheetSnap] = useState<MapSheetSnap>('half');
+  const [routeIntent, setRouteIntent] = useState<{ id: number; place: Place; field: 'start' | 'end' }>();
+  const routeIntentRevision = useRef(0);
   const [selectedPlace,setSelectedPlace]=useState<Place|null>(null);
   const [journeyLines,setJourneyLines]=useState<Point[][]>([]);
+  const [planningActive, setPlanningActive] = useState(false);
+  const [journeyEndpoints, setJourneyEndpoints] = useState<{ start: Place | null; end: Place | null }>({ start: null, end: null });
   const params = useLocalSearchParams<{stationId?:string;latitude?:string;longitude?:string;notificationId?:string}>();
   const [initialPosition,setInitialPosition]=useState<{latitude:number;longitude:number}|null>(null);
   const [preparingLocation,setPreparingLocation]=useState(true);
@@ -148,28 +158,32 @@ export default function MapScreen() {
   }, [routeDetail?.stops]);
 
   useEffect(() => () => setMapTabHidden(false), [setMapTabHidden]);
+  useEffect(() => {
+    setMapTabHidden(planningActive || Boolean(subwayStation || selectedBusStop));
+  }, [planningActive, subwayStation, selectedBusStop, setMapTabHidden]);
 
   // 패딩으로 시트 위의 지도 영역을 정하고, 줌은 유지한 채 선택 좌표만 이동한다.
   useEffect(() => {
-    if (!selectedBusStop || sheetHeight === 0 || !initializedRef.current)
+    const target = selectedBusStop ?? (!planningActive ? selectedPlace : null);
+    if (!target || sheetHeight === 0 || !initializedRef.current)
       return;
     const frame = requestAnimationFrame(() => {
       mapRef.current?.animateCameraTo({
-        latitude: selectedBusStop.latitude,
-        longitude: selectedBusStop.longitude,
+        latitude: target.latitude,
+        longitude: target.longitude,
+        ...(subwayStation ? { zoom: 17 } : {}),
         duration: 350,
       });
     });
     return () => cancelAnimationFrame(frame);
-  }, [selectedBusStop, sheetHeight]);
+  }, [selectedBusStop, selectedPlace, planningActive, subwayStation, sheetHeight]);
 
   const closeBusStop = useCallback(() => {
     selectionRequest.current++;
     setShowRouteSheet(false);
     setSelectedBusStop(null);
     setSheetHeight(0);
-    setMapTabHidden(false);
-  }, [setMapTabHidden]);
+  }, []);
 
   const selectBusStop = useCallback((busStop: BusStop) => {
     setSubwayStation(null);
@@ -177,14 +191,13 @@ export default function MapScreen() {
     selectionRequest.current++;
     setShowRouteSheet(false);
     setSelectedBusStop(busStop);
-    setMapTabHidden(true);
-  }, [setMapTabHidden]);
+  }, []);
 
   const selectPlace=useCallback(async(place:Place|null,showBusStop=false)=>{
     const request=++selectionRequest.current;
     setSubwayStation(null);setSelectedPlace(place);
     if(!place){setSheetHeight(0);return;}
-    setShowRouteSheet(false);setSelectedRoute(null);setSelectedBusStop(null);setSheetHeight(0);setMapTabHidden(false);
+    setShowRouteSheet(false);setSelectedRoute(null);setSelectedBusStop(null);setSheetHeight(0);
     mapRef.current?.animateCameraTo({...place,zoom:17,duration:350});
     if (!showBusStop || !isBusStopPlace(place)) return;
     try {
@@ -202,19 +215,28 @@ export default function MapScreen() {
     } catch {
       if(request===selectionRequest.current)Alert.alert('정류장 버스 목록을 불러오지 못했어요','잠시 후 정류장을 다시 선택해주세요.');
     }
-  },[setMapTabHidden,queryClient,selectBusStop]);
+  },[queryClient,selectBusStop]);
   const activateSearch=useCallback(()=>{
     setSubwayStation(null);
-    selectionRequest.current++;setShowRouteSheet(false);setSelectedRoute(null);setSelectedBusStop(null);setSheetHeight(0);setMapTabHidden(false);
-  },[setMapTabHidden]);
+    selectionRequest.current++;setShowRouteSheet(false);setSelectedRoute(null);setSelectedBusStop(null);setSheetHeight(0);
+  },[]);
+  const onPlanningChange = useCallback((active: boolean) => {
+    setPlanningActive(active);
+  }, []);
+  const onEndpoints = useCallback((start: Place | null, end: Place | null) => {
+    setJourneyEndpoints({ start, end });
+  }, []);
   const showJourney=useCallback((lines:Point[][])=>{
     setJourneyLines(lines);
     const points=lines.flat();
     if(!points.length)return;
     const bounds=points.reduce((b,p)=>({south:Math.min(b.south,p.latitude),west:Math.min(b.west,p.longitude),north:Math.max(b.north,p.latitude),east:Math.max(b.east,p.longitude)}),
       {south:points[0].latitude,west:points[0].longitude,north:points[0].latitude,east:points[0].longitude});
-    mapRef.current?.animateCameraWithTwoCoords({coord1:{latitude:bounds.south,longitude:bounds.west},
-      coord2:{latitude:bounds.north,longitude:bounds.east},duration:350});
+    // 경로의 끝점 마커와 라벨까지 화면 안에 남도록 좌표 범위에 여백을 둔다.
+    const latitudeMargin = Math.max((bounds.north - bounds.south) * .12, .0003);
+    const longitudeMargin = Math.max((bounds.east - bounds.west) * .12, .0003);
+    mapRef.current?.animateCameraWithTwoCoords({coord1:{latitude:bounds.south-latitudeMargin,longitude:bounds.west-longitudeMargin},
+      coord2:{latitude:bounds.north+latitudeMargin,longitude:bounds.east+longitudeMargin},duration:350});
   },[]);
 
   /** 알림으로 연 정류장을 서버 데이터로 선택하고 해당 좌표로 지도를 이동한다. */
@@ -278,7 +300,6 @@ export default function MapScreen() {
       });
       setShowRouteSheet(false);
       setRouteSheetSnap("half");
-      setMapTabHidden(true);
     } catch (error) {
       if (request !== selectionRequest.current) return;
       Alert.alert(
@@ -286,7 +307,7 @@ export default function MapScreen() {
         error instanceof Error ? error.message : "잠시 후 다시 시도해 주세요.",
       );
     }
-  }, [busStops, queryClient, selectedRoute, routeDetail, setMapTabHidden]);
+  }, [busStops, queryClient, selectedRoute, routeDetail]);
 
   /** 노선 지도에서 돌아가면 원래 선택한 정류장 목록을 다시 보여 준다. */
   const closeRoute = useCallback(() => {
@@ -356,13 +377,17 @@ export default function MapScreen() {
       caption: stop.name, minZoom: 13,
     })));
     if (selectedBusStop) items.push(stopMarker(selectedBusStop, true, Boolean(selectedRoute)));
-    if (selectedPlace) items.push({ ...selectedPlace, id: `place:${selectedPlace.id}`, caption:selectedPlace.name, kind:'place', width:32,height:40 });
+    if (selectedPlace && !journeyEndpoints.start && !journeyEndpoints.end) items.push({ ...selectedPlace, id: `place:${selectedPlace.id}`, caption: subwayStation ? `${subwayStation}역 ${subwayLineName?.replace(/^수도권/, '') ?? ''}`.trim() : selectedPlace.name,
+      ...(subwayStation ? { imageUri: markerImage(SUBWAY_STATION_MARKER), anchor: { x: .5, y: 1 }, width: 32, height: 44 } : { kind: 'place' as const, width: 32, height: 40 }) });
+    for (const [label, place] of [['출발', journeyEndpoints.start], ['도착', journeyEndpoints.end]] as const) {
+      if (place) items.push({ ...place, id: `endpoint:${label}:${place.id}`, caption: `${label} · ${place.name}`, kind: 'place', width: 32, height: 40 });
+    }
     if (selectedRoute) items.push(...directionMarkers.map(marker => ({
       id: `direction:${marker.id}`, latitude:marker.latitude, longitude:marker.longitude,
       imageUri:markerImage(ROUTE_DIRECTION_PATTERN), width:12,height:12,anchor:{x:.5,y:.5},rotation:marker.angle,
     })));
     return items;
-  }, [visibleBusStops,selectedRoute,routeStops,selectedBusStop,selectedPlace,directionMarkers]);
+  }, [visibleBusStops,selectedRoute,routeStops,selectedBusStop,selectedPlace,directionMarkers,journeyEndpoints,subwayStation,subwayLineName]);
   const lines = useMemo<TmapLine[]>(() => [
     ...(selectedRoute && routeCoordinates.length>1 ? [{id:`route:${selectedRoute.routeId}`,points:routeCoordinates,color:'#00A86B',width:6}] : []),
     ...journeyLines.map((points,index)=>({id:`journey:${index}`,points,color:colors.accent,width:6})),
@@ -375,12 +400,48 @@ export default function MapScreen() {
       const stop=routeStops.find(item=>item.stationId===id.slice(11));if(stop)void selectRouteStop(stop);
     }
   }, [selectedBusStop,busStops,routeStops,selectSelectedStop,selectBusStop,selectRouteStop]);
-  const openSubway = useCallback((stationName:string) => {
-    activateSearch();setSubwayStation(stationName);setMapTabHidden(true);
-  }, [activateSearch,setMapTabHidden]);
   const closeSubway = useCallback(() => {
-    setSubwayStation(null);setSheetHeight(0);setMapTabHidden(false);
-  }, [setMapTabHidden]);
+    selectionRequest.current++;
+    setSubwayStation(null);setSheetHeight(0);
+  }, []);
+  const routeFromSubway = useCallback((field: 'start' | 'end') => {
+    if (!selectedPlace) {
+      Alert.alert('역 위치를 확인 중이에요', '위치를 불러온 뒤 다시 눌러주세요.');
+      return;
+    }
+    const place = { ...selectedPlace, name: `${subwayStation}역` };
+    activateSearch();
+    setRouteIntent({ id: ++routeIntentRevision.current, place, field });
+  }, [selectedPlace, subwayStation, activateSearch]);
+  const selectSubwayStation = useCallback(async (name: string, lineName: string, point?: Point) => {
+    const request = ++selectionRequest.current;
+    try {
+      const near = selectedPlace ?? initialPosition;
+      if (!near) return;
+      const places = point ? [] : await queryClient.fetchQuery({
+        queryKey: ['mobility', 'subway-place', name, lineName],
+        queryFn: ({ signal }) => searchPlaces(`${name}역`, near, signal), staleTime: 30 * 60_000,
+      });
+      if (request !== selectionRequest.current) return;
+      const place = point ? { ...point, id: `subway:${lineName}:${name}`, name: `${name}역`, address: '', category: '지하철역', distanceMeters: null } : places.find(item => item.name.startsWith(`${name}역`) && item.name.includes(lineName)) ?? places.find(item => item.name.startsWith(`${name}역`) && /지하철|전철/.test(item.category));
+      if (!place) throw new Error('역 위치 없음');
+      setSelectedPlace(place);setSubwayStation(name);setSubwayLineName(lineName);
+      mapRef.current?.animateCameraTo({ ...place, zoom: 17, duration: 350 });
+    } catch {
+      if (request === selectionRequest.current) Alert.alert('역 위치를 확인하지 못했어요', '다시 선택해주세요.');
+    }
+  }, [selectedPlace, initialPosition, queryClient]);
+
+  const openSubway = useCallback((stationName: string, savedLine?: string) => {
+    const name = stationName.replace(/\[[^\]]*\]/g, '').trim().replace(/역$/, '').trim();
+    if (!name) return;
+    const lineName = savedLine ?? stationName.match(/\[([^\]]+)\]/)?.[1];
+    activateSearch();setSubwaySheetSnap('half');setSubwayLineName(lineName);setSubwayStation(name);
+    if (!selectedPlace || !(selectedPlace.name === name || selectedPlace.name.startsWith(`${name}역`))) {
+      setSelectedPlace(null);
+      void selectSubwayStation(name, lineName ?? '');
+    }
+  }, [activateSearch, selectedPlace, selectSubwayStation]);
 
   if(!initialPosition) return <View style={{flex:1,backgroundColor:'#208AEF',justifyContent:'center',alignItems:'center',gap:20,padding:32}}>
     <Text style={{color:'#FFFFFF',fontSize:40,fontWeight:'800'}}>타라고</Text>
@@ -394,7 +455,7 @@ export default function MapScreen() {
     <View style={styles.container}>
       <TmapView ref={mapRef} style={styles.container} initialCamera={{...initialPosition,zoom:17}}
         markers={markers} lines={lines} position={position}
-        padding={{top:insets.top+72,bottom:sheetHeight ? sheetHeight+insets.bottom+8 : 0}}
+        padding={{top:insets.top+(planningActive ? 150 : 120),bottom:sheetHeight ? sheetHeight+insets.bottom+8 : 0}}
         onReady={onMapInitialized} onCameraIdle={onCameraIdle} onMarkerPress={onMarkerPress} />
 
 
@@ -417,7 +478,7 @@ export default function MapScreen() {
         </Pressable>
       ) : null}
 
-      <Pressable
+      {!planningActive ? <Pressable
         accessibilityRole="button"
         accessibilityLabel="현재 위치로 지도 이동"
         accessibilityState={{ disabled: loading, busy: loading }}
@@ -439,15 +500,15 @@ export default function MapScreen() {
         ) : (
           <SymbolView
             name={{
-              ios: "location.north.fill",
+              ios: "scope",
               android: "my_location",
               web: "my_location",
             }}
             size={24}
-            tintColor={colors.accent}
+            tintColor={mapUi.text}
           />
         )}
-      </Pressable>
+      </Pressable> : null}
 
       {selectedBusStop && selectedRoute && showRouteSheet ? (
         <BusRouteBottomSheet
@@ -470,8 +531,9 @@ export default function MapScreen() {
         />
       ) : null}
       <MobilitySearch position={position??initialPosition} top={insets.top+12} left={selectedRoute ? 76 : 16} onPlace={selectPlace}
-        onGeometry={showJourney} onActivate={activateSearch} onSheetHeight={setSheetHeight} onSubway={openSubway} getPosition={getCurrentLocation} suspended={Boolean(subwayStation || selectedBusStop)} />
-      {subwayStation ? <SubwayArrivalSheet stationName={subwayStation} onClose={closeSubway} onHeightChange={setSheetHeight} /> : null}
+        routeIntent={routeIntent} onGeometry={showJourney} onActivate={activateSearch} onSheetHeight={setSheetHeight} onSubway={openSubway} getPosition={getCurrentLocation} onPlanningChange={onPlanningChange} onEndpoints={onEndpoints} suspended={Boolean(subwayStation || selectedBusStop)} />
+      {subwayStation && subwaySheetSnap === 'full' ? <View pointerEvents="none" style={{ position: 'absolute', top: 0, left: 0, right: 0, height: insets.top, backgroundColor: mapUi.background }} /> : null}
+      {subwayStation ? <SubwayArrivalSheet initialLineName={subwayLineName} stationName={subwayStation} onClose={closeSubway} onChangeSnap={setSubwaySheetSnap} onHeightChange={setSheetHeight} onStart={() => routeFromSubway('start')} onEnd={() => routeFromSubway('end')} onSelectStation={(name, lineName, point) => void selectSubwayStation(name, lineName, point)} /> : null}
     </View>
   );
 }
@@ -510,21 +572,3 @@ const styles = StyleSheet.create({
     opacity: 0.7,
   },
 });
-
-/**
- * 같은 타일 집합이면 React 상태 갱신을 건너뛰어 불필요한 조회를 막는다.
- * @param currentTiles 현재 조회 중인 타일.
- * @param nextTiles 새 카메라 영역에서 계산한 타일.
- * @returns 타일 개수·인덱스·크기가 모두 같으면 `true`.
- */
-function haveSameTiles(currentTiles: BusStopTile[], nextTiles: BusStopTile[]) {
-  return (
-    currentTiles.length === nextTiles.length &&
-    currentTiles.every(
-      (tile, index) =>
-        tile.tileX === nextTiles[index]?.tileX &&
-        tile.tileY === nextTiles[index]?.tileY &&
-        tile.sizeMeters === nextTiles[index]?.sizeMeters,
-    )
-  );
-}

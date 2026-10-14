@@ -129,6 +129,7 @@ export const BusStopBottomSheet = memo(function BusStopBottomSheet({
       keyExtractor={(group)=>`${group.routeId}:${group.stationSeq ?? ''}`}
       ListHeaderComponent={header}
       ListEmptyComponent={empty}
+      ListFooterComponent={<Text style={{ color: colors.secondaryText, fontSize: 11, paddingHorizontal: 20, paddingVertical: 16 }}>버스정보 제공: 서울특별시 · 경기도 · 국토교통부(TAGO)</Text>}
       contentContainerStyle={styles.arrivalList}
       showsVerticalScrollIndicator={false}
             renderItem={({item:group}) => (

@@ -4,6 +4,7 @@ export interface SubwayArrival {
   id: string; lineId: string; lineName: string; direction: string; destination: string;
   trainId: string; trainType: string; arrivalMessage: string; locationMessage: string;
   arrivalCode: string; receivedAt: string | null; etaSeconds: number | null; isLastTrain: boolean;
+  stationId?: string; previousStationId?: string; nextStationId?: string; destinationDirection?: string;
 }
 export interface SubwayArrivals {
   stationName: string; fetchedAt: string; attribution: string; arrivals: SubwayArrival[];
