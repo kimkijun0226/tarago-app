@@ -406,10 +406,6 @@ export default function MapScreen() {
         {selectedRoute && routeStops.map((stop) => (
           <RouteBusStopMarker key={stop.stationId} stop={stop} onSelect={selectRouteStop} />
         ))}
-        {routeDetail?.vehicles.map(vehicle=>vehicle.positionSource==='gps' ? <NaverMapMarkerOverlay
-          key={`gps:${vehicle.vehicleId}`} latitude={vehicle.latitude} longitude={vehicle.longitude}
-          image={require('../../assets/images/bus-stop-route-marker.png')} width={26} height={26}
-          globalZIndex={200001} zIndex={20} /> : null)}
         {selectedPlace ? <NaverMapMarkerOverlay key={`place:${selectedPlace.id}`} latitude={selectedPlace.latitude} longitude={selectedPlace.longitude}
           caption={{text:selectedPlace.name,textSize:13,color:colors.text,haloColor:colors.surface}} globalZIndex={200002} /> : null}
         {journeyLines.map((coords,index)=><NaverMapPathOverlay key={`journey:${index}`} coords={coords} color={colors.accent}

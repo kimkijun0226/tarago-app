@@ -106,7 +106,7 @@ export const BusRouteBottomSheet = memo(function BusRouteBottomSheet({
       ListEmptyComponent={empty}
       ListFooterComponent={snap!=='compact' && data ? (
           <View style={styles.footer}>
-            <Text style={styles.footerHint}>{data.vehicles.some(v=>v.positionSource==='gps') ? '지도는 제공된 차량 좌표 · 목록은 정류장 순번 기준' : '차량 정보는 정류장 순번 기준'}</Text>
+            <Text style={styles.footerHint}>차량 정보는 정류장 순번 기준</Text>
             <Pressable
               onPress={() => {
                 void refetchRoute();
