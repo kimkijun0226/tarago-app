@@ -10,7 +10,8 @@ export type BusRouteDetail = {
   turnStationSeq: number | null;
   stops: { stationId: string; stationSeq: number; mobileNo: string | null; name: string; latitude: number; longitude: number }[];
   geometry: { source: 'official' | 'unavailable'; points: { latitude: number; longitude: number }[] };
-  vehicles: { vehicleId: string; stationSeq: number; positionSource: 'station_sequence' }[];
+  vehicles: ({ vehicleId: string; stationSeq: number; positionSource: 'station_sequence' }
+    | { vehicleId: string; stationSeq: number; positionSource: 'gps'; latitude: number; longitude: number })[];
 };
 
 /** 선택 정류장의 정확한 경유 순번을 전달해 왕복 노선을 구별한다. */

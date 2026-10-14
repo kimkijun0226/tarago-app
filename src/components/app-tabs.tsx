@@ -1,7 +1,6 @@
 import { NativeTabs } from 'expo-router/unstable-native-tabs';
-import { useColorScheme } from 'react-native';
 
-import { Colors } from '@/constants/theme';
+import { useAppTheme } from '@/shared/ui/design-system';
 import { useMapTabVisibility } from '@/components/map-tab-visibility';
 
 /**
@@ -10,29 +9,30 @@ import { useMapTabVisibility } from '@/components/map-tab-visibility';
  * 탭 색상은 시스템 색상 모드와 공통 테마 값을 사용한다.
  */
 export default function AppTabs() {
-  const scheme = useColorScheme();
-  const colors = Colors[scheme === 'unspecified' ? 'light' : scheme];
+  const { colors } = useAppTheme();
   const { isMapTabHidden } = useMapTabVisibility();
 
   return (
     <NativeTabs
       hidden={isMapTabHidden}
-      backgroundColor={colors.background}
-      indicatorColor={colors.backgroundElement}
-      labelStyle={{ selected: { color: colors.text } }}>
+      backgroundColor={colors.surface}
+      indicatorColor={colors.accentSurface}
+      tintColor={colors.accent}
+      iconColor={{ default: colors.secondaryText, selected: colors.accent }}
+      labelStyle={{ default: { color: colors.secondaryText }, selected: { color: colors.accent } }}>
       <NativeTabs.Trigger name="index">
         <NativeTabs.Trigger.Label>지도</NativeTabs.Trigger.Label>
         <NativeTabs.Trigger.Icon
-          src={require('@/assets/images/tabIcons/home.png')}
-          renderingMode="template"
+          sf={{ default: 'map', selected: 'map.fill' }}
+          md="map"
         />
       </NativeTabs.Trigger>
 
       <NativeTabs.Trigger name="alerts">
         <NativeTabs.Trigger.Label>알림</NativeTabs.Trigger.Label>
         <NativeTabs.Trigger.Icon
-          src={require('@/assets/images/tabIcons/explore.png')}
-          renderingMode="template"
+          sf={{ default: 'bell', selected: 'bell.fill' }}
+          md="notifications"
         />
       </NativeTabs.Trigger>
     </NativeTabs>

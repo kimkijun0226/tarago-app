@@ -1,3 +1,4 @@
+import { useAppTheme } from '@/shared/ui/design-system';
 import { memo, useMemo } from "react";
 import { router } from 'expo-router';
 import { SymbolView } from 'expo-symbols';
@@ -10,8 +11,7 @@ import {
   View,
 } from 'react-native';
 import { BottomSheetFlatList } from '@gorhom/bottom-sheet';
-import { MapBottomSheet } from './map-bottom-sheet';
-import { openStopDirections } from '../model/open-stop-directions';
+import { MapBottomSheet } from '@/shared/ui/map-bottom-sheet';
 
 import type { BusStop } from '@/features/bus-stop/api/get-nearby-bus-stops';
 import {
@@ -46,6 +46,8 @@ export const BusStopBottomSheet = memo(function BusStopBottomSheet({
   onHeightChange,
   onSelectRoute,
 }: BusStopBottomSheetProps) {
+  const { colors } = useAppTheme();
+  const styles = useMemo(() => createStyles(colors), [colors]);
   const { setMapTabHidden } = useMapTabVisibility();
   const {
     data: arrivals = EMPTY_ARRIVALS,
@@ -60,10 +62,10 @@ export const BusStopBottomSheet = memo(function BusStopBottomSheet({
     .filter((group) => group.first.etaSeconds !== null && group.first.etaSeconds <= 60)
     .map((group) => group.busNumber), [arrivalGroups]);
 
-  const header=(<View style={{backgroundColor:'#FFFFFF'}}>
+  const header=(<View style={{backgroundColor:colors.surface}}>
       <View style={styles.header}>
         <View style={styles.stationText}>
-          <Text style={styles.title}>{busStop.name}</Text>
+          <Text accessibilityRole="header" style={styles.title}>{busStop.name}</Text>
           <Text style={styles.subtitle}>
             {busStop.arsId ?? '정류장 번호 없음'}
           </Text>
@@ -79,18 +81,10 @@ export const BusStopBottomSheet = memo(function BusStopBottomSheet({
             pressed && styles.pressed,
           ]}
         >
-          <Text style={styles.closeText}>×</Text>
+          <SymbolView name={{ios:'xmark',android:'close',web:'close'}} size={18} tintColor={colors.secondaryText} />
         </Pressable>
       </View>
 
-      <View style={styles.refreshRow}>
-        <Pressable onPress={()=>void openStopDirections(busStop,'walk')} accessibilityRole="button" accessibilityLabel="네이버지도에서 정류장까지 도보 길찾기">
-          <Text style={styles.refreshText}>도보 길찾기 ↗</Text>
-        </Pressable>
-        <Pressable onPress={()=>void openStopDirections(busStop,'public')} accessibilityRole="button" accessibilityLabel="네이버지도에서 정류장까지 대중교통 길찾기">
-          <Text style={styles.refreshText}>대중교통 ↗</Text>
-        </Pressable>
-      </View>
       <View style={styles.refreshRow}>
         <Text style={styles.updatedAt}>
           {dataUpdatedAt
@@ -116,7 +110,7 @@ export const BusStopBottomSheet = memo(function BusStopBottomSheet({
       {soonBusNumbers.length>0 ? <View style={styles.soonRow}><Text style={styles.soonBadge}>곧 도착</Text><Text style={styles.soonNumbers}>{soonBusNumbers.join(', ')}</Text></View> : null}
     </View>);
   const empty=(<View style={styles.stateContainer}>
-    {isPending ? <ActivityIndicator color="#1769E0" /> : null}
+    {isPending ? <ActivityIndicator color={colors.accent} /> : null}
     <Text style={styles.stateText}>{isPending ? '도착정보를 불러오고 있습니다.' : isError ? '도착정보를 불러오지 못했습니다.' : '현재 도착 예정인 버스가 없습니다.'}</Text>
     {isError ? <Pressable onPress={()=>void refetch()}><Text style={styles.retryText}>다시 시도</Text></Pressable> : null}
   </View>);
@@ -133,8 +127,7 @@ export const BusStopBottomSheet = memo(function BusStopBottomSheet({
               <Pressable
                 accessibilityRole="button"
                 accessibilityLabel={`${group.busNumber}번 노선 상세 보기`}
-                disabled={!group.first.stationSeq}
-                onPress={() => onSelectRoute(group.routeId, group.first.stationSeq!)}
+                onPress={() => onSelectRoute(group.routeId, group.first.stationSeq ?? 0)}
                 style={styles.routeButton}
               >
                 <View style={styles.routeHeader}>
@@ -165,7 +158,7 @@ export const BusStopBottomSheet = memo(function BusStopBottomSheet({
                     requestId:String(Date.now()),alertId:'',
                   }});
                 }}>
-                <SymbolView name={{ios:'bell',android:'notifications',web:'notifications'}} size={21} tintColor="#1769E0" />
+                <SymbolView name={{ios:'bell',android:'notifications',web:'notifications'}} size={21} tintColor={colors.accent} />
               </Pressable>
               </View>
             )}
@@ -173,7 +166,7 @@ export const BusStopBottomSheet = memo(function BusStopBottomSheet({
   </MapBottomSheet>;
 });
 
-const styles = StyleSheet.create({
+const createStyles = (colors: ReturnType<typeof useAppTheme>['colors']) => StyleSheet.create({
   header: {
     flexDirection: 'row',
     alignItems: 'flex-start',
@@ -184,29 +177,23 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   title: {
-    color: '#15171A',
-    fontSize: 21,
+    color: colors.text,
+    fontSize: 22,
     fontWeight: '700',
   },
   subtitle: {
     marginTop: 5,
-    color: '#69717C',
+    color: colors.secondaryText,
     fontSize: 14,
   },
   closeButton: {
-    width: 38,
-    height: 38,
+    width: 44,
+    height: 44,
     marginLeft: 12,
-    borderRadius: 19,
+    borderRadius: 22,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#F1F3F5',
-  },
-  closeText: {
-    marginTop: -2,
-    color: '#343A40',
-    fontSize: 30,
-    fontWeight: '300',
+    backgroundColor: colors.secondarySurface,
   },
   refreshRow: {
     flexDirection: 'row',
@@ -215,15 +202,17 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingVertical: 8,
     borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: '#E9ECEF',
+    borderTopColor: colors.separator,
   },
   updatedAt: {
-    color: '#8A919B',
+    color: colors.tertiaryText,
     fontSize: 12,
   },
   refreshText: {
-    color: '#1769E0',
-    fontSize: 13,
+    color: colors.accent,
+    minHeight: 44,
+    paddingVertical: 12,
+    fontSize: 15,
     fontWeight: '600',
   },
   stateContainer: {
@@ -233,11 +222,13 @@ const styles = StyleSheet.create({
     gap: 10,
   },
   stateText: {
-    color: '#69717C',
+    color: colors.secondaryText,
     fontSize: 14,
   },
   retryText: {
-    color: '#1769E0',
+    minHeight: 44,
+    paddingVertical: 12,
+    color: colors.accent,
     fontSize: 14,
     fontWeight: '600',
   },
@@ -248,11 +239,11 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingVertical: 10,
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: '#DEE2E6',
+    borderBottomColor: colors.separator,
   },
   soonBadge: {
-    color: '#E5484D',
-    borderColor: '#E5484D',
+    color: colors.danger,
+    borderColor: colors.danger,
     borderWidth: 1,
     borderRadius: 14,
     paddingHorizontal: 8,
@@ -260,7 +251,7 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   soonNumbers: {
-    color: '#15171A',
+    color: colors.text,
     fontSize: 17,
     fontWeight: '700',
   },
@@ -270,29 +261,30 @@ const styles = StyleSheet.create({
   arrivalRow: {
     minHeight: 66,
     paddingHorizontal: 20,
-    paddingVertical: 12,
+    paddingVertical: 16,
     flexDirection: 'row',
     alignItems: 'center',
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: '#E9ECEF',
+    borderBottomColor: colors.separator,
   },
-  routeButton: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 8 },
-  alertButton: { width: 44, height: 44, marginLeft: 10, borderRadius: 22, backgroundColor: '#EEF4FF', alignItems: 'center', justifyContent: 'center' },
+  routeButton: { minHeight:44, flex: 1, flexDirection: 'row', alignItems: 'center', gap: 8 },
+  alertButton: { width: 44, height: 44, marginLeft: 10, borderRadius: 22, backgroundColor: colors.accentSurface, alignItems: 'center', justifyContent: 'center' },
   routeHeader: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 7,
     flex: 1,
+    flexWrap: 'wrap',
   },
   busNumber: {
-    color: '#15171A',
+    color: colors.text,
     fontSize: 20,
     fontWeight: '600',
   },
   routeType: {
     overflow: 'hidden',
-    color: '#FFFFFF',
-    backgroundColor: '#0096A8',
+    color: colors.onAccent,
+    backgroundColor: colors.accent,
     fontSize: 12,
     fontWeight: '700',
     borderRadius: 4,
@@ -300,7 +292,7 @@ const styles = StyleSheet.create({
     paddingVertical: 3,
   },
   villageRoute: {
-    backgroundColor: '#239900',
+    backgroundColor: colors.success,
   },
   arrivalTimes: {
     alignItems: 'flex-end',
@@ -311,12 +303,12 @@ const styles = StyleSheet.create({
     textAlign: 'right',
   },
   eta: {
-    color: '#F04438',
+    color: colors.danger,
     fontSize: 14,
     fontWeight: '600',
   },
   noEta: {
-    color: '#8A919B',
+    color: colors.tertiaryText,
   },
   pressed: {
     opacity: 0.65,
@@ -332,6 +324,8 @@ function ArrivalTime({
 }: {
   arrival: BusArrivalGroup['first'];
 }) {
+  const { colors } = useAppTheme();
+  const styles = useMemo(() => createStyles(colors), [colors]);
   return (
     <Text style={[styles.eta, styles.etaText, arrival.etaSeconds === null && styles.noEta]}>
       {formatEta(arrival.etaSeconds, arrival.serviceStatus, arrival.etaPrecision, arrival.etaSource)}

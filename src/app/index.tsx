@@ -381,14 +381,6 @@ export default function MapScreen() {
         {selectedRoute && routeStops.map((stop) => (
           <RouteBusStopMarker key={stop.stationId} stop={stop} onSelect={selectRouteStop} />
         ))}
-        {routeDetail?.vehicles.map(vehicle=>{
-          const stop=routeDetail.stops.find(item=>item.stationSeq===vehicle.stationSeq);
-          if(!stop || !Number.isFinite(stop.latitude) || !Number.isFinite(stop.longitude)) return null;
-          return <NaverMapMarkerOverlay key={`vehicle:${vehicle.vehicleId}`} latitude={stop.latitude} longitude={stop.longitude}
-            image={require('../../assets/images/bus-stop-selected-marker.png')} width={30} height={36}
-            caption={{text:`${routeDetail.busNumber} · 마지막 확인`,textSize:11,color:'#1769E0',haloColor:'#FFFFFF'}}
-            globalZIndex={200001} zIndex={20} />;
-        })}
         {selectedBusStop ? (
           <BusStopMarker
             key={`selected-stop:${selectedBusStop.id}`}

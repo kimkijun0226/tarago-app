@@ -1,3 +1,4 @@
+import { useAppTheme } from '@/shared/ui/design-system';
 import { memo, useCallback, useMemo, useRef } from "react";
 import { SymbolView } from "expo-symbols";
 import {
@@ -8,7 +9,7 @@ import {
   View,
 } from "react-native";
 import { BottomSheetFlatList, type BottomSheetFlatListMethods } from '@gorhom/bottom-sheet';
-import { MapBottomSheet } from './map-bottom-sheet';
+import { MapBottomSheet } from '@/shared/ui/map-bottom-sheet';
 import type { BusRouteDetail } from '../api/get-bus-route-detail';
 
 import { formatEta, formatRemainingStops } from "../model/bus-arrival";
@@ -40,6 +41,8 @@ export const BusRouteBottomSheet = memo(function BusRouteBottomSheet({
   onClose,
   onHeightChange,
 }: Props) {
+  const { colors } = useAppTheme();
+  const styles = useMemo(() => createStyles(colors), [colors]);
   const listRef=useRef<BottomSheetFlatListMethods>(null);
   const {
     data,
@@ -53,18 +56,18 @@ export const BusRouteBottomSheet = memo(function BusRouteBottomSheet({
   const centerSelectedStop=useCallback(()=>{
     if(snap==='compact'){centeredSnap.current=null;return;}
     if(centeredSnap.current===snap)return;
-    const index=data?.stops.findIndex(stop=>stop.stationSeq===stationSeq && stop.stationId===stationId) ?? -1;
+    const index=data?.stops.findIndex(stop=>stop.stationSeq===data.selectedStationSeq && stop.stationId===data.selectedStationId) ?? -1;
     if(index>=0) {centeredSnap.current=snap;listRef.current?.scrollToIndex({index,viewPosition:.5,animated:false});}
-  },[snap,data,stationSeq,stationId]);
+  },[snap,data]);
   const arriving = useMemo(() => arrivals
     .filter(
       (item) =>
         item.routeId === routeId &&
-        item.stationSeq === stationSeq &&
+        (item.stationSeq === undefined || item.stationSeq === (data?.selectedStationSeq ?? stationSeq)) &&
         item.etaSeconds !== null,
     )
     .sort((a, b) => a.etaSeconds! - b.etaSeconds!)
-    .slice(0, 2), [arrivals, routeId, stationSeq]);
+    .slice(0, 2), [arrivals, routeId, stationSeq,data?.selectedStationSeq]);
   const vehiclesByStop = useMemo(() => {
     const grouped = new Map<number, NonNullable<typeof data>["vehicles"]>();
     for (const vehicle of data?.vehicles ?? []) {
@@ -74,37 +77,26 @@ export const BusRouteBottomSheet = memo(function BusRouteBottomSheet({
     }
     return grouped;
   }, [data?.vehicles]);
-  const header=<View style={{backgroundColor:'#FFFFFF'}}>
+  const header=<View style={{backgroundColor:colors.surface}}>
       <View style={styles.header}>
         <View style={styles.routeTitle}>
           <Text style={styles.routeBadge}>
             {data?.routeType.includes("마을") ? "마을" : "일반"}
           </Text>
-          <Text style={styles.title}>{data?.busNumber ?? "노선"}</Text>
+          <Text accessibilityRole="header" style={styles.title}>{data?.busNumber ?? "노선"}</Text>
         </View>
-        <Pressable
-          onPress={() => onChangeSnap(snap === "compact" ? "full" : "compact")}
-          accessibilityRole="button"
-          accessibilityLabel={
-            snap === "compact" ? "노선 목록 보기" : "지도 크게 보기"
-          }
-        >
-          <Text style={styles.action}>
-            {snap === "compact" ? "노선 보기" : "지도 크게 보기"}
-          </Text>
-        </Pressable>
         <Pressable
           onPress={onClose}
           accessibilityRole="button"
           accessibilityLabel="정류장 버스 목록으로 돌아가기"
         >
-          <Text style={styles.close}>×</Text>
+          <View style={styles.close}><SymbolView name={{ios:'chevron.left',android:'arrow_back',web:'arrow_back'}} size={20} tintColor={colors.accent} /></View>
         </Pressable>
       </View>
     {snap!=='compact' && data?.geometry.source==='unavailable' ? <Text style={styles.notice}>공식 도로 경로 정보가 없습니다.</Text> : null}
   </View>;
   const empty=snap==='compact' ? <Text style={styles.compactHint}>선택 정류장 · {arriving[0] ? formatEta(arriving[0].etaSeconds,arriving[0].serviceStatus,arriving[0].etaPrecision,arriving[0].etaSource) : '도착정보 확인 중'}</Text>
-    : isPending ? <ActivityIndicator color="#1769E0" /> : isError ? <Pressable onPress={()=>void refetchRoute()}><Text style={styles.notice}>노선 정보를 불러오지 못했습니다. 다시 시도</Text></Pressable> : null;
+    : isPending ? <ActivityIndicator color={colors.accent} /> : isError ? <Pressable onPress={()=>void refetchRoute()}><Text style={styles.notice}>노선 정보를 불러오지 못했습니다. 다시 시도</Text></Pressable> : null;
   return <MapBottomSheet snap={snap} onChangeSnap={onChangeSnap} onHeightChange={onHeightChange}>
     <BottomSheetFlatList<BusRouteDetail['stops'][number]>
       ref={listRef}
@@ -114,7 +106,7 @@ export const BusRouteBottomSheet = memo(function BusRouteBottomSheet({
       ListEmptyComponent={empty}
       ListFooterComponent={snap!=='compact' && data ? (
           <View style={styles.footer}>
-            <Text style={styles.footerHint}>차량 위치는 정류장 순번 기준</Text>
+            <Text style={styles.footerHint}>{data.vehicles.some(v=>v.positionSource==='gps') ? '지도는 제공된 차량 좌표 · 목록은 정류장 순번 기준' : '차량 정보는 정류장 순번 기준'}</Text>
             <Pressable
               onPress={() => {
                 void refetchRoute();
@@ -139,7 +131,7 @@ export const BusRouteBottomSheet = memo(function BusRouteBottomSheet({
               if(!data)return null;
               const vehicles = vehiclesByStop.get(stop.stationSeq) ?? [];
               const selected =
-                stop.stationSeq === stationSeq &&
+                stop.stationSeq === data.selectedStationSeq &&
                 stop.stationId === data.selectedStationId;
               const color =
                 stop.stationSeq <= (data.turnStationSeq ?? Infinity)
@@ -172,7 +164,7 @@ export const BusRouteBottomSheet = memo(function BusRouteBottomSheet({
                             web: "directions_bus",
                           }}
                           size={20}
-                          tintColor="#FFFFFF"
+                          tintColor={colors.onAccent}
                         />
                       </View>
                     ) : null}
@@ -225,7 +217,7 @@ export const BusRouteBottomSheet = memo(function BusRouteBottomSheet({
   </MapBottomSheet>;
 });
 
-const styles = StyleSheet.create({
+const createStyles = (colors: ReturnType<typeof useAppTheme>['colors']) => StyleSheet.create({
   header: {
     flexDirection: "row",
     alignItems: "center",
@@ -233,36 +225,36 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingBottom: 16,
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: "#E9ECEF",
+    borderBottomColor: colors.separator,
   },
-  routeTitle: { flexDirection: "row", alignItems: "center", gap: 8 },
+  routeTitle: { flex:1, flexDirection: "row", alignItems: "center", gap: 8 },
   routeBadge: {
-    backgroundColor: "#00A4B1",
-    color: "#FFF",
+    backgroundColor: colors.accent,
+    color: colors.onAccent,
     fontSize: 13,
-    paddingHorizontal: 5,
-    paddingVertical: 3,
-    borderRadius: 3,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 6,
   },
-  title: { fontSize: 23, fontWeight: "700", color: "#15171A" },
-  action: { color: "#1769E0", fontSize: 14, fontWeight: "600" },
-  close: { fontSize: 30, color: "#343A40" },
+  title: { fontSize: 23, fontWeight: "700", color: colors.text },
+  action: { color: colors.accent, fontSize: 15, fontWeight: "600",minHeight:44,paddingVertical:12 },
+  close: { width:44,height:44,borderRadius:22,backgroundColor:colors.secondarySurface,alignItems:"center",justifyContent:"center" },
   compactHint: {
     paddingHorizontal: 20,
     paddingTop: 8,
     fontSize: 14,
-    color: "#69717C",
+    color: colors.secondaryText,
   },
-  notice: { paddingHorizontal: 20, paddingVertical: 12, color: "#69717C" },
+  notice: { minHeight:44, paddingHorizontal: 20, paddingVertical: 12, color: colors.secondaryText },
   list: { flex: 1 },
   listContent: { paddingBottom: 10 },
   row: {
     flexDirection: "row",
     minHeight: 67,
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: "#E9ECEF",
+    borderBottomColor: colors.separator,
   },
-  selectedRow: { backgroundColor: "#F3F7FC" },
+  selectedRow: { backgroundColor: colors.accentSurface },
   rail: { width: 72, alignItems: "center", justifyContent: "center" },
   railLine: { position: "absolute", width: 5, top: 0, bottom: 0, left: 35 },
   railStart: { top: "50%" },
@@ -271,16 +263,16 @@ const styles = StyleSheet.create({
     width: 11,
     height: 11,
     borderRadius: 6,
-    backgroundColor: "#FFF",
+    backgroundColor: colors.surface,
     borderWidth: 2,
-    borderColor: "#AEB4BC",
+    borderColor: colors.tertiaryText,
     zIndex: 1,
   },
   selectedDot: {
     width: 15,
     height: 15,
     borderRadius: 8,
-    borderColor: "#1769E0",
+    borderColor: colors.accent,
     borderWidth: 3,
   },
   busOnRail: {
@@ -292,30 +284,30 @@ const styles = StyleSheet.create({
     borderRadius: 5,
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: "#00A4B1",
+    backgroundColor: colors.accent,
     zIndex: 2,
   },
   rowBody: {
     flex: 1,
     justifyContent: "center",
-    paddingVertical: 13,
+    paddingVertical: 16,
     paddingRight: 16,
   },
   rowTitle: { flexDirection: "row", alignItems: "center", gap: 8 },
-  stopName: { fontSize: 17, color: "#15171A" },
+  stopName: { flexShrink:1, fontSize: 17, color: colors.text },
   selectedName: { fontWeight: "700" },
   turnBadge: {
     borderRadius: 10,
     borderWidth: 1,
-    borderColor: "#ADB5BD",
+    borderColor: colors.separator,
     paddingHorizontal: 5,
     paddingVertical: 1,
-    color: "#69717C",
+    color: colors.secondaryText,
     fontSize: 11,
   },
-  selectedLabel: { marginTop: 4, color: "#1769E0", fontSize: 12 },
-  arrivalText: { marginTop: 4, color: "#F04438", fontSize: 14 },
-  vehicleText: { marginTop: 4, color: "#008F99", fontSize: 12 },
+  selectedLabel: { marginTop: 4, color: colors.accent, fontSize: 12 },
+  arrivalText: { marginTop: 4, color: colors.danger, fontSize: 14 },
+  vehicleText: { marginTop: 4, color: colors.success, fontSize: 12 },
   footer: {
     flexDirection: "row",
     justifyContent: "space-between",
@@ -323,7 +315,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingVertical: 14,
     borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: "#E9ECEF",
+    borderTopColor: colors.separator,
   },
-  footerHint: { fontSize: 12, color: "#8A919B" },
+  footerHint: { fontSize: 12, color: colors.tertiaryText },
 });
