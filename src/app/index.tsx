@@ -32,7 +32,9 @@ import {
 import { RouteBusStopMarker } from "@/features/bus-stop/ui/route-bus-stop-marker";
 import { BusStopMarker } from "@/features/bus-stop/ui/bus-stop-marker";
 import { BusStopBottomSheet } from "@/features/bus-stop/ui/bus-stop-bottom-sheet";
-import { MapSearchBar } from '@/features/bus-stop/ui/map-search-bar';
+import { MobilitySearch } from '@/features/mobility/ui/mobility-search';
+import type { Place, Point } from '@/features/mobility/api/mobility';
+import { useAppTheme } from '@/shared/ui/design-system';
 import { BusRouteBottomSheet } from "@/features/bus-stop/ui/bus-route-bottom-sheet";
 import { useBusRouteDetail } from "@/features/bus-stop/model/use-bus-route-detail";
 import {
@@ -57,6 +59,9 @@ const ROUTE_DIRECTION_PATTERN = require("../../assets/images/route-direction-tri
  * 카메라 이동 종료 이벤트에서만 조회·표시 영역을 반영한다.
  */
 export default function MapScreen() {
+  const {colors}=useAppTheme();
+  const [selectedPlace,setSelectedPlace]=useState<Place|null>(null);
+  const [journeyLines,setJourneyLines]=useState<Point[][]>([]);
   const params = useLocalSearchParams<{stationId?:string;latitude?:string;longitude?:string;notificationId?:string}>();
   const [initialPosition,setInitialPosition]=useState<{latitude:number;longitude:number}|null>(null);
   const [preparingLocation,setPreparingLocation]=useState(true);
@@ -170,11 +175,31 @@ export default function MapScreen() {
   }, [setMapTabHidden]);
 
   const selectBusStop = useCallback((busStop: BusStop) => {
+    setSelectedPlace(null);setJourneyLines([]);
     selectionRequest.current++;
     setShowRouteSheet(false);
     setSelectedBusStop(busStop);
     setMapTabHidden(true);
   }, [setMapTabHidden]);
+
+  const selectPlace=useCallback((place:Place|null)=>{
+    setSelectedPlace(place);
+    if(!place)return;
+    selectionRequest.current++;setShowRouteSheet(false);setSelectedRoute(null);setSelectedBusStop(null);setSheetHeight(0);setMapTabHidden(false);
+    mapRef.current?.animateCameraTo({...place,zoom:16,duration:350});
+  },[setMapTabHidden]);
+  const activateSearch=useCallback(()=>{
+    selectionRequest.current++;setShowRouteSheet(false);setSelectedRoute(null);setSelectedBusStop(null);setSheetHeight(0);setMapTabHidden(false);
+  },[setMapTabHidden]);
+  const showJourney=useCallback((lines:Point[][])=>{
+    setJourneyLines(lines);
+    const points=lines.flat();
+    if(!points.length)return;
+    const bounds=points.reduce((b,p)=>({south:Math.min(b.south,p.latitude),west:Math.min(b.west,p.longitude),north:Math.max(b.north,p.latitude),east:Math.max(b.east,p.longitude)}),
+      {south:points[0].latitude,west:points[0].longitude,north:points[0].latitude,east:points[0].longitude});
+    mapRef.current?.animateCameraWithTwoCoords({coord1:{latitude:bounds.south,longitude:bounds.west},
+      coord2:{latitude:bounds.north,longitude:bounds.east},duration:350});
+  },[]);
 
   /** 알림으로 연 정류장을 서버 데이터로 선택하고 해당 좌표로 지도를 이동한다. */
   useEffect(() => {
@@ -323,7 +348,7 @@ export default function MapScreen() {
         initialCamera={{...initialPosition,zoom:17}}
         mapPadding={{
           top: insets.top+72,
-          bottom: selectedBusStop ? sheetHeight + insets.bottom + 8 : 0,
+          bottom: sheetHeight ? sheetHeight + insets.bottom + 8 : 0,
         }}
         isShowLocationButton={false}
         isShowZoomControls={false}
@@ -381,6 +406,14 @@ export default function MapScreen() {
         {selectedRoute && routeStops.map((stop) => (
           <RouteBusStopMarker key={stop.stationId} stop={stop} onSelect={selectRouteStop} />
         ))}
+        {routeDetail?.vehicles.map(vehicle=>vehicle.positionSource==='gps' ? <NaverMapMarkerOverlay
+          key={`gps:${vehicle.vehicleId}`} latitude={vehicle.latitude} longitude={vehicle.longitude}
+          image={require('../../assets/images/bus-stop-route-marker.png')} width={26} height={26}
+          globalZIndex={200001} zIndex={20} /> : null)}
+        {selectedPlace ? <NaverMapMarkerOverlay key={`place:${selectedPlace.id}`} latitude={selectedPlace.latitude} longitude={selectedPlace.longitude}
+          caption={{text:selectedPlace.name,textSize:13,color:colors.text,haloColor:colors.surface}} globalZIndex={200002} /> : null}
+        {journeyLines.map((coords,index)=><NaverMapPathOverlay key={`journey:${index}`} coords={coords} color={colors.accent}
+          width={6} outlineColor={colors.surface} outlineWidth={2} globalZIndex={100002} />)}
         {selectedBusStop ? (
           <BusStopMarker
             key={`selected-stop:${selectedBusStop.id}`}
@@ -396,14 +429,13 @@ export default function MapScreen() {
         ) : null}
       </NaverMapView>
 
-      <MapSearchBar position={position??initialPosition} top={insets.top+12} left={selectedRoute ? 76 : 16} onSelect={selectBusStop} />
 
       {selectedRoute ? (
         <Pressable
           accessibilityRole="button"
           accessibilityLabel="정류장 버스 목록으로 돌아가기"
           onPress={closeRoute}
-          style={[styles.backButton, { top: insets.top + 12 }]}
+          style={[styles.backButton, { top: insets.top + 12,backgroundColor:colors.surface }]}
         >
           <SymbolView
             name={{
@@ -412,7 +444,7 @@ export default function MapScreen() {
               web: "arrow_back",
             }}
             size={24}
-            tintColor="#15171A"
+            tintColor={colors.text}
           />
         </Pressable>
       ) : null}
@@ -426,7 +458,8 @@ export default function MapScreen() {
         style={({ pressed }) => [
           styles.locationButton,
           {
-            bottom: selectedBusStop
+            backgroundColor:colors.surface,
+            bottom: sheetHeight
               ? sheetHeight + insets.bottom + 24
               : insets.bottom + 16,
           },
@@ -434,7 +467,7 @@ export default function MapScreen() {
         ]}
       >
         {loading ? (
-          <ActivityIndicator color="#1769E0" />
+          <ActivityIndicator color={colors.accent} />
         ) : (
           <SymbolView
             name={{
@@ -443,7 +476,7 @@ export default function MapScreen() {
               web: "my_location",
             }}
             size={24}
-            tintColor="#1769E0"
+            tintColor={colors.accent}
           />
         )}
       </Pressable>
@@ -468,6 +501,8 @@ export default function MapScreen() {
           onSelectRoute={selectBusRoute}
         />
       ) : null}
+      <MobilitySearch position={position??initialPosition} top={insets.top+12} left={selectedRoute ? 76 : 16} onPlace={selectPlace}
+        onGeometry={showJourney} onActivate={activateSearch} onSheetHeight={setSheetHeight} />
     </View>
   );
 }

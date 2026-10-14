@@ -7,7 +7,7 @@ export function useBusRouteDetail(stationId: string, routeId: string, stationSeq
   return useQuery({
     queryKey: ['bus-route', stationId, routeId, stationSeq],
     queryFn: ({ signal }) => getBusRouteDetail(stationId, routeId, stationSeq, signal),
-    enabled,
+    enabled: enabled && Boolean(stationId && routeId),
     refetchInterval: 10_000,
     refetchIntervalInBackground: false,
   });
