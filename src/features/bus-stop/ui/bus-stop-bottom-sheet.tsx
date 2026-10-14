@@ -1,10 +1,12 @@
 import { useAppTheme } from '@/shared/ui/design-system';
-import { memo, useMemo } from "react";
+import { isAxiosError } from 'axios';
+import { memo, useEffect, useMemo } from "react";
 import { router } from 'expo-router';
 import { SymbolView } from 'expo-symbols';
 import { useMapTabVisibility } from '@/components/map-tab-visibility';
 import {
   ActivityIndicator,
+  Alert,
   Pressable,
   StyleSheet,
   Text,
@@ -53,10 +55,17 @@ export const BusStopBottomSheet = memo(function BusStopBottomSheet({
     data: arrivals = EMPTY_ARRIVALS,
     dataUpdatedAt,
     isError,
+    error,
     isFetching,
     isPending,
     refetch,
   } = useBusArrivals(busStop.id);
+  useEffect(() => {
+    if (!isAxiosError(error) || error.response?.status !== 410) return;
+    onClose();
+    Alert.alert('정차 노선이 없는 정류장', '현재 버스가 정차하지 않는 것으로 확인되어 지도에서 제외했습니다.');
+  },[error,onClose]);
+  const errorMessage = isAxiosError(error) && typeof error.response?.data?.message==='string' ? error.response.data.message : '도착정보를 불러오지 못했습니다.';
   const arrivalGroups = useMemo(() => groupBusArrivals(arrivals), [arrivals]);
   const soonBusNumbers = useMemo(() => arrivalGroups
     .filter((group) => group.first.etaSeconds !== null && group.first.etaSeconds <= 60)
@@ -111,7 +120,7 @@ export const BusStopBottomSheet = memo(function BusStopBottomSheet({
     </View>);
   const empty=(<View style={styles.stateContainer}>
     {isPending ? <ActivityIndicator color={colors.accent} /> : null}
-    <Text style={styles.stateText}>{isPending ? '도착정보를 불러오고 있습니다.' : isError ? '도착정보를 불러오지 못했습니다.' : '현재 도착 예정인 버스가 없습니다.'}</Text>
+    <Text style={styles.stateText}>{isPending ? '도착정보를 불러오고 있습니다.' : isError ? errorMessage : '현재 도착 예정인 버스가 없습니다.'}</Text>
     {isError ? <Pressable onPress={()=>void refetch()}><Text style={styles.retryText}>다시 시도</Text></Pressable> : null}
   </View>);
   return <MapBottomSheet onHeightChange={onHeightChange}>
