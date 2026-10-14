@@ -147,6 +147,7 @@ function AlertsScreenContent({initialDraft,sources}:{initialDraft:Draft|null;sou
         <Pressable accessibilityRole="button" onPress={() => {setMapTabHidden(false);router.navigate('/');}}><Text style={styles.link}>지도</Text></Pressable>
       </View>
       <Text style={styles.help}>원하는 시간에, 정류소 가까이에서. 버스를 놓치지 않도록 알려드려요.</Text>
+      <Pressable accessibilityRole="button" onPress={() => router.push('/subway-alerts')}><Text style={styles.link}>지하철 알림</Text></Pressable>
       <MonitoringSessionsPanel sources={dismissedSource ? [] : sources} onDismiss={()=>setDismissedSource(true)} />
       <View style={styles.segmented}>
         {(['time','location'] as const).map(value=><Pressable key={value} disabled={busy} accessibilityRole="button" accessibilityState={{selected:kind===value}} onPress={()=>selectKind(value)} style={[styles.segment,kind===value && styles.selectedSegment]}><Text style={[styles.segmentText,kind===value && styles.selectedSegmentText]}>{value==='time' ? '시간' : '위치'}</Text></Pressable>)}

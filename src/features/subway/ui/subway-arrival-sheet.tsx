@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { ActivityIndicator, Pressable, Text, View } from 'react-native';
 import { BottomSheetScrollView } from '@gorhom/bottom-sheet';
 import { isAxiosError } from 'axios';
+import { router } from 'expo-router';
 import { useSubwayArrivals } from '@/features/subway/model/use-subway-arrivals';
 import { useAppTheme } from '@/shared/ui/design-system';
 import { MapBottomSheet, type MapSheetSnap } from '@/shared/ui/map-bottom-sheet';
@@ -36,6 +37,7 @@ export function SubwayArrivalSheet({ stationName, onClose, onHeightChange, snap,
           <Text style={{ ...type.headline, color: colors.text }}>{arrival.lineName} · {arrival.direction}</Text>
           <Text style={{ color: colors.text }}>{arrival.destination ? `${arrival.destination}행` : '방면 정보 없음'}{arrival.trainType && arrival.trainType !== '일반' ? ` · ${arrival.trainType}` : ''}{arrival.isLastTrain ? ' · 막차' : ''}</Text>
           <Text style={{ ...type.headline, color: old ? colors.secondaryText : colors.accent }}>{old ? '갱신이 지연된 정보' : seconds && seconds > 0 ? `${Math.floor(seconds / 60)}분 ${seconds % 60}초 후` : arrival.arrivalMessage || '도착 시간 확인 중'}</Text>
+          <Pressable accessibilityRole="button" accessibilityLabel={`${arrival.lineName} ${arrival.direction} 알림 설정`} onPress={() => router.push({ pathname:'/subway-alerts',params:{stationName,lineId:arrival.lineId,lineName:arrival.lineName,direction:arrival.direction,requestId:String(Date.now())} })} style={{minHeight:44,justifyContent:'center'}}><Text style={{color:colors.accent}}>알림 설정</Text></Pressable>
           {arrival.locationMessage ? <Text style={{ ...type.footnote, color: colors.secondaryText }}>{arrival.locationMessage}</Text> : null}
           <Text style={{ ...type.footnote, color: colors.secondaryText }}>{arrival.trainId ? `열차 ${arrival.trainId} · ` : ''}{arrival.receivedAt ? `정보 생성 ${new Date(arrival.receivedAt).toLocaleTimeString('ko-KR')}` : '생성 시각 미제공'}</Text>
         </View>;

@@ -85,7 +85,10 @@ if (!TaskManager.isTaskDefined(TASK)) {
 
 export async function ensureNotificationPermission() {
   await registerProximityActions();
-  if (Platform.OS === 'android') await Notifications.setNotificationChannelAsync(CHANNEL,{name:'버스 도착 알림',importance:Notifications.AndroidImportance.HIGH,sound:'default'});
+  if (Platform.OS === 'android') {
+    await Notifications.setNotificationChannelAsync(CHANNEL,{name:'버스 도착 알림',importance:Notifications.AndroidImportance.HIGH,sound:'default'});
+    await Notifications.setNotificationChannelAsync('subway-arrivals',{name:'지하철 도착 알림',importance:Notifications.AndroidImportance.HIGH,sound:'default'});
+  }
   const permission = await Notifications.requestPermissionsAsync();
   if (!permission.granted) throw new Error('기기 설정에서 TaraGo의 알림 권한을 허용해주세요.');
 }

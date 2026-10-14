@@ -45,7 +45,7 @@ import {
 import { useMapTabVisibility } from "@/components/map-tab-visibility";
 import { useCurrentLocation } from "@/hooks/use-current-location";
 
-const ROUTE_DIRECTION_PATTERN = require("../../assets/images/route-direction-triangle.png");
+const ROUTE_DIRECTION_PATTERN = require("../../../assets/images/route-direction-triangle.png");
 
 /**
  * 지도 카메라의 보이는 영역으로 정류장 타일을 조회하고 선택한 정류장을 연다.

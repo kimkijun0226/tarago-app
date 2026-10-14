@@ -1,5 +1,5 @@
 import { focusManager, QueryClientProvider } from '@tanstack/react-query';
-import { DefaultTheme, ThemeProvider } from 'expo-router';
+import { DefaultTheme, Stack, ThemeProvider } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { AppState, Platform } from 'react-native';
 import { useEffect } from 'react';
@@ -7,7 +7,6 @@ import { GestureHandlerRootView } from 'react-native-gesture-handler';
 
 import { AnimatedSplashOverlay } from '@/components/animated-icon';
 import { AlertRuntimeProvider } from '@/features/bus-alert/ui/alert-runtime-provider';
-import AppTabs from '@/components/app-tabs';
 import { MapTabVisibilityProvider } from '@/components/map-tab-visibility';
 import { queryClient } from '@/shared/lib/query-client';
 
@@ -26,7 +25,7 @@ export default function TabLayout() {
         <AnimatedSplashOverlay />
         <MapTabVisibilityProvider>
           <AlertRuntimeProvider>
-            <AppTabs />
+            <Stack screenOptions={{headerShown:false}}><Stack.Screen name="(tabs)" /><Stack.Screen name="subway-alerts" /></Stack>
           </AlertRuntimeProvider>
         </MapTabVisibilityProvider>
       </ThemeProvider>

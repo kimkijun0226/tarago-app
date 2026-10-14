@@ -57,6 +57,11 @@ export function useAlertRuntime() {
       handledResponse.current=responseKey;
       setMapTabHidden(false);
       try {
+        if (data.kind === 'subway-arrival' && typeof data.stationName === 'string') {
+          router.navigate({pathname:'/subway-alerts',params:{stationName:data.stationName,alertId:data.alertId,requestId:responseKey}});
+          await Notifications.clearLastNotificationResponseAsync();
+          return;
+        }
         if (data.kind === 'proximity-prompt') {
           const savedAlerts = await queryClient.fetchQuery({queryKey:['alerts','list'],queryFn:()=>getAlerts()});
           const ids=Array.isArray(data.alertIds) ? data.alertIds.filter((value):value is string=>typeof value==='string') : [data.alertId];
@@ -102,6 +107,7 @@ export function useAlertRuntime() {
     const appListener = AppState.addEventListener('change',state => {
       if (state !== 'active') return;
       void queryClient.invalidateQueries({queryKey:['alerts']});
+      void queryClient.invalidateQueries({queryKey:['subway-alerts']});
       void alertStorage.getItem('tarago-proximity-error').then(setError);
     });
     return () => { listener.remove(); tokenListener.remove(); appListener.remove(); };
