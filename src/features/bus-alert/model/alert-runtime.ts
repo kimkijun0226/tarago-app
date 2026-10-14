@@ -128,10 +128,15 @@ export function syncGeofences(alerts:BusAlert[]) {
 }
 async function applyGeofences(alerts:BusAlert[]) {
   const regions = proximityRegions(alerts);
+  const background = await Location.getBackgroundPermissionsAsync();
+  // 위치 알림이 없으면 백그라운드 권한 자체를 요구하지 않는다.
+  if (!background.granted) {
+    if (!regions.length) return;
+    throw new Error('정류소 접근 알림이 중지됐어요. 위치 권한을 항상 허용해주세요.');
+  }
   const registered = await Location.hasStartedGeofencingAsync(TASK);
   if (!regions.length) { if (registered) await Location.stopGeofencingAsync(TASK); return; }
   if (regions.length > 20) throw new Error('접근 알림은 최대 20개 정류소까지 설정할 수 있어요.');
-  if (!(await Location.getBackgroundPermissionsAsync()).granted) throw new Error('정류소 접근 알림이 중지됐어요. 위치 권한을 항상 허용해주세요.');
   await Location.startGeofencingAsync(TASK,regions);
   await alertStorage.removeItem('tarago-proximity-error');
 }
