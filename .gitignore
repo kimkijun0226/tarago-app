@@ -33,3 +33,7 @@ yarn-error.*
 
 # Expo generated types
 expo-env.d.ts
+
+# Official TMAP SDK binaries are restored by the SDK setup script
+/modules/tarago-tmap/android/libs/
+/modules/tarago-tmap/ios/Frameworks/

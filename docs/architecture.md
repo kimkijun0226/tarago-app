@@ -17,7 +17,7 @@ TaraGo는 사용자가 선택한 버스 정류장과 노선의 도착 시간을 
 
 ```text
 React Native 앱
-  ├─ 네이버 지도와 현재 위치
+  ├─ TMAP 지도와 현재 위치
   ├─ 정류장·노선·도착정보 조회 UI
   ├─ 알림 설정과 목록 관리
   └─ 푸시 토큰 등록
@@ -41,7 +41,7 @@ Monitoring Worker ─── 공유 캐시
 
 ### React Native 앱
 
-- 네이버 지도 표시와 현재 위치 이동
+- TMAP 네이티브 지도 표시와 현재 위치 이동
 - 주변 버스 정류장과 지하철역 표시 및 선택
 - 정류장 경유 버스와 도착정보 표시
 - 요일, 감시 시간, 알림 임계값 입력
@@ -68,14 +68,16 @@ Monitoring Worker ─── 공유 캐시
 
 ## 4. 외부 서비스
 
-- Naver Cloud Maps Dynamic Map: 모바일 지도
+- TMAP Vector Map SDK: 모바일 지도
+- TMAP POI·보행자·대중교통 API: 검색과 앱 내부 길찾기
+- 서울 열린데이터광장 지하철 API: 실시간 도착정보
 - 서울시 버스 Open API: 정류장 검색, 경유 노선, 도착정보, 차량 위치
 - Expo Location: foreground 현재 위치
 - FCM: Android 푸시
 - APNs: iOS 푸시
 - 필요하면 Expo Notifications를 푸시 클라이언트 계층에 사용
 
-지하철 데이터 제공처와 범위는 버스 MVP가 안정된 뒤 별도로 결정한다.
+지하철 조회 범위와 TMAP 키·네이티브 빌드 설정은 [연결 문서](tmap-and-subway.md)를 따른다.
 
 ## 5. 주요 데이터 흐름
 
@@ -200,7 +202,7 @@ src/
 ### Phase 1 — 앱 기반과 지도
 
 - Expo Router 기반 Android·iOS Development Build가 실행된다.
-- 네이버 지도가 표시된다.
+- TMAP 지도가 표시된다.
 - 위치 권한을 허용하면 현재 위치로 이동한다.
 - 오른쪽 아래 버튼으로 현재 위치를 다시 찾을 수 있다.
 
@@ -295,7 +297,7 @@ src/
 - React Native + TypeScript + Expo SDK 57
 - Expo Router 기본 탭 구조
 - Expo Development Build 환경
-- 네이버 Dynamic Map 등록과 네이티브 지도 연동
+- TMAP 지도 SDK 등록과 네이티브 지도 연동
 - Android·iOS 시뮬레이터 빌드 환경
 - foreground 위치 권한 요청
 - 지도 초기 현재 위치 이동

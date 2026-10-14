@@ -5,8 +5,9 @@ TaraGo는 주변 버스 정류장을 지도에서 찾고 도착 정보를 확인
 ## 구성
 
 - React Native · Expo Development Build · TypeScript
-- 네이버 지도 · TanStack Query · Axios
+- TMAP 네이티브 지도 · TanStack Query · Axios
 - 버스 정류장 지도, 노선·도착 조회, 예약 알림 및 정류장 접근 알림
+- 장소·주소 검색, 앱 내부 길찾기, 지하철 실시간 도착 조회
 - API: `https://api.tarago.cloud`
 
 서버는 별도 비공개 `tarago-server` 저장소에서 관리합니다. 이 저장소에는 앱 코드와 개발 기록을 공개합니다. 푸시 알림은 EAS/APNs/FCM 연결이 필요합니다. 자세한 내용은 [알림 기능 문서](docs/bus-alerts.md)를 참고하세요.
@@ -17,6 +18,7 @@ TaraGo는 주변 버스 정류장을 지도에서 찾고 도착 정보를 확인
 
 ```bash
 npm install
+npm run tmap:sdk
 npm run start:simulator
 ```
 
@@ -27,6 +29,8 @@ npm run ios:device
 ```
 
 푸시 권한을 포함한 일반 빌드는 유료 Apple Developer Team을 설정한 뒤 `npm run ios -- --device`로 실행합니다. 네이티브 설정이나 라이브러리가 바뀌면 개발 빌드를 다시 설치해야 합니다.
+
+TMAP 키와 새 빌드 준비는 [TMAP·지하철 연결 문서](docs/tmap-and-subway.md)를 참고하세요.
 
 API 주소는 `EXPO_PUBLIC_API_BASE_URL`로 변경할 수 있습니다. 로컬 환경 파일과 비밀 키는 커밋하지 않습니다.
 

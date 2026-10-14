@@ -5,7 +5,6 @@
   "dependencies": {
     "@expo/ui": "~57.0.19",
     "@gorhom/bottom-sheet": "^5.2.14",
-    "@mj-studio/react-native-naver-map": "^2.9.0",
     "@tanstack/react-query": "^5.104.0",
     "axios": "^1.20.0",
     "expo": "~57.0.24",
@@ -56,7 +55,9 @@
     "web": "expo start --web",
     "lint": "expo lint",
     "test": "node --experimental-strip-types --test src/**/*.test.ts",
-    "ios:device": "EXPO_PUBLIC_API_BASE_URL=https://api.tarago.cloud expo prebuild --platform ios --no-install && EXPO_PUBLIC_API_BASE_URL=https://api.tarago.cloud expo run:ios --device"
+    "ios:device": "EXPO_PUBLIC_API_BASE_URL=https://api.tarago.cloud expo prebuild --platform ios --no-install && EXPO_PUBLIC_API_BASE_URL=https://api.tarago.cloud expo run:ios --device",
+    "tmap:sdk": "python3 modules/tarago-tmap/install-sdk.py",
+    "eas-build-pre-install": "python3 modules/tarago-tmap/install-sdk.py \"$EAS_BUILD_PLATFORM\""
   },
   "private": true
 }

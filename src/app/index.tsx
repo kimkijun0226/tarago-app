@@ -1,9 +1,6 @@
-import {
-  NaverMapView,
-  NaverMapPathOverlay,
-  NaverMapMarkerOverlay,
-  type NaverMapViewRef,
-} from "@mj-studio/react-native-naver-map";
+import { TmapView, type TmapViewRef, type TmapMarker, type TmapLine } from '@/shared/ui/tmap/tmap-view';
+import { markerImage, stopMarker, routeStopImage } from '@/features/bus-stop/model/map-markers';
+import { SubwayArrivalSheet } from '@/features/subway/ui/subway-arrival-sheet';
 import { SymbolView } from "expo-symbols";
 import { useLocalSearchParams } from 'expo-router';
 import { useQueryClient } from "@tanstack/react-query";
@@ -29,10 +26,9 @@ import {
   getVisibleBusStopTiles,
   type BusStopTile,
 } from "@/features/bus-stop/model/bus-stop-tile";
-import { RouteBusStopMarker } from "@/features/bus-stop/ui/route-bus-stop-marker";
-import { BusStopMarker } from "@/features/bus-stop/ui/bus-stop-marker";
 import { BusStopBottomSheet } from "@/features/bus-stop/ui/bus-stop-bottom-sheet";
 import { MobilitySearch } from '@/features/mobility/ui/mobility-search';
+import { isBusStopPlace, stationSearchName } from '@/features/mobility/model/place-kind';
 import type { Place, Point } from '@/features/mobility/api/mobility';
 import { useAppTheme } from '@/shared/ui/design-system';
 import { BusRouteBottomSheet } from "@/features/bus-stop/ui/bus-route-bottom-sheet";
@@ -60,6 +56,7 @@ const ROUTE_DIRECTION_PATTERN = require("../../assets/images/route-direction-tri
  */
 export default function MapScreen() {
   const {colors}=useAppTheme();
+  const [subwayStation, setSubwayStation] = useState<string | null>(null);
   const [selectedPlace,setSelectedPlace]=useState<Place|null>(null);
   const [journeyLines,setJourneyLines]=useState<Point[][]>([]);
   const params = useLocalSearchParams<{stationId?:string;latitude?:string;longitude?:string;notificationId?:string}>();
@@ -67,7 +64,7 @@ export default function MapScreen() {
   const [preparingLocation,setPreparingLocation]=useState(true);
   const startupRequested=useRef(false);
   const [mapReady,setMapReady] = useState(false);
-  const mapRef = useRef<NaverMapViewRef>(null);
+  const mapRef = useRef<TmapViewRef>(null);
   const selectionRequest = useRef(0);
   const queryClient = useQueryClient();
   const initializedRef = useRef(false);
@@ -175,6 +172,7 @@ export default function MapScreen() {
   }, [setMapTabHidden]);
 
   const selectBusStop = useCallback((busStop: BusStop) => {
+    setSubwayStation(null);
     setSelectedPlace(null);setJourneyLines([]);
     selectionRequest.current++;
     setShowRouteSheet(false);
@@ -182,13 +180,31 @@ export default function MapScreen() {
     setMapTabHidden(true);
   }, [setMapTabHidden]);
 
-  const selectPlace=useCallback((place:Place|null)=>{
-    setSelectedPlace(place);
-    if(!place)return;
-    selectionRequest.current++;setShowRouteSheet(false);setSelectedRoute(null);setSelectedBusStop(null);setSheetHeight(0);setMapTabHidden(false);
-    mapRef.current?.animateCameraTo({...place,zoom:16,duration:350});
-  },[setMapTabHidden]);
+  const selectPlace=useCallback(async(place:Place|null,showBusStop=false)=>{
+    const request=++selectionRequest.current;
+    setSubwayStation(null);setSelectedPlace(place);
+    if(!place){setSheetHeight(0);return;}
+    setShowRouteSheet(false);setSelectedRoute(null);setSelectedBusStop(null);setSheetHeight(0);setMapTabHidden(false);
+    mapRef.current?.animateCameraTo({...place,zoom:17,duration:350});
+    if (!showBusStop || !isBusStopPlace(place)) return;
+    try {
+      const nearby=await queryClient.fetchQuery({
+        queryKey:['bus-stops','place',place.id,place.latitude,place.longitude],
+        queryFn:({signal})=>getNearbyBusStops({...place,radius:120,signal}),staleTime:30*60_000,
+      });
+      if (request!==selectionRequest.current) return;
+      const name=stationSearchName(place.name);
+      const matches=nearby.filter(stop=>{
+        const other=stationSearchName(stop.name);
+        return other===name || (name.length>=3 && other.length>=3 && (other.includes(name)||name.includes(other)));
+      }).sort((a,b)=>a.distanceMeters-b.distanceMeters);
+      if(matches[0])selectBusStop(matches[0]);
+    } catch {
+      if(request===selectionRequest.current)Alert.alert('정류장 버스 목록을 불러오지 못했어요','잠시 후 정류장을 다시 선택해주세요.');
+    }
+  },[setMapTabHidden,queryClient,selectBusStop]);
   const activateSearch=useCallback(()=>{
+    setSubwayStation(null);
     selectionRequest.current++;setShowRouteSheet(false);setSelectedRoute(null);setSelectedBusStop(null);setSheetHeight(0);setMapTabHidden(false);
   },[setMapTabHidden]);
   const showJourney=useCallback((lines:Point[][])=>{
@@ -332,6 +348,40 @@ export default function MapScreen() {
     setRouteSheetSnap("half");
   }, [selectedBusStop]);
 
+  const markers = useMemo<TmapMarker[]>(() => {
+    const items = visibleBusStops.map(stop => stopMarker(stop, false));
+    if (selectedRoute) items.push(...routeStops.map(stop => ({
+      id: `route-stop:${stop.stationId}`, latitude: stop.latitude, longitude: stop.longitude,
+      imageUri: routeStopImage, width: 24, height: 24, anchor: {x:.5,y:.5},
+      caption: stop.name, minZoom: 13,
+    })));
+    if (selectedBusStop) items.push(stopMarker(selectedBusStop, true, Boolean(selectedRoute)));
+    if (selectedPlace) items.push({ ...selectedPlace, id: `place:${selectedPlace.id}`, caption:selectedPlace.name, kind:'place', width:32,height:40 });
+    if (selectedRoute) items.push(...directionMarkers.map(marker => ({
+      id: `direction:${marker.id}`, latitude:marker.latitude, longitude:marker.longitude,
+      imageUri:markerImage(ROUTE_DIRECTION_PATTERN), width:12,height:12,anchor:{x:.5,y:.5},rotation:marker.angle,
+    })));
+    return items;
+  }, [visibleBusStops,selectedRoute,routeStops,selectedBusStop,selectedPlace,directionMarkers]);
+  const lines = useMemo<TmapLine[]>(() => [
+    ...(selectedRoute && routeCoordinates.length>1 ? [{id:`route:${selectedRoute.routeId}`,points:routeCoordinates,color:'#00A86B',width:6}] : []),
+    ...journeyLines.map((points,index)=>({id:`journey:${index}`,points,color:colors.accent,width:6})),
+  ], [selectedRoute,routeCoordinates,journeyLines,colors.accent]);
+  const onMarkerPress = useCallback((id:string) => {
+    if(id.startsWith('stop:')) {
+      const stop = selectedBusStop?.id===id.slice(5) ? selectedBusStop : busStops.find(item=>item.id===id.slice(5));
+      if(stop) {if(stop.id===selectedBusStop?.id) selectSelectedStop(stop);else selectBusStop(stop);}
+    } else if(id.startsWith('route-stop:')) {
+      const stop=routeStops.find(item=>item.stationId===id.slice(11));if(stop)void selectRouteStop(stop);
+    }
+  }, [selectedBusStop,busStops,routeStops,selectSelectedStop,selectBusStop,selectRouteStop]);
+  const openSubway = useCallback((stationName:string) => {
+    activateSearch();setSubwayStation(stationName);setMapTabHidden(true);
+  }, [activateSearch,setMapTabHidden]);
+  const closeSubway = useCallback(() => {
+    setSubwayStation(null);setSheetHeight(0);setMapTabHidden(false);
+  }, [setMapTabHidden]);
+
   if(!initialPosition) return <View style={{flex:1,backgroundColor:'#208AEF',justifyContent:'center',alignItems:'center',gap:20,padding:32}}>
     <Text style={{color:'#FFFFFF',fontSize:40,fontWeight:'800'}}>타라고</Text>
     {preparingLocation ? <><ActivityIndicator color="#FFFFFF" /><Text style={{color:'#FFFFFF'}}>현재 위치를 찾고 있어요</Text></> : <>
@@ -342,88 +392,10 @@ export default function MapScreen() {
   </View>;
   return (
     <View style={styles.container}>
-      <NaverMapView
-        ref={mapRef}
-        style={styles.container}
-        initialCamera={{...initialPosition,zoom:17}}
-        mapPadding={{
-          top: insets.top+72,
-          bottom: sheetHeight ? sheetHeight + insets.bottom + 8 : 0,
-        }}
-        isShowLocationButton={false}
-        isShowZoomControls={false}
-        locationOverlay={{
-          isVisible: position !== null,
-          position: position ?? initialPosition,
-        }}
-        onInitialized={onMapInitialized}
-        onCameraIdle={onCameraIdle}
-      >
-        {selectedRoute && routeCoordinates.length > 1 ? (
-          <NaverMapPathOverlay
-            key={`route:${selectedRoute.routeId}`}
-            coords={routeCoordinates}
-            color="#00A86B"
-            passedColor="#00A86B"
-            width={6}
-            outlineColor="#FFFFFF"
-            passedOutlineColor="#FFFFFF"
-            outlineWidth={2}
-            globalZIndex={100000}
-            zIndex={0}
-          />
-        ) : null}
-        {selectedRoute &&
-          directionMarkers.map((marker) => (
-            <NaverMapMarkerOverlay
-              key={`direction:${marker.id}`}
-              latitude={marker.latitude}
-              longitude={marker.longitude}
-              image={ROUTE_DIRECTION_PATTERN}
-              width={12}
-              height={12}
-              anchor={{ x: 0.5, y: 0.5 }}
-              angle={marker.angle}
-              isFlatEnabled
-              globalZIndex={100000}
-              zIndex={2}
-            />
-          ))}
-        {visibleBusStops
-          .map((busStop) => (
-            <BusStopMarker
-              key={busStop.id}
-              busStop={busStop}
-              selected={false}
-              onRoute={Boolean(
-                selectedRoute &&
-                routeDetail &&
-                isRouteBusStop(busStop, routeDetail.stops),
-              )}
-              onSelect={selectBusStop}
-            />
-          ))}
-        {selectedRoute && routeStops.map((stop) => (
-          <RouteBusStopMarker key={stop.stationId} stop={stop} onSelect={selectRouteStop} />
-        ))}
-        {selectedPlace ? <NaverMapMarkerOverlay key={`place:${selectedPlace.id}`} latitude={selectedPlace.latitude} longitude={selectedPlace.longitude}
-          caption={{text:selectedPlace.name,textSize:13,color:colors.text,haloColor:colors.surface}} globalZIndex={200002} /> : null}
-        {journeyLines.map((coords,index)=><NaverMapPathOverlay key={`journey:${index}`} coords={coords} color={colors.accent}
-          width={6} outlineColor={colors.surface} outlineWidth={2} globalZIndex={100002} />)}
-        {selectedBusStop ? (
-          <BusStopMarker
-            key={`selected-stop:${selectedBusStop.id}`}
-            busStop={selectedBusStop}
-            selected
-            onRoute={Boolean(
-              selectedRoute &&
-              routeDetail &&
-              isRouteBusStop(selectedBusStop, routeDetail.stops),
-            )}
-            onSelect={selectSelectedStop}
-          />
-        ) : null}
-      </NaverMapView>
+      <TmapView ref={mapRef} style={styles.container} initialCamera={{...initialPosition,zoom:17}}
+        markers={markers} lines={lines} position={position}
+        padding={{top:insets.top+72,bottom:sheetHeight ? sheetHeight+insets.bottom+8 : 0}}
+        onReady={onMapInitialized} onCameraIdle={onCameraIdle} onMarkerPress={onMarkerPress} />
 
 
       {selectedRoute ? (
@@ -498,7 +470,8 @@ export default function MapScreen() {
         />
       ) : null}
       <MobilitySearch position={position??initialPosition} top={insets.top+12} left={selectedRoute ? 76 : 16} onPlace={selectPlace}
-        onGeometry={showJourney} onActivate={activateSearch} onSheetHeight={setSheetHeight} />
+        onGeometry={showJourney} onActivate={activateSearch} onSheetHeight={setSheetHeight} onSubway={openSubway} getPosition={getCurrentLocation} suspended={Boolean(subwayStation || selectedBusStop)} />
+      {subwayStation ? <SubwayArrivalSheet stationName={subwayStation} onClose={closeSubway} onHeightChange={setSheetHeight} /> : null}
     </View>
   );
 }

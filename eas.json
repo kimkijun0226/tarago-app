@@ -5,18 +5,30 @@
       "distribution": "internal",
       "env": {
         "EXPO_PUBLIC_API_BASE_URL": "https://api.tarago.cloud"
-      }
+      },
+      "ios": {
+        "image": "macos-tahoe-26.6-xcode-27.0"
+      },
+      "environment": "development"
     },
     "preview": {
       "distribution": "internal",
       "env": {
         "EXPO_PUBLIC_API_BASE_URL": "https://api.tarago.cloud"
-      }
+      },
+      "ios": {
+        "image": "macos-tahoe-26.6-xcode-27.0"
+      },
+      "environment": "preview"
     },
     "production": {
       "env": {
         "EXPO_PUBLIC_API_BASE_URL": "https://api.tarago.cloud"
-      }
+      },
+      "ios": {
+        "image": "macos-tahoe-26.6-xcode-27.0"
+      },
+      "environment": "production"
     }
   }
 }
