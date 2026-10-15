@@ -1,3 +1,5 @@
+/** @fileoverview 차량 응답을 노선별 도착 목록으로 묶고 ETA와 남은 정류장 수를 화면 문구로 변환한다. */
+
 import type { BusArrival } from '@/features/bus-stop/api/get-bus-arrivals';
 
 /** 같은 노선의 첫 번째·두 번째 도착 차량을 화면에 함께 표시하는 형태. */
@@ -18,14 +20,20 @@ export type BusArrivalGroup = {
  * @param source 회차점의 공식 ETA와 경로 기반 이동시간으로 계산한 예상값인지 여부.
  * @returns ETA가 없으면 확인된 상태를 우선 표시하고, 있으면 도착 시간 문구.
  */
-export function formatEta(etaSeconds: number | null, serviceStatus?: BusArrival['serviceStatus'], precision?: BusArrival['etaPrecision'], source?: BusArrival['etaSource']) {
+export function formatEta(
+  etaSeconds: number | null,
+  serviceStatus?: BusArrival['serviceStatus'],
+  precision?: BusArrival['etaPrecision'],
+  source?: BusArrival['etaSource'],
+) {
   if (etaSeconds === null) {
     if (serviceStatus === 'turnaround_waiting') return '회차지 대기 중';
     if (serviceStatus === 'before_turnaround') return '운행정보 확인 중';
     if (serviceStatus === 'on_route') return '노선 운행 중';
     return '운행정보 확인 중';
   }
-  if (source === 'turnaround_estimate') return `예상 ${Math.floor(etaSeconds / 60)}분 ${Math.floor(etaSeconds % 60)}초`;
+  if (source === 'turnaround_estimate')
+    return `예상 ${Math.floor(etaSeconds / 60)}분 ${Math.floor(etaSeconds % 60)}초`;
   if (etaSeconds <= 60) return '곧 도착';
   if (precision === 'minutes') return `약 ${Math.ceil(etaSeconds / 60)}분`;
   if (etaSeconds <= 600) return `${Math.floor(etaSeconds / 60)}분 ${Math.floor(etaSeconds % 60)}초`;
@@ -51,32 +59,48 @@ export function formatRemainingStops(remainingStops: number | null) {
  * @returns 첫 차 도착이 빠른 순서의 노선 목록.
  */
 export function groupBusArrivals(arrivals: BusArrival[]): BusArrivalGroup[] {
+  /** 왕복 경유를 구분하는 노선 키에 차량 도착 응답을 모으는 색인이다. */
   const byRoute = new Map<string, BusArrival[]>();
 
+  /** arrival은 노선·경유 순번별로 묶을 현재 차량 도착 응답이다. */
   for (const arrival of arrivals) {
+    /** 노선 ID와 경유 순번을 결합해 반대 방향 차량이 섞이지 않게 하는 키다. */
     const key = `${arrival.routeId}:${arrival.stationSeq ?? ''}`;
+
+    /** 같은 노선과 경유 순번에 속한 차량 응답 목록이다. */
     const routeArrivals = byRoute.get(key) ?? [];
     routeArrivals.push(arrival);
     byRoute.set(key, routeArrivals);
   }
 
-  const groups = [...byRoute.entries()]
-    .map(([, routeArrivals]) => {
-      const [first, second] = [...routeArrivals]
-        .sort((left, right) => (left.etaSeconds ?? Infinity) - (right.etaSeconds ?? Infinity))
-        .slice(0, 2);
+  /** 노선별 가까운 두 차량을 묶어 최종 ETA 순으로 정렬할 목록이다. */
+  const groups = [...byRoute.entries()].map(([, routeArrivals]) => {
+    /** ETA 정렬 후 화면에 함께 표시할 첫 번째·두 번째 도착 차량이다. */
+    const [first, second] = [...routeArrivals]
+      .sort((left, right) => (left.etaSeconds ?? Infinity) - (right.etaSeconds ?? Infinity))
+      .slice(0, 2);
 
-      return {
-        routeId: first.routeId,
-        stationSeq: first.stationSeq,
-        busNumber: first.busNumber,
-        routeType: first.routeType,
-        first,
-        second,
-      };
-    });
+    return {
+      routeId: first.routeId,
+      stationSeq: first.stationSeq,
+      busNumber: first.busNumber,
+      routeType: first.routeType,
+      first,
+      second,
+    };
+  });
 
   return groups.sort(
     (left, right) => (left.first.etaSeconds ?? Infinity) - (right.first.etaSeconds ?? Infinity),
   );
+}
+
+/** 공급자가 반환한 노선 유형만 배지로 변환한다. 알 수 없는 코드는 일반버스로 단정하지 않는다. */
+export function getBusRouteBadge(routeType: string): { label: string; color: string } | null {
+  if (routeType === '3' || routeType.includes('간선')) return { label: '간선', color: '#386DE8' };
+  if (routeType === '4' || routeType.includes('지선')) return { label: '지선', color: '#38BE40' };
+  if (routeType === '2' || routeType.includes('마을')) return { label: '마을', color: '#38BE40' };
+  if (routeType.includes('광역') || routeType === '6') return { label: '광역', color: '#EB4335' };
+  if (routeType.includes('일반')) return { label: '일반', color: '#87C600' };
+  return null;
 }

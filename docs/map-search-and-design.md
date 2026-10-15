@@ -1,60 +1,31 @@
 # 지도 검색·길찾기와 공통 UI
 
-> 2026-10-14 지도·검색·길찾기를 TMAP으로 전환했다. 현재 연결·검증 상태는 [TMAP·지하철 문서](tmap-and-subway.md)를 따른다. 아래는 전환 전 분석·구현 기록이다.
+지도·장소 검색·길찾기는 TMAP을 사용한다. 네이버 지도 SDK, Kakao 장소 API, ODsay 경로 API를 연결하는 앱 코드는 사용하지 않는다.
+네이버·카카오 지도 화면은 이전에 UX 비교 대상으로 관찰했으며, 앱의 데이터 공급자나 실행 의존성이 아니다.
 
-## 적용한 흐름
+## 현재 책임
 
-네이버지도 Android 6.11.2.2에서 실제 장소 검색, 장소의 출발·도착 지정,
-현재 위치 출발, 교환 버튼, 대중교통 결과 카드와 시트 전환을 관찰했다.
-REA 클래스 근거와 화면 관찰 기록은 `/tmp/tarago-android-analysis/naver-search-directions-report.md`에 있다.
-관찰한 흐름을 타라고 코드로 구현했으며 네이버의 서버 알고리즘이나 비공개 API를 복제하지 않았다.
+- `features/mobility/ui/mobility-search.tsx`: 장소 선택·검색·길찾기 상태 조립과 Query 연결.
+- `features/mobility/ui/route-editor.tsx`: 출발·도착 입력과 이동수단 선택.
+- `features/mobility/ui/place-search-results.tsx`: 최근 검색과 장소 결과 목록.
+- `features/mobility/ui/place-detail.tsx`: 선택 장소 상세와 출발·도착 지정.
+- `features/mobility/ui/journey-results.tsx`: 경로 비교와 이동 단계 표시.
+- `features/mobility/api/mobility.ts`: 타라고 서버의 검색·경로 응답 계약.
+- `app/(tabs)/index.tsx`: 지도·검색·시트 UI 배치.
+- `features/map/model`: 선택 장소·경로를 TMAP 지도 마커와 선으로 연결.
+- `shared/ui/theme.ts`: 앱 공통 라이트 테마, 간격·글자·모서리.
+- `shared/ui/map-design-tokens.ts`: 지도 화면 전용 시각 토큰.
+- `shared/ui/index.ts`: 공통 테마·버튼·설정 섹션의 공개 내보내기.
+- `shared/ui/app-button.tsx`, `app-section.tsx`: 공통 버튼과 설정 섹션.
+- `shared/ui/map-bottom-sheet.tsx`: 지도와 시트가 공유하는 정착 높이·제스처.
 
-- 일반 검색은 장소·주소 검색이다. 기존 정류장 전용 검색창을 대체했다.
-- 최근 선택 장소는 기기 SQLite에 최대 10개 보관하고 사용자가 지울 수 있다.
-- 출발·도착 편집, 교환, 현재 위치 선택과 대중교통·버스·도보 모드를 제공한다.
-- 소요 시간·환승·요금·도보 거리·승하차 순서를 앱에서 표시한다.
-- 지도 선은 공급자의 실제 도로/노선 형상만 사용한다. 없는 도로를 직선으로 만들지 않는다.
-- 경로 목록과 정류장 목록은 공통 제스처 시트를 사용한다.
+## 동작과 범위
 
-## UI 기준
+일반 검색은 장소·주소 검색이다. 검색한 장소가 버스 정류장일 때만 서버 정류장과 매칭한다.
+최근 장소는 SQLite KV에 저장한다. 길찾기는 대중교통·버스·도보 모드와 경로별 승하차·환승·요금·도보 정보를 표시한다.
 
-`src/shared/ui/design-system.tsx`가 라이트·다크 색상, 글자, 간격, 모서리,
-공통 버튼과 그룹 섹션의 기준이다. Apple HIG를 참고한 React Native UI이며
-공식 Apple UI 라이브러리 자체를 가져온 것은 아니다.
-탭·스위치·시간 선택기는 기존 네이티브 구성요소를 유지한다.
-지도·알림 화면과 시트의 텍스트, 터치 영역, 경고와 설정 그룹에 이 기준을 적용했다.
+공급자가 반환한 실제 구간 좌표만 지도에 그린다. 버스 차량 위치를 지도에 추가하지 않는다.
+TMAP 버스 전용 결과는 반환된 경로 중 버스·도보 경로를 고르는 방식이며 모든 조합을 보장하지 않는다.
+자동차·자전거 길찾기나 네이버 지도 전체 기능·성능과의 동일성을 보장하는 구현은 아니다.
 
-## 서버 연결에 필요한 항목
-
-앱에는 키를 넣지 않는다. 서버 `.env.local`에 다음 변수를 설정한다.
-
-| 변수 | 용도 | 발급/설정 |
-| --- | --- | --- |
-| `KAKAO_REST_API_KEY` | 장소·주소 검색 | Kakao Developers, Local API를 사용할 수 있는 REST API 키 |
-| `ODSAY_API_KEY` | 버스·대중교통 경로와 노선 형상 | ODsay 서버용 애플리케이션 등록 및 서버 IP 허용 |
-| `TMAP_API_KEY` | 실제 도보 도로 경로 | SK Open API 보행자 경로 사용 가능 앱 키 |
-| `PUBLIC_DATA_SERVICE_KEY` | TAGO 경유 정류장·차량 좌표 | 공공데이터포털 TAGO 버스노선정보 및 버스위치정보 사용 등록 |
-
-서버 `/mobility/capabilities`는 연결 설정 여부만 반환한다. 키 값은 반환하지 않는다.
-미설정 API는 503과 안내 문구를 반환한다. 설정 여부가 실제 외부 API의 사용 승인 성공을 보장하지 않는다.
-
-## 현재 확인한 한계
-
-- 로컬 서버에는 신규 검색·길찾기 세 키가 없다. 실제 검색 결과·경로 조회는 미검증이다.
-- 2026-10-14 TAGO 활용신청 후 기존 키로 정상 응답을 받았다. 앞서 발생한 키 미등록 403 오류는 해소됐다.
-- 경기도 GBIS 위치 API에는 실제 좌표가 없고 정류장 순번만 있다. 해당 정보는 시트에만 표시한다.
-- 부천 52번 `GGB210000009`, 시흥 12번 `GGB210000027`의 실제 좌표 수신을 확인했다. 역곡 정류장 `GGB210000019`의 경유 순번은 각각 43·34이며 경기도 데이터와 대조했다.
-- 경기도 노선 화면도 공식 관할 도시·노선 목록·선택 경유를 검증한 뒤 TAGO GPS를 연결한다. 다른 노선은 실제 제공 여부를 확인해야 한다.
-- 차량 위치를 지도에 표시하지 않는다. TAGO 좌표는 서버 상세 응답에 남아 있으나 지도 마커로 사용하지 않는다.
-- 도시 내 대중교통 경로만 지원한다. 도시간 연결, 자동차·자전거, 즐겨찾기,
-  출발 시각 변경·실시간 길 안내 및 네이버 전체 기능·성능 동등성은 구현/검증하지 않았다.
-- Android 에뮬레이터에서 지도·알림 화면 표시를 확인했지만 iPhone의 새 UI와 실제 푸시 액션은 미확인이다.
-
-## 참고 문서
-
-- https://developer.apple.com/design/human-interface-guidelines
-- https://developers.kakao.com/docs/ko/local/dev-guide
-- https://lab.odsay.com/guide/releaseReference?platform=web
-- https://tmap-skopenapi.readme.io/reference/보행자-경로안내
-- https://www.gbis.go.kr/gbis2014/publicService.action?cmd=mBusLocation
-- https://www.data.go.kr/data/15098533/openapi.do
+관련 명세: [TMAP·지하철](tmap-and-subway.md), [앱 구조](architecture.md).

@@ -22,25 +22,23 @@
     "expo-secure-store": "~57.0.4",
     "expo-splash-screen": "~57.0.9",
     "expo-sqlite": "~57.0.4",
-    "expo-status-bar": "~57.0.1",
     "expo-symbols": "~57.0.3",
     "expo-system-ui": "~57.0.4",
     "expo-task-manager": "~57.0.21",
-    "expo-web-browser": "~57.0.3",
     "react": "19.2.3",
-    "react-dom": "19.2.3",
     "react-native": "0.86.3",
     "react-native-gesture-handler": "~2.32.0",
     "react-native-reanimated": "4.5.1",
     "react-native-safe-area-context": "~5.7.0",
     "react-native-screens": "~4.26.0",
-    "react-native-web": "~0.21.0",
-    "react-native-worklets": "0.10.1"
+    "react-native-worklets": "0.10.1",
+    "zustand": "^5.0.15"
   },
   "devDependencies": {
     "@types/react": "~19.2.2",
     "eslint": "^9.0.0",
     "eslint-config-expo": "~57.0.2",
+    "prettier": "^3.9.10",
     "typescript": "~6.0.3"
   },
   "scripts": {
@@ -49,15 +47,15 @@
     "start:device": "EXPO_PUBLIC_API_BASE_URL=https://api.tarago.cloud expo start --dev-client --lan",
     "simulator:build": "expo prebuild && expo run:android --no-bundler && expo run:ios --no-bundler && npm run start:simulator",
     "simulator:open": "expo run:android --no-bundler && expo run:ios --no-bundler && npm run start:simulator",
-    "reset-project": "node ./scripts/reset-project.js",
     "android": "expo run:android",
     "ios": "expo run:ios",
-    "web": "expo start --web",
     "lint": "expo lint",
     "test": "node --experimental-strip-types --test src/**/*.test.ts",
     "ios:device": "EXPO_PUBLIC_API_BASE_URL=https://api.tarago.cloud expo prebuild --platform ios --no-install && EXPO_PUBLIC_API_BASE_URL=https://api.tarago.cloud expo run:ios --device",
     "tmap:sdk": "python3 modules/tarago-tmap/install-sdk.py",
-    "eas-build-pre-install": "python3 modules/tarago-tmap/install-sdk.py \"$EAS_BUILD_PLATFORM\""
+    "eas-build-pre-install": "python3 modules/tarago-tmap/install-sdk.py \"$EAS_BUILD_PLATFORM\"",
+    "format": "prettier --write src plugins *.js *.json docs README.md .vscode",
+    "format:check": "prettier --check src plugins *.js *.json docs README.md .vscode"
   },
   "private": true
 }

@@ -1,0 +1,12 @@
+node_modules/
+.expo/
+ios/
+android/
+dist/
+assets/
+graphify-out/
+modules/tarago-tmap/ios/Frameworks/
+modules/tarago-tmap/android/libs/
+**/*.test.ts
+expo-env.d.ts
+package-lock.json

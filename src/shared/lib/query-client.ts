@@ -1,3 +1,4 @@
+/** @fileoverview 화면과 알림 런타임이 공유하는 서버 상태 캐시. 모듈 범위의 단일 QueryClient로 화면 전환 후에도 결과를 재사용한다. */
 import { QueryClient } from '@tanstack/react-query';
 
 /**

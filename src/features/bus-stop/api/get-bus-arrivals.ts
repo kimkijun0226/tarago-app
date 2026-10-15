@@ -1,3 +1,5 @@
+/** @fileoverview 서버의 차량별 도착 정보 계약과 정류장 도착 조회 요청을 정의한다. 캐시와 폴링은 모델 훅이 맡는다. */
+
 import { apiClient } from '@/shared/api/client';
 
 /** 서버가 공급자별 차량 도착정보와 도착정보 없는 노선을 정규화한 형태. */
@@ -6,6 +8,9 @@ export type BusArrival = {
   stationSeq?: number;
   busNumber: string;
   routeType: string;
+  /** 공급자의 공식 다음 정류장과 운행 방면. 없는 값은 화면에서 생략한다. */
+  nextStopName?: string;
+  direction?: string;
   etaSeconds: number | null;
   etaPrecision?: 'minutes';
   etaSource?: 'turnaround_estimate';
@@ -34,10 +39,10 @@ export async function getBusArrivals({
   stationId,
   signal,
 }: GetBusArrivalsParams): Promise<BusArrival[]> {
-  const response = await apiClient.get<BusArrival[]>(
-    `/bus/stations/${stationId}/arrivals`,
-    { signal },
-  );
+  /** 공유 HTTP 클라이언트의 응답이며 호출자에게 본문 데이터만 전달한다. */
+  const response = await apiClient.get<BusArrival[]>(`/bus/stations/${stationId}/arrivals`, {
+    signal,
+  });
 
   return response.data;
 }

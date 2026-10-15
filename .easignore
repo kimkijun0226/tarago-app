@@ -1,0 +1,54 @@
+# Dependencies and generated output
+node_modules/
+.expo/
+dist/
+expo-env.d.ts
+*.tsbuildinfo
+.kotlin/
+*.orig.*
+
+# Expo CNG native output
+/ios/
+/android/
+
+# Local configuration and credentials
+.env*.local
+*.jks
+*.p8
+*.p12
+*.key
+*.mobileprovision
+*.pem
+
+# Local data snapshots
+/*.csv
+
+# Tool and OS files
+.metro-health-check*
+npm-debug.*
+yarn-debug.*
+yarn-error.*
+.DS_Store
+
+# Expo generated types
+expo-env.d.ts
+
+# Official TMAP SDK binaries are restored by the SDK setup script
+/modules/tarago-tmap/android/libs/
+/modules/tarago-tmap/ios/Frameworks/
+
+# Local code-graph output is generated from source, not application code
+/graphify-out/
+
+# Only application source and required build assets are uploaded
+.git/
+.github/
+.vscode/
+.codex/
+.agents/
+docs/
+AGENTS.md
+**/README.md
+.env*
+**/*.test.ts
+**/*.spec.ts

@@ -1,43 +1,42 @@
 # TaraGo 앱
 
-TaraGo는 주변 버스 정류장을 지도에서 찾고 도착 정보를 확인하며, 원하는 정류장과 노선의 알림을 설정하는 모바일 앱입니다.
+주변 버스 정류장·도착정보, 장소 검색·길찾기, 버스·지하철 알림을 제공하는 iOS·Android 앱.
+서버는 별도 `tarago-server` 저장소이며 앱 API 주소는 `https://api.tarago.cloud`다.
 
-## 구성
+## 기술 구성
 
-- React Native · Expo Development Build · TypeScript
-- TMAP 네이티브 지도 · TanStack Query · Axios
-- 버스 정류장 지도, 노선·도착 조회, 예약 알림 및 정류장 접근 알림
-- 장소·주소 검색, 앱 내부 길찾기, 지하철 실시간 도착 조회
-- API: `https://api.tarago.cloud`
+| 구성                             | 역할                                      |
+| -------------------------------- | ----------------------------------------- |
+| Expo · React Native · TypeScript | 모바일 실행 환경과 타입 검사              |
+| Expo Router                      | 화면 경로와 탭·스택 구성                  |
+| TMAP Vector Map SDK              | 네이티브 지도와 오버레이                  |
+| TanStack Query · Axios           | 서버 상태 캐시와 공통 HTTP 요청           |
+| Zustand `app-store.ts`           | 탭 숨김 여부와 알림 런타임 오류 공유      |
+| SQLite KV · SecureStore          | 최근 검색·기기 사본과 알림 인증 정보 저장 |
+| Expo Notifications · Location    | 푸시·접근 알림과 기기 위치 구독           |
+| Prettier · ESLint                | 코드 서식과 정적 규칙 검사                |
 
-서버는 별도 비공개 `tarago-server` 저장소에서 관리합니다. 이 저장소에는 앱 코드와 개발 기록을 공개합니다. 푸시 알림은 EAS/APNs/FCM 연결이 필요합니다. 자세한 내용은 [알림 기능 문서](docs/bus-alerts.md)를 참고하세요.
+## 코드 문서
 
-## 실행
+- [현재 구조](docs/architecture.md): 실행 계층, 상태 소유권, 데이터 흐름.
+- [파일별 역할](docs/file-map.md): 각 소스 파일의 책임.
+- [버스 알림](docs/bus-alerts.md): 시간·접근·1시간 감시의 구분.
+- [지도 검색·길찾기](docs/map-search-and-design.md): 검색 화면과 경로 표시 구성.
+- [TMAP·지하철](docs/tmap-and-subway.md): SDK·API·인증 경계.
 
-명령은 `tarago-app` 루트에서 실행합니다.
+각 소스의 한글 JSDoc은 파일·함수·상태·변수와 훅의 역할을 기술한다.
 
-```bash
-npm install
-npm run tmap:sdk
-npm run start:simulator
-```
+## 개발 명령
 
-무료 Apple Personal Team으로 연결한 아이폰을 테스트할 때는 다음 명령을 사용합니다. 이 빌드에서는 원격 푸시 알림이 제외됩니다.
+| 명령                      | 역할                                        |
+| ------------------------- | ------------------------------------------- |
+| `npm run start:simulator` | 운영 API와 연결하는 시뮬레이터용 Metro 서버 |
+| `npm run start:device`    | 실기기용 LAN Metro 서버                     |
+| `npm run tmap:sdk`        | 공식 TMAP 네이티브 SDK 설치                 |
+| `npm run format`          | Prettier 서식 적용                          |
+| `npm run format:check`    | Prettier 서식 검사                          |
+| `npm run lint`            | ESLint 검사                                 |
+| `npx tsc --noEmit`        | 산출물 없는 타입 검사                       |
 
-```bash
-npm run ios:device
-```
-
-푸시 권한을 포함한 일반 빌드는 유료 Apple Developer Team을 설정한 뒤 `npm run ios -- --device`로 실행합니다. 네이티브 설정이나 라이브러리가 바뀌면 개발 빌드를 다시 설치해야 합니다.
-
-TMAP 키와 새 빌드 준비는 [TMAP·지하철 연결 문서](docs/tmap-and-subway.md)를 참고하세요.
-
-API 주소는 `EXPO_PUBLIC_API_BASE_URL`로 변경할 수 있습니다. 로컬 환경 파일과 비밀 키는 커밋하지 않습니다.
-
-## 검증
-
-```bash
-npx tsc --noEmit
-npm run lint
-npm test
-```
+`EXPO_PUBLIC_API_BASE_URL`은 공개 API 주소, `TMAP_API_KEY`는 지도 SDK의 빌드 인증 변수다.
+프리뷰 빌드는 Metro 없이 실행되는 설치 파일이고, 개발 빌드는 Metro의 JS 번들을 사용한다.

@@ -1,3 +1,5 @@
+/** @fileoverview 지도 타일 Query를 관찰하고 새 영역이 준비될 때까지 이전 영역의 정류장 표시를 유지한다. */
+
 import { useCallback, useMemo, useState } from 'react';
 import { useQueries } from '@tanstack/react-query';
 
@@ -17,39 +19,70 @@ import type { BusStop } from '../api/get-nearby-bus-stops';
  * @returns 타일 응답을 합쳐 중복을 제거한 정류장 목록.
  */
 export function useNearbyBusStops(tiles: BusStopTile[]) {
-  // 서버 응답은 Query에만 두고, 이전 조회 영역의 타일 식별자만 유지한다.
+  /** 새 영역이 준비될 때까지 유지할 이전 타일 식별자 상태다. 서버 응답은 복제하지 않고 Query에 둔다. */
   const [previousTiles, setPreviousTiles] = useState<BusStopTile[]>([]);
+
+  /** 현재 화면의 타일 키 집합이며 tiles 변경 시에만 다시 만든다. */
   const activeKeys = useMemo(() => new Set(tiles.map(tileKey)), [tiles]);
-  const observedTiles = useMemo(() => tiles.length
-    ? [...new Map([...previousTiles, ...tiles].map(tile => [tileKey(tile), tile])).values()]
-    : [], [previousTiles, tiles]);
-  const queries = useMemo(() => observedTiles.map((tile) => ({
-      queryKey: [
-        'bus-stops',
-        'tile',
-        'complete-coverage-v2',
-        tile.sizeMeters,
-        tile.tileX,
-        tile.tileY,
-      ],
-      queryFn: ({ signal }: { signal: AbortSignal }) =>
-        getNearbyBusStops({
-          latitude: tile.center.latitude,
-          longitude: tile.center.longitude,
-          radius: tile.radiusMeters,
-          signal,
-        }),
-      enabled: activeKeys.has(tileKey(tile)),
-      staleTime: 30 * 60_000,
-      gcTime: 30 * 60_000,
-    })), [activeKeys, observedTiles]);
-  const combine = useCallback((results: { data?: BusStop[] }[]) => ({
-    stops: combineBusStops(results),
-    ready: results.every((result, index) => !activeKeys.has(tileKey(observedTiles[index])) || result.data !== undefined),
-  }), [activeKeys, observedTiles]);
+
+  /** 새 응답이 준비될 때까지 이전 타일과 현재 타일을 함께 관찰하는 목록이다. */
+  const observedTiles = useMemo(
+    () =>
+      tiles.length
+        ? [...new Map([...previousTiles, ...tiles].map((tile) => [tileKey(tile), tile])).values()]
+        : [],
+    [previousTiles, tiles],
+  );
+
+  /** 관찰 타일별 요청과 캐시 설정이며 화면 밖 이전 타일의 새 요청은 막는다. */
+  const queries = useMemo(
+    () =>
+      observedTiles.map((tile) => ({
+        queryKey: [
+          'bus-stops',
+          'tile',
+          'complete-coverage-v2',
+          tile.sizeMeters,
+          tile.tileX,
+          tile.tileY,
+        ],
+        queryFn: ({ signal }: { signal: AbortSignal }) =>
+          getNearbyBusStops({
+            latitude: tile.center.latitude,
+            longitude: tile.center.longitude,
+            radius: tile.radiusMeters,
+            signal,
+          }),
+        enabled: activeKeys.has(tileKey(tile)),
+        staleTime: 30 * 60_000,
+        gcTime: 30 * 60_000,
+      })),
+    [activeKeys, observedTiles],
+  );
+
+  /**
+   * 타일 결과를 합치고 현재 화면 타일에 응답이 모두 있는지 판정한다.
+   * useQueries는 combine 참조 변경 시 다시 결합하므로 activeKeys·observedTiles 변경 때만 교체한다.
+   */
+  const combine = useCallback(
+    (results: { data?: BusStop[] }[]) => ({
+      stops: combineBusStops(results),
+      ready: results.every(
+        (result, index) =>
+          !activeKeys.has(tileKey(observedTiles[index])) || result.data !== undefined,
+      ),
+    }),
+    [activeKeys, observedTiles],
+  );
+
+  /** 여러 타일 Query에서 결합한 정류장 목록과 현재 영역의 준비 상태다. */
   const result = useQueries({ queries, combine });
-  if ((result.ready || previousTiles.length === 0) && !haveSameTiles(previousTiles, tiles)) setPreviousTiles(tiles);
+  if ((result.ready || previousTiles.length === 0) && !haveSameTiles(previousTiles, tiles))
+    setPreviousTiles(tiles);
   return result.stops;
 }
 
-function tileKey(tile: BusStopTile) { return `${tile.sizeMeters}:${tile.tileX}:${tile.tileY}`; }
+/** 타일 크기도 포함해 서로 다른 줌 단계의 동일 인덱스가 충돌하지 않게 한다. */
+function tileKey(tile: BusStopTile) {
+  return `${tile.sizeMeters}:${tile.tileX}:${tile.tileY}`;
+}

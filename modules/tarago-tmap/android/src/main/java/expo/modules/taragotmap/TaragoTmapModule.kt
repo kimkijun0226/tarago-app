@@ -1,3 +1,7 @@
+/**
+ * TMAP Android 지도 어댑터. React props를 네이티브 카메라·마커·선으로 연결한다.
+ * Kotlin은 JSDoc 대신 KDoc을 사용하며 앱의 조회·알림 비즈니스 규칙을 포함하지 않는다.
+ */
 package expo.modules.taragotmap
 
 import android.content.Context
@@ -29,7 +33,9 @@ import expo.modules.kotlin.viewevent.EventDispatcher
 import java.net.URL
 import java.util.concurrent.Executors
 
+/** Expo에 지도 뷰 이름·이벤트·props와 해제 동작을 등록한다. */
 class TaragoTmapModule : Module() {
+  /** JS와 네이티브 지도 사이의 입력·이벤트 계약을 정의한다. */
   override fun definition() = ModuleDefinition {
     Name("TaragoTmap")
     View(TaragoTmapView::class) {
@@ -46,9 +52,9 @@ class TaragoTmapModule : Module() {
   }
 }
 
-/** The native SDK renders every frame; camera events are debounced before crossing to JS. */
+/** 매 프레임 렌더링은 SDK에 맡기고 JS에는 정착한 카메라 범위만 전달한다. */
 class TaragoTmapView(context: Context, appContext: AppContext) : ExpoView(context, appContext) {
-  /** The SDK adds a GL child after configuration loads; Yoga must allow its native layout. */
+  /** SDK가 나중에 생성하는 GL 하위 뷰가 자체 레이아웃을 적용할 수 있게 한다. */
   override val shouldUseAndroidLayout = true
   private val onReady by EventDispatcher()
   private val onCameraIdle by EventDispatcher()
@@ -103,9 +109,11 @@ class TaragoTmapView(context: Context, appContext: AppContext) : ExpoView(contex
     if (!key.isNullOrBlank()) map.setSKTMapApiKey(key)
     else handler.post { onError(mapOf("message" to "TMAP_API_KEY is missing from the native build.")) }
   }
+  /** 최초 카메라만 기억해 일반 재렌더가 지도 이동을 초기화하지 않도록 한다. */
   fun initialCamera(value: Map<String, Any>) { if (initial == null) initial = value }
+  /** 명령을 대기열에 두고 전체 props 전달이 끝난 뒤 실행한다. */
   fun camera(value: Map<String, Any>) { pending = value }
-  /** Apply target and native screen anchor together once all React props are available. */
+  /** 같은 React 업데이트의 카메라·시트 여백이 모두 반영된 뒤 화면 기준점과 목표 좌표를 함께 적용한다. */
   fun flushCamera() {
     if (!ready || map.width <= 0 || map.height <= 0) return
     val value = pending ?: if (!didApplyInitialCamera) initial else null
@@ -132,6 +140,7 @@ class TaragoTmapView(context: Context, appContext: AppContext) : ExpoView(contex
     }
     scheduleIdle()
   }
+  /** 변경 서명으로 마커를 비교하고 로컬·네트워크 이미지를 비동기 로딩한다. 최신 항목에만 이미지 결과를 적용한다. */
   fun setMarkers(value: List<Map<String, Any>>) {
     markerData = value
     if (!ready) return
@@ -187,6 +196,7 @@ class TaragoTmapView(context: Context, appContext: AppContext) : ExpoView(contex
     }
     updateVisibility()
   }
+  /** 선 좌표가 달라질 때만 기존 폴리라인을 교체하고 dp 두께를 실제 픽셀로 바꾼다. */
   fun setLines(value: List<Map<String, Any>>) {
     lineData = value
     if (!ready) return
@@ -202,10 +212,11 @@ class TaragoTmapView(context: Context, appContext: AppContext) : ExpoView(contex
       map.addTMapPolyLine(line)
     }
   }
+  /** 마지막 위치 점을 지우고 새 좌표에 파란 점을 표시한다. */
   fun setPosition(value: Map<String, Any>?) {
     positionData = value
     if (!ready) return
-    // SDK 3.7's built-in location layer is uninitialized until its first location update.
+    // SDK 3.7 기본 위치 레이어는 첫 센서 업데이트 전 초기화되지 않아 앱의 위치 점을 사용한다.
     map.removeTMapMarkerItem("__tarago_location")
     if (value != null) {
       val size = (18*resources.displayMetrics.density).toInt()
@@ -219,6 +230,7 @@ class TaragoTmapView(context: Context, appContext: AppContext) : ExpoView(contex
       marker.setPosition(0.5f,0.5f); map.addTMapMarkerItem(marker)
     }
   }
+  /** 줌에 맞춰 마커와 이름 이미지를 바꾸고 달라진 오버레이만 갱신한다. */
   private fun updateVisibility() {
     for (item in markerData) {
       val marker = map.getMarkerItemFromId(item["id"] as? String ?: continue) ?: continue
@@ -239,8 +251,11 @@ class TaragoTmapView(context: Context, appContext: AppContext) : ExpoView(contex
       if (changed) map.updateTMapMarkerItem(marker)
     }
   }
+  /** 뷰가 해제되면 예약 이벤트·이미지 실행기·지도 자원을 종료한다. */
   fun destroy() { handler.removeCallbacksAndMessages(null); executor.shutdownNow(); map.onDestroy() }
+  /** 이동·줌 이벤트를 150ms 단위로 합쳐 마지막 화면 범위만 React로 전달한다. */
   private fun scheduleIdle() { handler.removeCallbacks(idle); handler.postDelayed(idle,150) }
+  /** 일반 장소 핀을 기기 픽셀 밀도에 맞춰 그린다. */
   private fun placeIcon(): Bitmap {
     val density=resources.displayMetrics.density
     val image=Bitmap.createBitmap((32*density).toInt(),(40*density).toInt(),Bitmap.Config.ARGB_8888)
@@ -251,7 +266,10 @@ class TaragoTmapView(context: Context, appContext: AppContext) : ExpoView(contex
     paint.color=Color.WHITE; canvas.drawCircle(16f,14f,6f,paint)
     return image
   }
+  /** JS 숫자 필드를 읽고 없으면 기본값을 반환한다. */
   private fun num(item: Map<String, Any>, key: String, fallback: Double = 0.0) = (item[key] as? Number)?.toDouble() ?: fallback
+  /** 논리적 dp 크기를 기기 픽셀 밀도에 맞는 정수 크기로 변환한다. */
   private fun px(item: Map<String, Any>, key: String) = (num(item,key)*resources.displayMetrics.density).toInt()
+  /** React의 위도·경도 객체를 TMAP 좌표로 변환한다. */
   private fun point(item: Map<String, Any>) = TMapPoint(num(item,"latitude",num(item,"lat")),num(item,"longitude",num(item,"lng")))
 }

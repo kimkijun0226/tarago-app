@@ -36,10 +36,6 @@
         "android.permission.FOREGROUND_SERVICE_LOCATION"
       ]
     },
-    "web": {
-      "output": "static",
-      "favicon": "./assets/images/favicon.png"
-    },
     "plugins": [
       "expo-router",
       [
@@ -82,6 +78,7 @@
         "projectId": "9d8a0d3c-cae6-4394-8490-90a9cd6864ca"
       }
     },
-    "owner": "kimkijun"
+    "owner": "kimkijun",
+    "platforms": ["ios", "android"]
   }
 }

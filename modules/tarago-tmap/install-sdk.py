@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Install pinned official TMAP vector SDKs without committing vendor binaries."""
+"""고정 버전의 공식 TMAP SDK를 내려받아 검증하고 플랫폼별 빌드 위치에 설치한다. 업체 바이너리는 커밋하지 않는다."""
 import hashlib
 import json
 import pathlib
@@ -18,6 +18,7 @@ CHECKSUMS = {
 }
 
 def install(platform):
+    """공식 다운로드의 HTTPS·SHA256·압축 경로를 검증한 뒤 Android AAR 또는 iOS XCFramework를 배치한다."""
     endpoint = ('[iOS_VSM]TmapSDK_' if platform == 'ios' else '[Android]TMapVSMSDK_') + VERSION + '.zip'
     with tempfile.TemporaryDirectory(prefix='tarago-tmap-') as work:
         request = 'https://tmapapi.tmapmobility.com/presigned-url/' + urllib.parse.quote(endpoint)

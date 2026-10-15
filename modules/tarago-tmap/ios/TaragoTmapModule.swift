@@ -1,10 +1,16 @@
+/**
+ * TMAP iOS 지도 어댑터. React props를 SDK 카메라·마커·선으로 변환하고 정착 이벤트를 JS로 전달한다.
+ * 정류장 조회나 도착 알림 규칙은 포함하지 않는다. Swift 파일은 JSDoc 대신 같은 형태의 문서 주석을 사용한다.
+ */
 import ExpoModulesCore
 import TMapSDK
 import VSMSDK
 import UIKit
 import CoreLocation
 
+/** JS에서 사용할 뷰 이름·이벤트·props 계약을 등록한다. */
 public class TaragoTmapModule: Module {
+  /** 네이티브 지도 뷰의 입력과 콜백을 Expo 모듈에 연결한다. */
   public func definition() -> ModuleDefinition {
     Name("TaragoTmap")
     View(TaragoTmapView.self) {
@@ -20,7 +26,7 @@ public class TaragoTmapModule: Module {
   }
 }
 
-/** SDK owns rendering and gestures; only settled camera state crosses the JS boundary. */
+/** 지도 렌더링과 제스처는 SDK가 처리하고, 움직임이 정착한 범위만 React로 전달한다. */
 final class TaragoTmapView: ExpoView, TMapViewDelegate {
   let onReady = EventDispatcher()
   let onCameraIdle = EventDispatcher()
@@ -44,6 +50,7 @@ final class TaragoTmapView: ExpoView, TMapViewDelegate {
   private var markerSignatures: [String: String] = [:]
   var padding: [String: Any] = [:]
 
+  /** 지도 인스턴스를 생성하고 빌드 설정에 들어 있는 SDK 키로 인증한다. */
   required init(appContext: AppContext? = nil) {
     super.init(appContext: appContext)
     clipsToBounds = true
@@ -55,6 +62,7 @@ final class TaragoTmapView: ExpoView, TMapViewDelegate {
       map.setApiKey(key)
     }
   }
+  /** 뷰 크기가 결정되면 카메라를 적용하고 지도 키 누락을 알린다. */
   override func layoutSubviews() {
     super.layoutSubviews()
     map.frame = bounds
@@ -63,9 +71,11 @@ final class TaragoTmapView: ExpoView, TMapViewDelegate {
       onError(["message": "TMAP_API_KEY is missing from the native build."])
     }
   }
+  /** 초기 카메라는 최초 입력만 보관해 React 재렌더가 사용자 이동을 되돌리지 않게 한다. */
   func initialCamera(_ value: [String: Any]) { if initial == nil { initial = value } }
+  /** 다음 카메라 명령을 보관하고 전체 props 반영 시점에 실행하도록 지연한다. */
   func camera(_ value: [String: Any]) { pendingCamera = value }
-  /** Apply camera and padding together after React has delivered every prop in this update. */
+  /** 같은 React 업데이트의 카메라와 시트 여백 props가 모두 전달된 뒤 함께 적용한다. */
   func flushCamera() {
     guard ready, bounds.width > 0, bounds.height > 0,
       let value = pendingCamera ?? (didApplyInitialCamera ? nil : initial) else { return }
@@ -79,13 +89,14 @@ final class TaragoTmapView: ExpoView, TMapViewDelegate {
       let target = VSMMapPoint(longitude:point.longitude,latitude:point.latitude)
       let duration = UInt32(max(0,number(value,"duration")))
       let animation = VSMAnimationInfoMake(duration > 0 ? .easeOutCubic : .none,duration)
-      // The native normalized anchor keeps the requested GPS coordinate above a covering sheet.
+      // 네이티브 화면 기준점을 조정해 선택 좌표가 시트 위의 보이는 영역에 놓이도록 한다.
       map.vsmMapView?.screenCenter = CGPoint(x:(bounds.width+number(padding,"left")-number(padding,"right"))/(2*bounds.width),y:max(0.05,min(0.95,(bounds.height+number(padding,"top")-number(padding,"bottom"))/(2*bounds.height))))
       let update = VSMCameraUpdate(center:target,zoom:number(value,"zoom",Double(map.getZoom() ?? 17)),animation:animation)
       map.vsmMapView?.moveCamera(update)
     }
     scheduleIdle()
   }
+  /** 마커의 변경 서명을 비교해 달라진 항목만 재생성한다. 이미지 로딩이 늦게 끝나도 최신 서명에만 적용한다. */
   func setMarkers(_ value: [[String: Any]]) {
     markerData = value
     guard ready else { return }
@@ -106,7 +117,7 @@ final class TaragoTmapView: ExpoView, TMapViewDelegate {
         text.map = map; captions[id] = text
       }
       marker.rotation = (item["rotation"] as? NSNumber)?.floatValue
-      /** TMAP divides offset by UIImage.size to obtain the icon's normalized anchor. */
+      /** TMAP은 이미지 크기로 offset을 나누어 앵커를 계산하므로 실제 표시 크기에 맞춘다. */
       marker.offset = CGSize(width: number(item,"width") * anchor(item,"x",0.5), height: number(item,"height") * anchor(item,"y",1))
       marker.setTapCallback { [weak self] _ in self?.onMarkerPress(["id":id]) }
       markers[id] = marker
@@ -143,6 +154,7 @@ final class TaragoTmapView: ExpoView, TMapViewDelegate {
     }
     updateVisibility()
   }
+  /** 선 좌표의 직렬화 결과가 달라질 때만 네이티브 폴리라인을 교체한다. */
   func setLines(_ value: [[String: Any]]) {
     lineData = value
     guard ready else { return }
@@ -158,6 +170,7 @@ final class TaragoTmapView: ExpoView, TMapViewDelegate {
       line.map = map; lines.append(line)
     }
   }
+  /** 유효한 현재 좌표를 고정 크기의 파란 위치 점으로 표시하고 이전 점은 제거한다. */
   func setPosition(_ value: [String: Any]?) {
     positionData = value
     guard ready else { return }
@@ -171,14 +184,19 @@ final class TaragoTmapView: ExpoView, TMapViewDelegate {
     }
     marker.isUseImage = true; marker.map = map; locationMarker = marker
   }
+  /** 지도 준비 후 보관한 카메라·마커·선·위치를 적용하고 준비 완료를 전달한다. */
   func mapViewDidFinishLoadingMap() {
     guard !ready else { return }; ready = true
     flushCamera()
     setMarkers(markerData); setLines(lineData); setPosition(positionData); onReady([:]); scheduleIdle()
   }
+  /** SDK 인증 실패를 React 화면으로 전달한다. */
   func SKTMapApikeyFailed(error: NSError?) { onError(["message":error?.localizedDescription ?? "TMAP SDK authentication failed."]) }
+  /** 지도 범위 변경은 즉시 서버 호출하지 않고 정착 이벤트 예약으로 넘긴다. */
   func mapViewDidChangeBounds() { scheduleIdle() }
+  /** 줌 변경도 동일한 정착 이벤트로 합친다. */
   func mapView(_ mapView: TMapView, viewLevelChanged zoom: Int) { scheduleIdle() }
+  /** 150ms 동안 이어지는 이동 이벤트를 하나로 합쳐 최종 범위와 줌만 전달한다. */
   private func scheduleIdle() {
     idleWork?.cancel()
     let work = DispatchWorkItem { [weak self] in
@@ -188,10 +206,12 @@ final class TaragoTmapView: ExpoView, TMapViewDelegate {
     }
     idleWork = work; DispatchQueue.main.asyncAfter(deadline:.now()+0.15,execute:work)
   }
+  /** 줌과 이미지 준비 여부에 맞춰 마커·라벨 노출을 조절한다. */
   private func updateVisibility() {
     let zoom = Double(map.getZoom() ?? 15)
     for item in markerData { if let id = item["id"] as? String, let marker = markers[id] { let visible = zoom >= number(item,"minZoom") && (item["imageUri"] == nil || marker.icon != nil); if visible && marker.map == nil { marker.map = map }; if !visible && marker.map != nil { marker.map = nil }; let captionVisible = visible && zoom >= number(item,"captionMinZoom",18); if captionVisible && captions[id]?.map == nil { captions[id]?.map = map }; if !captionVisible { captions[id]?.map = nil } } }
   }
+  /** 일반 검색 장소의 핀 이미지를 로컬 벡터 경로로 그린다. */
   private func placeIcon() -> UIImage {
     UIGraphicsImageRenderer(size:CGSize(width:32,height:40)).image { _ in
       let pin = UIBezierPath()
@@ -202,8 +222,12 @@ final class TaragoTmapView: ExpoView, TMapViewDelegate {
       UIColor.white.setFill(); UIBezierPath(ovalIn:CGRect(x:10,y:8,width:12,height:12)).fill()
     }
   }
+  /** JS 숫자 필드를 Double로 읽고 값이 없으면 지정된 기본값을 사용한다. */
   private func number(_ item:[String:Any],_ key:String,_ fallback:Double = 0)->Double { (item[key] as? NSNumber)?.doubleValue ?? fallback }
+  /** 중첩된 anchor 객체에서 정규화 기준점을 읽는다. */
   private func anchor(_ item:[String:Any],_ key:String,_ fallback:Double)->Double { number(item["anchor"] as? [String:Any] ?? [:],key,fallback) }
+  /** React 좌표 필드를 SDK의 위도·경도 타입으로 변환한다. */
   private func coordinate(_ item:[String:Any],lat:String = "latitude",lng:String = "longitude")->CLLocationCoordinate2D { CLLocationCoordinate2D(latitude:number(item,lat,number(item,"lat")),longitude:number(item,lng,number(item,"lng"))) }
+  /** React의 RGB HEX 문자열을 UIKit 색상으로 변환한다. */
   private func color(_ hex:String)->UIColor { let v=UInt64(hex.trimmingCharacters(in:CharacterSet(charactersIn:"#")),radix:16) ?? 0x1976D2; return UIColor(red:CGFloat((v>>16)&255)/255,green:CGFloat((v>>8)&255)/255,blue:CGFloat(v&255)/255,alpha:1) }
 }

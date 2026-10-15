@@ -1,34 +1,43 @@
+/** @fileoverview 앱 전체의 Provider와 최상위 Router를 연결하는 조립 지점. Query·알림 런타임·제스처를 한 번 설치한다. */
 import { focusManager, QueryClientProvider } from '@tanstack/react-query';
 import { DefaultTheme, Stack, ThemeProvider } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
-import { AppState, Platform } from 'react-native';
 import { useEffect } from 'react';
+import { AppState } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 
 import { AnimatedSplashOverlay } from '@/components/animated-icon';
-import { AlertRuntimeProvider } from '@/features/bus-alert/ui/alert-runtime-provider';
-import { MapTabVisibilityProvider } from '@/components/map-tab-visibility';
+import { AlertRuntime } from '@/features/bus-alert/ui/alert-runtime';
 import { queryClient } from '@/shared/lib/query-client';
 
 SplashScreen.preventAutoHideAsync();
 
-export default function TabLayout() {
+/** Provider 수명을 화면 전환과 분리하고 앱 활성 상태를 Query에 전달해 백그라운드 폴링을 중지한다. */
+export default function RootLayout() {
+  /** 앱 활성 상태를 Query에 연결해 백그라운드 폴링을 제어한다. 최초 한 번 등록하고 루트 해제 시 AppState 구독을 제거한다. */
   useEffect(() => {
-    if (Platform.OS === 'web') return;
     focusManager.setFocused(AppState.currentState === 'active');
-    const subscription = AppState.addEventListener('change', state => focusManager.setFocused(state === 'active'));
+
+    /** 앱의 활성·백그라운드 전환을 Query focusManager에 전달하는 구독이다. 레이아웃 해제 시 제거한다. */
+    const subscription = AppState.addEventListener('change', (state) =>
+      focusManager.setFocused(state === 'active'),
+    );
+
     return () => subscription.remove();
   }, []);
+
   return (
-    <GestureHandlerRootView style={{flex:1}}><QueryClientProvider client={queryClient}>
-      <ThemeProvider value={DefaultTheme}>
-        <AnimatedSplashOverlay />
-        <MapTabVisibilityProvider>
-          <AlertRuntimeProvider>
-            <Stack screenOptions={{headerShown:false}}><Stack.Screen name="(tabs)" /><Stack.Screen name="subway-alerts" /></Stack>
-          </AlertRuntimeProvider>
-        </MapTabVisibilityProvider>
-      </ThemeProvider>
-    </QueryClientProvider></GestureHandlerRootView>
+    <GestureHandlerRootView style={{ flex: 1 }}>
+      <QueryClientProvider client={queryClient}>
+        <ThemeProvider value={DefaultTheme}>
+          <AnimatedSplashOverlay />
+          <AlertRuntime />
+          <Stack screenOptions={{ headerShown: false }}>
+            <Stack.Screen name="(tabs)" />
+            <Stack.Screen name="subway-alerts" />
+          </Stack>
+        </ThemeProvider>
+      </QueryClientProvider>
+    </GestureHandlerRootView>
   );
 }

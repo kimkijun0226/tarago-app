@@ -1,9 +1,15 @@
+/** @fileoverview 지도 타일 중심에서 조회하는 정류장 응답 계약과 HTTP 요청을 정의한다. */
+
 import { apiClient } from '@/shared/api/client';
 
 /** 지도에 표시할 정류장. `id`는 서버 UUID, `arsId`는 이용자용 정류장 번호다. */
 export type BusStop = {
   id: string;
   arsId: string | null;
+  /** 같은 승강장의 서울·경기 번호 목록이다. 서버에서 실제 위치로 검증한 경우만 제공한다. */
+  arsIds?: string[];
+  /** 병합 전 정류장 알림의 링크도 같은 승강장으로 연결하는 원본 ID 목록이다. */
+  stationIds?: string[];
   name: string;
   latitude: number;
   longitude: number;
@@ -36,6 +42,7 @@ export async function getNearbyBusStops({
   radius = 500,
   signal,
 }: GetNearbyBusStopsParams): Promise<BusStop[]> {
+  /** 공유 HTTP 클라이언트의 응답이며 호출자에게 본문 데이터만 전달한다. */
   const response = await apiClient.get<BusStop[]>('/bus/stations/nearby', {
     params: {
       latitude,
