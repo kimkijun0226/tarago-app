@@ -1,5 +1,6 @@
 /** @fileoverview 노선 경유 순번·공식 도로 형상·차량 위치의 서버 계약과 상세 조회 요청을 정의한다. */
 
+import type { BusArrival } from './get-bus-arrivals';
 import { apiClient } from '@/shared/api/client';
 
 /** 도로 형상은 공식 데이터가 있을 때만 전달한다. 차량 순번은 GPS 좌표가 아니다. */
@@ -48,11 +49,14 @@ export async function getBusRouteDetail(
   routeId: string,
   stationSeq: number,
   signal?: AbortSignal,
+  overview = false,
+  source?: BusArrival['routeSource'],
 ) {
   /** 공유 HTTP 클라이언트의 응답이며 호출자에게 본문 데이터만 전달한다. */
   const response = await apiClient.get<BusRouteDetail>(
     `/bus/stations/${stationId}/routes/${routeId}`,
-    { params: { stationSeq }, signal },
+    { params: { stationSeq, ...(overview ? { overview: true } : {}),
+      ...(source ? { sourceProvider: source.provider, sourceStationId: source.stationId } : {}) }, signal },
   );
   return response.data;
 }

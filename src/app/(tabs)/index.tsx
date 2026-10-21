@@ -7,11 +7,16 @@ import { BusStopBottomSheet } from '@/features/bus-stop/ui/bus-stop-bottom-sheet
 import { MobilitySearch } from '@/features/mobility/ui/mobility-search';
 import { SubwayArrivalSheet } from '@/features/subway/ui/subway-arrival-sheet';
 import { mapUi } from '@/shared/ui/map-design-tokens';
-import { TmapView } from '@/shared/ui/tmap/tmap-view';
-import { useState } from 'react';
-import type { MapSheetSnap } from '@/shared/ui/map-bottom-sheet';
+import { MapView } from '@/shared/ui/map/map-view';
+import { useEffect } from 'react';
+import Animated, {
+  Easing,
+  useSharedValue,
+  useAnimatedStyle,
+  withTiming,
+} from 'react-native-reanimated';
 import { SymbolView } from 'expo-symbols';
-import { ActivityIndicator, Pressable, View } from 'react-native';
+import { ActivityIndicator, Pressable, View, useWindowDimensions } from 'react-native';
 import { useMapController } from '@/features/map/model/use-map-controller';
 import { MapLocationGate } from '@/features/map/ui/map-location-gate';
 import { styles } from '@/features/map/ui/map-screen.styles';
@@ -21,6 +26,7 @@ import { styles } from '@/features/map/ui/map-screen.styles';
  * 단순한 스타일·표시 분기는 작은 계산이고 소비자가 참조 안정성에 의존하지 않아 useMemo를 추가하지 않는다.
  */
 export default function MapScreen() {
+  const { height: screenHeight } = useWindowDimensions();
   /** 지도 표시 값과 사용자 동작을 컨트롤러에서 받아 UI에 연결한다. 각 상태와 동작의 의미는 해당 훅의 선언에서 설명한다. */
   const {
     colors,
@@ -34,9 +40,11 @@ export default function MapScreen() {
     insets,
     planningActive,
     sheetHeight,
+    locationBottomPadding,
     onMapInitialized,
     onCameraIdle,
     onMarkerPress,
+    onSymbolPress,
     selectedRoute,
     closeRoute,
     loading,
@@ -49,9 +57,12 @@ export default function MapScreen() {
     closeBusStop,
     selectBusRoute,
     selectPlace,
-    routeIntent,
     showJourney,
     activateSearch,
+    setSearchMapRequest,
+    selectedSearchId,
+    selectSearchResult,
+    searchMapActive,
     openSubway,
     getCurrentLocation,
     onPlanningChange,
@@ -61,37 +72,65 @@ export default function MapScreen() {
     subwayLineName,
     closeSubway,
     setSubwaySheetSnap,
-    routeFromBusStop,
-    routeFromSubway,
     selectSubwayStation,
   } = useMapController();
-  /** 정류장 시트가 전체 높이일 때 지도 검색창과 상태 표시줄 배경을 함께 전환한다. */
-  const [busStopSheetSnap, setBusStopSheetSnap] = useState<MapSheetSnap>('half');
-
-  /** 다른 시트를 열 때 남은 높이 상태로 검색창을 숨기지 않도록 현재 선택도 확인한다. */
-  const fullBusStop = Boolean(selectedBusStop && !showRouteSheet && busStopSheetSnap === 'full');
+  /** 정착 높이 상태 대신 시트의 UI 스레드 위치를 사용해 드래그 중에도 버튼을 동기화한다. */
+  const sheetPosition = useSharedValue(screenHeight);
+  const hasSheet = Boolean(selectedBusStop || subwayStation);
+  useEffect(() => {
+    if (!hasSheet) sheetPosition.value = withTiming(screenHeight, { duration: 180 });
+  }, [hasSheet, screenHeight, sheetPosition]);
+  const locationStyle = useAnimatedStyle(() => {
+    const coveredHeight = Math.max(0, screenHeight - sheetPosition.value);
+    return { transform: [{ translateY: -coveredHeight - Math.min(8, coveredHeight) }] };
+  });
+  /** 버스 노선 상세에서만 검색 영역을 숨기고 지하철 시트에서는 길찾기 진입을 유지한다. */
+  const hideSearch = Boolean(selectedRoute && showRouteSheet);
+  const searchOpacity = useSharedValue(1);
+  useEffect(() => {
+    searchOpacity.value = withTiming(hideSearch ? 0 : 1, {
+      duration: 220,
+      easing: Easing.inOut(Easing.ease),
+    });
+  }, [hideSearch, searchOpacity]);
+  const searchStyle = useAnimatedStyle(() => ({
+    opacity: searchOpacity.value,
+    transform: [{ translateY: -8 * (1 - searchOpacity.value) }],
+  }));
 
   if (!initialPosition)
     return <MapLocationGate preparing={preparingLocation} onRetry={prepareInitialPosition} />;
   return (
     <View style={styles.container}>
-      <TmapView
+      <MapView
         ref={mapRef}
         style={styles.container}
         initialCamera={{ ...initialPosition, zoom: 17 }}
         markers={markers}
         lines={lines}
         position={position}
+        logoBottomInset={
+          (selectedBusStop || subwayStation) &&
+          sheetHeight > 0 &&
+          sheetHeight < screenHeight - insets.top - 9 &&
+          insets.bottom >= 28
+            ? 6
+            : Math.max(insets.bottom + 72, sheetHeight + insets.bottom + 20)
+        }
         padding={{
           top: insets.top + (planningActive ? 150 : 120),
-          bottom: sheetHeight ? sheetHeight + insets.bottom + 8 : 0,
+          // 선택 시 가림 영역은 고정해 시트 드래그가 지도 카메라를 바꾸지 않도록 한다.
+          bottom:
+            locationBottomPadding ??
+            (selectedBusStop || subwayStation || searchMapActive ? screenHeight * 0.47 + insets.bottom + 8 : 0),
         }}
         onReady={onMapInitialized}
         onCameraIdle={onCameraIdle}
         onMarkerPress={onMarkerPress}
+        onSymbolPress={onSymbolPress}
       />
 
-      {selectedRoute ? (
+      {selectedBusStop && selectedRoute && showRouteSheet ? (
         <Pressable
           accessibilityRole="button"
           accessibilityLabel="정류장 버스 목록으로 돌아가기"
@@ -110,34 +149,39 @@ export default function MapScreen() {
       ) : null}
 
       {!planningActive ? (
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel="현재 위치로 지도 이동"
-          accessibilityState={{ disabled: loading, busy: loading }}
-          disabled={loading}
-          onPress={moveToMyLocation}
-          style={({ pressed }) => [
-            styles.locationButton,
-            {
-              backgroundColor: colors.surface,
-              bottom: sheetHeight ? sheetHeight + insets.bottom + 24 : insets.bottom + 16,
-            },
-            pressed && styles.pressed,
-          ]}
-        >
-          {loading ? (
-            <ActivityIndicator color={colors.accent} />
-          ) : (
-            <SymbolView
-              name={{
-                ios: 'scope',
-                android: 'my_location',
-              }}
-              size={24}
-              tintColor={mapUi.text}
-            />
-          )}
-        </Pressable>
+        <Animated.View style={[{
+          position: 'absolute', right: 16, bottom: insets.bottom + 16, zIndex: 25,
+        }, locationStyle]}>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="현재 위치로 지도 이동"
+            accessibilityState={{ disabled: loading, busy: loading }}
+            disabled={loading}
+            onPress={moveToMyLocation}
+            style={({ pressed }) => [
+              styles.locationButton,
+              {
+                backgroundColor: colors.surface,
+                position: 'relative',
+                right: 0,
+              },
+              pressed && styles.pressed,
+            ]}
+          >
+            {loading ? (
+              <ActivityIndicator color={colors.accent} />
+            ) : (
+              <SymbolView
+                name={{
+                  ios: 'scope',
+                  android: 'my_location',
+                }}
+                size={24}
+                tintColor={mapUi.text}
+              />
+            )}
+          </Pressable>
+        </Animated.View>
       ) : null}
 
       {selectedBusStop && selectedRoute && showRouteSheet ? (
@@ -146,10 +190,12 @@ export default function MapScreen() {
           stationId={selectedRoute.stationId}
           routeId={selectedRoute.routeId}
           stationSeq={selectedRoute.stationSeq}
+          source={selectedRoute.source}
           snap={routeSheetSnap}
           onChangeSnap={setRouteSheetSnap}
           onClose={closeRoute}
           onHeightChange={setSheetHeight}
+          animatedPosition={sheetPosition}
         />
       ) : selectedBusStop ? (
         <BusStopBottomSheet
@@ -158,28 +204,29 @@ export default function MapScreen() {
           position={position}
           onClose={closeBusStop}
           onHeightChange={setSheetHeight}
+          animatedPosition={sheetPosition}
           onSelectRoute={selectBusRoute}
-          onChangeSnap={setBusStopSheetSnap}
-          onStart={() => routeFromBusStop('start')}
-          onEnd={() => routeFromBusStop('end')}
         />
       ) : null}
 
-      <View
-        pointerEvents={fullBusStop ? 'none' : 'box-none'}
+      <Animated.View
+        pointerEvents={hideSearch ? 'none' : 'box-none'}
         style={[
           { position: 'absolute', top: 0, bottom: 0, left: 0, right: 0 },
-          fullBusStop && { display: 'none' },
+          { zIndex: 10 },
+          searchStyle,
         ]}
       >
         <MobilitySearch
           position={position ?? initialPosition}
           top={insets.top + 12}
-          left={selectedRoute ? 76 : 16}
+          left={selectedRoute && showRouteSheet ? 76 : 16}
           onPlace={selectPlace}
-          routeIntent={routeIntent}
           onGeometry={showJourney}
           onActivate={activateSearch}
+          onSearchMap={setSearchMapRequest}
+          selectedSearchId={selectedSearchId}
+          onSearchSelect={selectSearchResult}
           onSheetHeight={setSheetHeight}
           onSubway={openSubway}
           getPosition={getCurrentLocation}
@@ -187,31 +234,17 @@ export default function MapScreen() {
           onEndpoints={onEndpoints}
           suspended={Boolean(subwayStation || selectedBusStop)}
         />
-      </View>
-
-      {fullBusStop || (subwayStation && subwaySheetSnap === 'full') ? (
-        <View
-          pointerEvents="none"
-          style={{
-            position: 'absolute',
-            top: 0,
-            left: 0,
-            right: 0,
-            height: insets.top,
-            backgroundColor: mapUi.background,
-          }}
-        />
-      ) : null}
+      </Animated.View>
 
       {subwayStation ? (
         <SubwayArrivalSheet
           initialLineName={subwayLineName}
           stationName={subwayStation}
+          snap={subwaySheetSnap}
           onClose={closeSubway}
           onChangeSnap={setSubwaySheetSnap}
           onHeightChange={setSheetHeight}
-          onStart={() => routeFromSubway('start')}
-          onEnd={() => routeFromSubway('end')}
+          animatedPosition={sheetPosition}
           onSelectStation={(name, lineName, point) =>
             void selectSubwayStation(name, lineName, point)
           }

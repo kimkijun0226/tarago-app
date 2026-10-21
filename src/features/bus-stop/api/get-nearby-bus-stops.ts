@@ -8,6 +8,8 @@ export type BusStop = {
   arsId: string | null;
   /** 같은 승강장의 서울·경기 번호 목록이다. 서버에서 실제 위치로 검증한 경우만 제공한다. */
   arsIds?: string[];
+  /** 같은 번호의 원본 공급자 좌표. 대표 좌표와 지도 심벌의 편차를 비교할 때 사용한다. */
+  sourcePositions?: { latitude: number; longitude: number }[];
   /** 병합 전 정류장 알림의 링크도 같은 승강장으로 연결하는 원본 ID 목록이다. */
   stationIds?: string[];
   name: string;

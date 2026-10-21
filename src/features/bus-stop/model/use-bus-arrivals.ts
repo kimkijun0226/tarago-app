@@ -18,7 +18,7 @@ export const BUS_ARRIVALS_REFRESH_INTERVAL = 15_000;
  * @param stationId 서버 DB의 정류장 UUID.
  * @returns 도착 목록, 조회·오류 상태, 수동 재조회 함수를 담은 Query 결과.
  */
-export function useBusArrivals(stationId: string) {
+export function useBusArrivals(stationId: string, enabled = true) {
   /** 폐쇄 정류장을 지도 타일 캐시에서도 제거하기 위한 Query 클라이언트다. */
   const client = useQueryClient();
 
@@ -26,7 +26,7 @@ export function useBusArrivals(stationId: string) {
   const query = useQuery({
     queryKey: ['bus-stops', stationId, 'arrivals'],
     queryFn: ({ signal }) => getBusArrivals({ stationId, signal }),
-    enabled: Boolean(stationId),
+    enabled: Boolean(stationId) && enabled,
     staleTime: 5_000,
     retry: (count, error) =>
       !(isAxiosError(error) && [410, 429, 503].includes(error.response?.status ?? 0)) && count < 2,
@@ -36,6 +36,12 @@ export function useBusArrivals(stationId: string) {
         : BUS_ARRIVALS_REFRESH_INTERVAL,
     refetchIntervalInBackground: false,
   });
+
+  /** 축소 상태로 전환하면 진행 중인 요청과 재시도도 중단한다. */
+  useEffect(() => {
+    if (!enabled)
+      void client.cancelQueries({ queryKey: ['bus-stops', stationId, 'arrivals'], exact: true });
+  }, [client, enabled, stationId]);
 
   /**
    * 공식 응답이 410일 때만 해당 정류장을 모든 타일 캐시에서 제외한다.

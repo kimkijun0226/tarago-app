@@ -1,26 +1,22 @@
 /** @fileoverview 지도 위 장소 검색·출발/도착 편집·경로 선택 흐름을 연결한다. 서버 결과는 Query, 편집 중 UI는 로컬 상태가 소유한다. */
 
-import { useEffect, useEffectEvent, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
   BackHandler,
   Keyboard,
-  Pressable,
-  ScrollView,
   Text,
   TextInput,
   View,
 } from 'react-native';
 import { BottomSheetScrollView } from '@gorhom/bottom-sheet';
 import { MapBottomSheet, type MapSheetSnap } from '@/shared/ui/map-bottom-sheet';
-import { SymbolView } from 'expo-symbols';
 import { useQuery } from '@tanstack/react-query';
 import { isAxiosError } from 'axios';
 import { AppButton, useAppTheme } from '@/shared/ui';
 import {
   getDirections,
-  searchPlaces,
   type Journey,
   type Place,
   type Point,
@@ -30,11 +26,13 @@ import { mapUi } from '@/shared/ui/map-design-tokens';
 import { RouteEditor } from './route-editor';
 import { PlaceDetail } from './place-detail';
 import { PlaceSearchResults } from './place-search-results';
-import { HOME_CATEGORIES } from './search-categories';
 import { SavedPlaces } from './saved-places';
 import { JourneyResults } from './journey-results';
 import { usePlaceShortcuts } from '../model/use-place-shortcuts';
-import { searchBusStops } from '@/features/bus-stop/api/search-bus-stops';
+import { usePlaceSearch, type SearchMapRequest } from '../model/use-place-search';
+import { matchesSearchFilter, type SearchResultFilter } from '../model/place-kind';
+import { MobilitySearchBar } from './mobility-search-bar';
+import { MapSearchResults } from './map-search-results';
 import { readPlaceHistory, savePlaceHistory } from '../model/search-history';
 
 type Props = {
@@ -49,8 +47,10 @@ type Props = {
   onSubway: (stationName: string, lineName?: string) => void;
   onPlanningChange?: (active: boolean) => void;
   onEndpoints?: (start: Place | null, end: Place | null) => void;
-  routeIntent?: { id: number; place: Place; field: 'start' | 'end' } | null;
   suspended?: boolean;
+  onSearchMap: (request: SearchMapRequest | null) => void;
+  selectedSearchId: string | null;
+  onSearchSelect: (place: Place) => void;
 };
 
 /**
@@ -70,8 +70,10 @@ export function MobilitySearch({
   getPosition,
   onPlanningChange,
   onEndpoints,
-  routeIntent,
   suspended = false,
+  onSearchMap,
+  selectedSearchId,
+  onSearchSelect,
 }: Props) {
   /** 공통 앱 색상을 읽어 지도 전용 팔레트의 기본값으로 사용한다. */
   const { colors: appColors } = useAppTheme();
@@ -98,9 +100,6 @@ export function MobilitySearch({
   /** 내 장소에서 뒤로 돌아올 때 검색 선택 화면을 복원할지 기억한다. 화면에 직접 표시하지 않는 전환 기록이다. */
   const savedFromSearch = useRef(false);
 
-  /** 마지막 외부 요청 ID를 기억해 effect 재실행으로 같은 출발·도착 의도를 두 번 적용하지 않는다. */
-  const handledIntent = useRef<number | null>(null);
-
   /** 집·회사로 지정한 사용자 장소와 기기 저장 상태다. */
   const shortcuts = usePlaceShortcuts();
 
@@ -109,6 +108,10 @@ export function MobilitySearch({
 
   /** 검색 입력과 결과 목록의 열림 여부다. 검색 모드에서는 지도 위 전체 검색 영역을 표시한다. */
   const [open, setOpen] = useState(false);
+  const [mapResults, setMapResults] = useState(false);
+  const [searchOrigin, setSearchOrigin] = useState<Point>(position);
+  const [mapFilter, setMapFilter] = useState<SearchResultFilter>('all');
+  const [searchSnap, setSearchSnap] = useState<MapSheetSnap>('half');
 
   /** 내 장소 화면을 표시할지 결정한다. */
   const [savedOpen, setSavedOpen] = useState(false);
@@ -182,11 +185,11 @@ export function MobilitySearch({
     };
   }, []);
 
-  /** 입력 text가 바뀔 때마다 300ms 디바운스를 다시 예약한다. cleanup에서 이전 타이머를 해제해 마지막 입력만 Query에 반영한다. */
+  /** 입력 text가 바뀔 때마다 400ms 디바운스를 다시 예약한다. cleanup에서 이전 타이머를 해제해 마지막 입력만 Query에 반영한다. */
   useEffect(() => {
-    /** 입력이 멈춘 뒤 300ms 후 검색어를 확정할 예약 핸들이다. 다음 입력 때 해제한다. */
+    /** 입력이 멈춘 뒤 400ms 후 검색어를 확정할 예약 핸들이다. 다음 입력 때 해제한다. */
 
-    const timer = setTimeout(() => setQuery(text.trim()), 300);
+    const timer = setTimeout(() => setQuery(text.trim()), 400);
     return () => clearTimeout(timer);
   }, [text]);
 
@@ -250,70 +253,17 @@ export function MobilitySearch({
     return () => subscription.remove();
   });
 
-  /** 외부 경로 요청을 최신 편집 상태로 적용한다. Effect Event이므로 요청 감지 effect를 로컬 상태마다 다시 예약하지 않는다. */
-  const handleRouteIntent = useEffectEvent(() => {
-    if (!routeIntent || handledIntent.current === routeIntent.id) return;
-    handledIntent.current = routeIntent.id;
-    onActivate();
-    clearRoute();
-    setPlanning(true);
-    setChosen(null);
-    setText('');
-    setQuery('');
-    if (routeIntent.field === 'end') {
-      setStart(current);
-      setEnd(routeIntent.place);
-      setOpen(false);
-      void searchJourney(current, routeIntent.place);
-    } else {
-      setStart(routeIntent.place);
-      setEnd(null);
-      setField('end');
-      setOpen(true);
-    }
-  });
+  const { places, stations, results: searchResults } = usePlaceSearch(query, searchOrigin, open, !planning && !shortcutSlot);
 
-  // 역 시트가 닫힌 다음 프레임에 외부 출발·도착 요청을 적용한다.
-  /** 외부 routeIntent가 바뀌면 역 시트가 닫힌 다음 프레임에 요청을 적용한다. 최신 편집 상태는 Effect Event가 읽고 cleanup은 예약 프레임을 취소한다. */
   useEffect(() => {
-    if (!routeIntent) return;
+    onSearchMap(mapResults && open && !planning ? { query, position: searchOrigin, filter: mapFilter } : null);
+    return () => onSearchMap(null);
+  }, [mapResults, mapFilter, open, planning, query, searchOrigin, onSearchMap]);
 
-    /** 역 시트가 닫힌 다음 프레임에 외부 경로 요청을 적용할 예약 핸들이다. */
-    const frame = requestAnimationFrame(() => handleRouteIntent());
-    return () => cancelAnimationFrame(frame);
-  }, [routeIntent]);
-
-  /** 검색창이 열리고 검색어가 두 글자 이상일 때 실행하는 주변 장소 Query 결과다. */
-  const places = useQuery({
-    queryKey: ['mobility', 'places', query, position.latitude, position.longitude],
-    queryFn: ({ signal }) => searchPlaces(query, position, signal),
-    enabled: open && query.length >= 2,
-    staleTime: 60_000,
-    retry: false,
-  });
-
-  /** 정류장은 서버 DB에서 별도 조회해 장소 공급자에 누락된 정류장도 검색할 수 있게 한다. */
-  const stations = useQuery({
-    queryKey: ['bus-stops', 'search', query, position.latitude, position.longitude],
-    queryFn: ({ signal }) => searchBusStops(query, position, signal),
-    enabled: open && query.length >= 2,
-    staleTime: 5 * 60_000,
-    retry: false,
-  });
-
-  /** 정류장 응답을 선택 화면의 공통 장소 계약으로 투영한다. 원본 Query 데이터를 다른 상태에 복제하지 않는다. */
-  const searchResults: Place[] = [
-    ...(stations.data ?? []).map((stop) => ({
-      id: `station:${stop.id}`,
-      name: stop.name,
-      latitude: stop.latitude,
-      longitude: stop.longitude,
-      address: stop.arsIds?.join(', ') || stop.arsId || '',
-      category: '버스정류장',
-      distanceMeters: stop.distanceMeters,
-    })),
-    ...(places.data ?? []),
-  ];
+  const visibleSearchResults = searchResults.filter(place => matchesSearchFilter(place, mapFilter));
+  const showMapFallback = open && mapResults && !planning && !suspended && visibleSearchResults.length === 0;
+  const searchBusy = text.trim() !== query || places.isFetching || stations.isFetching;
+  const searchError = places.isError ? message(places.error) : stations.isError ? message(stations.error) : '';
 
   /** 확정된 출발·도착·이동수단별 경로 Query 결과다. */
   const journeys = useQuery({
@@ -339,7 +289,24 @@ export function MobilitySearch({
   function changeText(value: string) {
     selection.current++;
     setPositionBusy(false);
+    if (mapResults) {
+      if (suspended) onActivate();
+      setMapResults(false);
+      onPlace(null);
+      onSheetHeight(0);
+    }
     setText(value);
+  }
+
+  /** 일반 검색을 제출하면 키보드를 닫고 결과 전체를 지도에서 보여 준다. */
+  function submitSearch() {
+    const value = text.trim();
+    setQuery(value);
+    if (value.length < 2 || planning || shortcutSlot) return;
+    Keyboard.dismiss();
+    setMapFilter('all');
+    setSearchSnap('half');
+    setMapResults(true);
   }
 
   /** 검색을 닫으면 진행 중인 선택 완료와 집·회사 등록 의도를 함께 무효화한다. */
@@ -347,6 +314,9 @@ export function MobilitySearch({
     selection.current++;
     setPositionBusy(false);
     setOpen(false);
+    setMapResults(false);
+    if (mapResults) onPlace(null);
+    onSheetHeight(0);
     setShortcutSlot(null);
     Keyboard.dismiss();
   }
@@ -359,25 +329,13 @@ export function MobilitySearch({
     selection.current++;
     setPositionBusy(false);
     setShortcutSlot(null);
+    setMapResults(false);
+    setSearchOrigin({ latitude: position.latitude, longitude: position.longitude });
     setField(next);
     setText('');
     setQuery('');
     setOpen(true);
     input.current?.focus();
-  }
-
-  /**
-   * 홈 카테고리를 일반 장소 검색으로 적용한다.
-   * @param name 검색할 카테고리 이름.
-   */
-  function searchCategory(name: string) {
-    selection.current++;
-    setShortcutSlot(null);
-    onActivate();
-    setField('place');
-    setText(name);
-    setQuery(name);
-    setOpen(true);
   }
 
   /**
@@ -422,6 +380,8 @@ export function MobilitySearch({
     setText('');
     setQuery('');
     setOpen(false);
+    setMapResults(false);
+    onSheetHeight(0);
     if (targetField === 'start') {
       clearRoute();
       setStart(place);
@@ -516,7 +476,7 @@ export function MobilitySearch({
           }}
         />
       ) : null}
-      {open || (planning && (!request || journeySnap === 'full')) ? (
+      {(open && !mapResults) || showMapFallback || (planning && (!request || journeySnap === 'full')) ? (
         <View
           style={{
             position: 'absolute',
@@ -533,8 +493,8 @@ export function MobilitySearch({
         style={{
           position: 'absolute',
           top,
-          left: open || planning ? 0 : left,
-          right: open || planning ? 0 : 16,
+          left: planning ? 0 : left,
+          right: planning ? 0 : 16,
           gap: 12,
         }}
       >
@@ -580,191 +540,23 @@ export function MobilitySearch({
             }}
           />
         ) : null}
-        {open && !planning ? (
-          <View
-            style={{
-              flexDirection: 'row',
-              alignItems: 'center',
-              backgroundColor: colors.surface,
-              borderBottomWidth: 0.5,
-              borderColor: colors.separator,
-              minHeight: 54,
-            }}
-          >
-            <Pressable accessibilityLabel="검색 뒤로" onPress={closeSearch} style={{ padding: 12 }}>
-              <SymbolView
-                name={{ ios: 'chevron.left', android: 'arrow_back' }}
-                size={22}
-                tintColor={colors.text}
-              />
-            </Pressable>
-            <TextInput
-              ref={input}
-              value={text}
-              maxLength={100}
-              onChangeText={changeText}
-              placeholder={
-                planning
-                  ? `${field === 'start' ? '출발지' : '도착지'} 검색`
-                  : shortcutSlot
-                    ? `${shortcutSlot === 'home' ? '집' : '회사'} 위치 검색`
-                    : '장소, 버스, 지하철, 주소 검색'
-              }
-              placeholderTextColor={colors.secondaryText}
-              style={{ flex: 1, color: colors.text, fontSize: 17, paddingVertical: 12 }}
-              returnKeyType="search"
-              onSubmitEditing={() => setQuery(text.trim())}
-            />
-            {text ? (
-              <Pressable
-                accessibilityLabel="검색어 지우기"
-                onPress={() => {
-                  changeText('');
-                  setQuery('');
-                }}
-                style={{ padding: 12 }}
-              >
-                <SymbolView
-                  name={{ ios: 'xmark.circle.fill', android: 'cancel' }}
-                  size={20}
-                  tintColor={colors.tertiaryText}
-                />
-              </Pressable>
-            ) : null}
-          </View>
-        ) : !planning ? (
-          <>
-            <View style={{ flexDirection: 'row', gap: 8, alignItems: 'center' }}>
-              <View
-                style={{
-                  flex: 1,
-                  height: 50,
-                  flexDirection: 'row',
-                  alignItems: 'center',
-                  gap: 10,
-                  borderRadius: 28,
-                  backgroundColor: colors.surface,
-                  paddingLeft: 16,
-                  paddingRight: 12,
-                  boxShadow: '0 2px 6px #00000024',
-                }}
-              >
-                <Pressable
-                  accessibilityRole="button"
-                  accessibilityLabel="장소 검색"
-                  onPress={() => {
-                    onActivate();
-                    edit('place');
-                  }}
-                  style={{
-                    flex: 1,
-                    flexDirection: 'row',
-                    alignItems: 'center',
-                    gap: 12,
-                    height: 50,
-                  }}
-                >
-                  <View
-                    style={{
-                      width: 26,
-                      height: 31,
-                      borderRadius: 14,
-                      borderBottomRightRadius: 4,
-                      backgroundColor: colors.accent,
-                      justifyContent: 'center',
-                      alignItems: 'center',
-                    }}
-                  >
-                    <Text style={{ fontSize: 20, color: colors.onAccent, fontWeight: '800' }}>
-                      T
-                    </Text>
-                  </View>
-                  <Text numberOfLines={1} style={{ fontSize: 17, color: '#44474A', flex: 1 }}>
-                    타라고 검색
-                  </Text>
-                </Pressable>
-                <Pressable
-                  accessibilityRole="button"
-                  accessibilityLabel="내 장소"
-                  onPress={() => {
-                    onActivate();
-                    savedFromSearch.current = false;
-                    setSavedOpen(true);
-                  }}
-                  style={{
-                    width: 32,
-                    height: 32,
-                    borderRadius: 16,
-                    backgroundColor: '#DBEEEA',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                  }}
-                >
-                  <SymbolView
-                    name={{ ios: 'person.fill', android: 'person' }}
-                    size={23}
-                    tintColor="#559C8A"
-                  />
-                </Pressable>
-              </View>
-              <Pressable
-                accessibilityRole="button"
-                accessibilityLabel="길찾기"
-                onPress={() => beginPlanning()}
-                style={{
-                  height: 50,
-                  width: 50,
-                  borderRadius: 25,
-                  backgroundColor: colors.accent,
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  boxShadow: '0 2px 6px #00000024',
-                }}
-              >
-                <SymbolView
-                  name={{ ios: 'arrow.turn.up.right', android: 'turn_right' }}
-                  size={28}
-                  tintColor={colors.onAccent}
-                />
-              </Pressable>
-            </View>
-            <ScrollView
-              horizontal
-              showsHorizontalScrollIndicator={false}
-              contentContainerStyle={{ gap: 8, paddingBottom: 6 }}
-            >
-              {HOME_CATEGORIES.map((category) => (
-                <Pressable
-                  key={category.label}
-                  accessibilityRole="button"
-                  onPress={() => searchCategory(category.label)}
-                  style={{
-                    flexDirection: 'row',
-                    gap: 7,
-                    alignItems: 'center',
-                    height: 34,
-                    paddingHorizontal: 13,
-                    borderRadius: 18,
-                    backgroundColor: colors.surface,
-                    boxShadow: '0 2px 4px #00000020',
-                  }}
-                >
-                  <SymbolView name={category.symbol} size={17} tintColor={category.color} />
-                  <Text style={{ color: colors.text, fontSize: 14 }}>{category.label}</Text>
-                </Pressable>
-              ))}
-            </ScrollView>
-          </>
+        {!planning ? (
+          <MobilitySearchBar open={open} value={text} inputRef={input}
+            placeholder={shortcutSlot ? `${shortcutSlot === 'home' ? '집' : '회사'} 위치 검색` : '정류장 이름·번호, 지하철역 검색'}
+            onOpen={() => { onActivate(); edit('place'); }} onClose={closeSearch}
+            onText={changeText} onSubmit={submitSearch}
+            onSaved={() => { onActivate(); savedFromSearch.current = open; setOpen(false); Keyboard.dismiss(); setSavedOpen(true); }}
+            onDirections={() => beginPlanning()} />
         ) : null}
       </View>
-      {open ? (
+      {open && !mapResults && !suspended ? (
         <PlaceSearchResults
           top={top + headerHeight}
           planning={planning}
           query={query}
           recent={recent}
-          places={searchResults}
-          fetching={places.isFetching || stations.isFetching}
+          places={text.trim() === query ? searchResults : undefined}
+          fetching={text.trim() !== query || places.isFetching || stations.isFetching}
           shortcuts={shortcuts.shortcuts}
           shortcutBusy={shortcuts.busy}
           onShortcut={(slot) => {
@@ -793,13 +585,42 @@ export function MobilitySearch({
                 : '')
           }
           onCurrent={() => choose(current)}
-          onChoose={choose}
-          onCategory={searchCategory}
+          onChoose={place => {
+            if (planning || shortcutSlot || query.length < 2) { void choose(place); return; }
+            Keyboard.dismiss();
+            remember(place);
+            setMapResults(true);
+            onSearchSelect(place);
+          }}
+          transitOnly={!planning && !shortcutSlot}
+          onMap={!planning && !shortcutSlot && text.trim() === query && query.length >= 2 ? (filter) => {
+            setMapFilter(filter);
+            Keyboard.dismiss();
+            setSearchSnap('half');
+            setMapResults(true);
+          } : undefined}
           onClearHistory={() => {
             setRecent([]);
             void savePlaceHistory([]).catch(() => console.warn('최근 장소 삭제 실패'));
           }}
         />
+      ) : null}
+      {showMapFallback ? (
+        <View style={{ position: 'absolute', top: top + headerHeight, left: 0, right: 0, bottom: 0,
+          alignItems: 'center', justifyContent: 'center', backgroundColor: colors.background, gap: 12 }}>
+          {searchBusy ? <ActivityIndicator color={colors.accent} /> : null}
+          <Text accessibilityRole={searchError ? 'alert' : 'text'} style={{ color: colors.secondaryText, fontSize: 16, paddingHorizontal: 24, textAlign: 'center' }}>
+            {searchBusy ? '검색 중입니다.' : searchError || '검색 결과가 없습니다.'}
+          </Text>
+        </View>
+      ) : null}
+      {open && mapResults && !planning && !suspended && !showMapFallback ? (
+        <MapBottomSheet snap={searchSnap} onChangeSnap={setSearchSnap}
+          topInset={top + headerHeight} onHeightChange={onSheetHeight}>
+          <MapSearchResults query={query} places={visibleSearchResults} selectedId={selectedSearchId}
+            onSelect={onSearchSelect} onChoose={onSearchSelect}
+            onClose={() => { setMapResults(false); onPlace(null); onSheetHeight(0); }} />
+        </MapBottomSheet>
       ) : null}
       {!suspended && !open && chosen && !planning ? (
         <PlaceDetail
@@ -825,7 +646,7 @@ export function MobilitySearch({
           }}
           onEnd={() => beginPlanning(chosen)}
           onSubway={() => {
-            onSubway(chosen.name);
+            onSubway(chosen.name, chosen.subwayLineName);
             setChosen(null);
           }}
         />

@@ -41,7 +41,7 @@ export function useNearbyBusStops(tiles: BusStopTile[]) {
         queryKey: [
           'bus-stops',
           'tile',
-          'complete-coverage-v2',
+          'separate-station-identities-v6',
           tile.sizeMeters,
           tile.tileX,
           tile.tileY,

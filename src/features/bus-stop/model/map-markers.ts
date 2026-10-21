@@ -1,7 +1,7 @@
-/** @fileoverview 로컬 정류장 이미지를 현재 Tmap 오버레이 계약으로 변환한다. 네이버 지도 SDK에 의존하지 않는다. */
+/** @fileoverview 로컬 정류장 이미지를 공통 지도 마커 입력으로 변환한다. */
 
 import { Image } from 'react-native';
-import type { TmapMarker } from '@/shared/ui/tmap/tmap-view';
+import type { MapMarker } from '@/shared/ui/map/map-view';
 import type { BusStop } from '../api/get-nearby-bus-stops';
 
 /** 일반 정류장에 사용하는 로컬 이미지 자산이다. */
@@ -26,14 +26,14 @@ export function markerImage(asset: number): string {
 }
 
 /**
- * 정류장 선택·노선 상태에 맞는 이미지와 크기를 갖는 Tmap 마커를 만든다.
+ * 정류장 선택·노선 상태에 맞는 이미지와 크기를 갖는 지도 마커를 만든다.
  * 호출자가 마커 배열을 메모이제이션하므로 이 짧은 변환 자체에는 별도 캐시를 두지 않는다.
  * @param stop 서버 정류장 좌표와 이름.
  * @param selected 현재 선택한 정류장 여부.
  * @param route 노선 상세에서 사용하는 마커 여부.
- * @returns Tmap에 전달할 정류장 오버레이.
+ * @returns 지도에 전달할 정류장 오버레이.
  */
-export function stopMarker(stop: BusStop, selected: boolean, route = false): TmapMarker {
+export function stopMarker(stop: BusStop, selected: boolean, route = false): MapMarker {
   return {
     id: `stop:${stop.id}`,
     latitude: stop.latitude,

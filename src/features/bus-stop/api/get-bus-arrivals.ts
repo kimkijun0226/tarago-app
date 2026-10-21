@@ -5,12 +5,17 @@ import { apiClient } from '@/shared/api/client';
 /** 서버가 공급자별 차량 도착정보와 도착정보 없는 노선을 정규화한 형태. */
 export type BusArrival = {
   routeId: string;
+  /** 지도 좌표와 독립적인 노선 조회 원본이다. */
+  routeSource?: { provider: 'SEOUL' | 'GYEONGGI' | 'TAGO'; stationId: string };
   stationSeq?: number;
   busNumber: string;
   routeType: string;
   /** 공급자의 공식 다음 정류장과 운행 방면. 없는 값은 화면에서 생략한다. */
   nextStopName?: string;
   direction?: string;
+  /** 공식 노선의 기점과 종점 또는 회차점이다. */
+  routeStartName?: string;
+  routeEndName?: string;
   etaSeconds: number | null;
   etaPrecision?: 'minutes';
   etaSource?: 'turnaround_estimate';

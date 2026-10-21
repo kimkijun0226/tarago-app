@@ -28,3 +28,11 @@ export function stationSearchName(name: string) {
 export function isSubwayPlace(place: Place) {
   return /지하철|전철|도시철도/.test(place.category) || /역(?:\s|$)/.test(place.name);
 }
+
+export type SearchResultFilter = 'all' | 'place' | 'stop' | 'subway';
+
+/** 목록과 지도에 같은 장소 분류를 적용한다. */
+export function matchesSearchFilter(place: Place, filter: SearchResultFilter) {
+  return filter === 'all' || (filter === 'stop' ? isBusStopPlace(place)
+    : filter === 'subway' ? isSubwayPlace(place) : !isBusStopPlace(place) && !isSubwayPlace(place));
+}

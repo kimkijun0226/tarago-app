@@ -6,6 +6,8 @@ export type { Point } from '@/shared/types/geo';
 /** 검색 장소. entrance가 있으면 길찾기는 표시용 대표 좌표 대신 실제 출입구를 사용한다. */
 export type Place = Point & {
   entrance?: Point;
+  /** 공식 역 검색에서 선택한 호선을 유지한다. */
+  subwayLineName?: string;
   id: string;
   name: string;
   address: string;

@@ -17,7 +17,7 @@ export type BusArrivalGroup = {
  * @param etaSeconds 도착까지 남은 시간(초).
  * @param serviceStatus 공급자 도착·차량위치 정보로 확인한 운행 상태.
  * @param precision 분 단위 원본에는 존재하지 않는 초 정밀도를 표시하지 않는다.
- * @param source 회차점의 공식 ETA와 경로 기반 이동시간으로 계산한 예상값인지 여부.
+ * @param source 노선 차량 위치와 남은 경유 경로로 계산한 예상값인지 여부.
  * @returns ETA가 없으면 확인된 상태를 우선 표시하고, 있으면 도착 시간 문구.
  */
 export function formatEta(
@@ -33,7 +33,7 @@ export function formatEta(
     return '운행정보 확인 중';
   }
   if (source === 'turnaround_estimate')
-    return `예상 ${Math.floor(etaSeconds / 60)}분 ${Math.floor(etaSeconds % 60)}초`;
+    return `예상 약 ${Math.max(1, Math.ceil(etaSeconds / 60))}분`;
   if (etaSeconds <= 60) return '곧 도착';
   if (precision === 'minutes') return `약 ${Math.ceil(etaSeconds / 60)}분`;
   if (etaSeconds <= 600) return `${Math.floor(etaSeconds / 60)}분 ${Math.floor(etaSeconds % 60)}초`;
@@ -97,10 +97,13 @@ export function groupBusArrivals(arrivals: BusArrival[]): BusArrivalGroup[] {
 
 /** 공급자가 반환한 노선 유형만 배지로 변환한다. 알 수 없는 코드는 일반버스로 단정하지 않는다. */
 export function getBusRouteBadge(routeType: string): { label: string; color: string } | null {
+  if (routeType.includes('직행좌석')) return { label: '직행좌석', color: '#EB4335' };
+  if (routeType.includes('광역') || routeType === '6') return { label: '광역', color: '#EB4335' };
+  if (routeType.includes('급행')) return { label: '급행', color: '#EB4335' };
   if (routeType === '3' || routeType.includes('간선')) return { label: '간선', color: '#386DE8' };
   if (routeType === '4' || routeType.includes('지선')) return { label: '지선', color: '#38BE40' };
-  if (routeType === '2' || routeType.includes('마을')) return { label: '마을', color: '#38BE40' };
-  if (routeType.includes('광역') || routeType === '6') return { label: '광역', color: '#EB4335' };
-  if (routeType.includes('일반')) return { label: '일반', color: '#87C600' };
+  if (routeType === '2' || routeType.includes('마을')) return { label: '마을', color: '#87C600' };
+  if (routeType.includes('일반')) return { label: '일반', color: '#386DE8' };
+  if (routeType.includes('좌석')) return { label: '좌석', color: '#386DE8' };
   return null;
 }

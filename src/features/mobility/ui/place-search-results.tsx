@@ -3,8 +3,7 @@ import { useState } from 'react';
 import { ActivityIndicator, FlatList, Pressable, StyleSheet, Text, View } from 'react-native';
 import { SymbolView } from 'expo-symbols';
 import type { Place } from '../api/mobility';
-import { HOME_CATEGORIES } from './search-categories';
-import { isBusStopPlace, isSubwayPlace } from '../model/place-kind';
+import { isBusStopPlace, isSubwayPlace, matchesSearchFilter, type SearchResultFilter } from '../model/place-kind';
 import { mapUi } from '@/shared/ui/map-design-tokens';
 
 type Props = {
@@ -20,8 +19,9 @@ type Props = {
   onCurrent: () => void;
   onClearHistory: () => void;
   onChoose: (place: Place) => void;
-  onCategory: (name: string) => void;
   onSaved: () => void;
+  transitOnly?: boolean;
+  onMap?: (filter: SearchResultFilter) => void;
   onShortcut: (slot: 'home' | 'work') => void;
 };
 
@@ -39,26 +39,20 @@ export function PlaceSearchResults({
   onCurrent,
   onClearHistory,
   onChoose,
-  onCategory,
   onSaved,
   onShortcut,
+  onMap,
+  transitOnly = false,
 }: Props) {
   /** 동일 검색 결과에 적용할 화면 분류다. 서버 응답을 상태에 복사하지 않는다. */
-  const [filter, setFilter] = useState<'all' | 'place' | 'stop' | 'subway'>('all');
+  const [filter, setFilter] = useState<SearchResultFilter>('all');
+  const activeFilter = transitOnly && filter === 'place' ? 'all' : filter;
 
   /** 입력 전에는 최근 기록을, 입력 뒤에는 선택한 분류에 해당하는 실제 결과만 표시한다. */
   const rows =
     query.length < 2
-      ? recent
-      : (places ?? []).filter(
-          (place) =>
-            filter === 'all' ||
-            (filter === 'stop'
-              ? isBusStopPlace(place)
-              : filter === 'subway'
-                ? isSubwayPlace(place)
-                : !isBusStopPlace(place) && !isSubwayPlace(place)),
-        );
+      ? recent.filter(place => !transitOnly || isBusStopPlace(place) || place.id.startsWith('subway:') || /지하철|전철|도시철도/.test(place.category))
+      : (places ?? []).filter(place => matchesSearchFilter(place, activeFilter));
 
   return (
     <View style={[styles.container, { top }]}>
@@ -112,15 +106,15 @@ export function PlaceSearchResults({
       </View>
       {query.length >= 2 ? (
         <View style={styles.tabs}>
-          {(['all', 'place', 'stop', 'subway'] as const).map((value) => (
+          {(transitOnly ? (['all', 'stop', 'subway'] as const) : (['all', 'place', 'stop', 'subway'] as const)).map((value) => (
             <Pressable
               key={value}
               accessibilityRole="tab"
-              accessibilityState={{ selected: filter === value }}
+              accessibilityState={{ selected: activeFilter === value }}
               onPress={() => setFilter(value)}
-              style={[styles.tab, filter === value && styles.activeTab]}
+              style={[styles.tab, activeFilter === value && styles.activeTab]}
             >
-              <Text style={[styles.tabText, filter === value && styles.activeText]}>
+              <Text style={[styles.tabText, activeFilter === value && styles.activeText]}>
                 {value === 'all'
                   ? '전체'
                   : value === 'place'
@@ -145,6 +139,10 @@ export function PlaceSearchResults({
           </Pressable>
         </View>
       )}
+      {onMap ? <Pressable accessibilityRole="button" onPress={() => onMap(activeFilter)}
+        style={{ alignSelf: 'flex-end', paddingHorizontal: 20, paddingVertical: 12, minHeight: 44 }}>
+        <Text style={styles.currentText}>지도에서 보기</Text>
+      </Pressable> : null}
       {fetching ? <ActivityIndicator style={styles.loading} color={mapUi.blue} /> : null}
       {error ? (
         <Text accessibilityRole="alert" style={styles.error}>
@@ -162,28 +160,6 @@ export function PlaceSearchResults({
         ListEmptyComponent={
           !fetching && query.length >= 2 ? (
             <Text style={styles.empty}>검색 결과가 없습니다.</Text>
-          ) : null
-        }
-        ListFooterComponent={
-          query.length < 2 && !planning ? (
-            <View style={styles.categories}>
-              <Text style={styles.historyTitle}>추천 카테고리</Text>
-              <View style={styles.categoryRow}>
-                {HOME_CATEGORIES.map((category) => (
-                  <Pressable
-                    key={category.label}
-                    accessibilityRole="button"
-                    onPress={() => onCategory(category.label)}
-                    style={styles.category}
-                  >
-                    <View style={styles.categoryIcon}>
-                      <SymbolView name={category.symbol} size={24} tintColor={category.color} />
-                    </View>
-                    <Text style={styles.categoryText}>{category.label}</Text>
-                  </Pressable>
-                ))}
-              </View>
-            </View>
           ) : null
         }
       />
@@ -300,16 +276,4 @@ const styles = StyleSheet.create({
   error: { padding: 16, color: '#DF453B' },
   loading: { padding: 12 },
   empty: { padding: 24, textAlign: 'center', color: '#969AA0' },
-  categories: { padding: 20, gap: 20 },
-  categoryRow: { flexDirection: 'row', justifyContent: 'space-between' },
-  category: { alignItems: 'center', gap: 9 },
-  categoryIcon: {
-    width: 54,
-    height: 54,
-    borderRadius: 16,
-    backgroundColor: '#F4F5F6',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  categoryText: { fontSize: 12, color: '#52565B' },
 });

@@ -151,6 +151,79 @@ export function roundRouteTurns(points: Coordinate[]) {
   return result;
 }
 
+/** 도로 데이터 접합·우측 보정에서 생긴 작은 고리를 잘라내되 실제 유턴은 보존한다. */
+function trimRouteLoops(points: Coordinate[]) {
+  if (points.length < 4) return points;
+  const scale = 111_320 * Math.cos((points[0].latitude * Math.PI) / 180);
+  const result = [...points];
+  // 자기 교차가 없는 수 m의 역주행 접합점도 제거하되 실제 회차는 보존한다.
+  for (let i = 1; i < result.length - 1; i++) {
+    const a = result[i - 1], b = result[i], c = result[i + 1];
+    const ax = (b.longitude - a.longitude) * scale;
+    const ay = (b.latitude - a.latitude) * 111_320;
+    const bx = (c.longitude - b.longitude) * scale;
+    const by = (c.latitude - b.latitude) * 111_320;
+    const incoming = Math.hypot(ax, ay), outgoing = Math.hypot(bx, by);
+    const chord = Math.hypot(ax + bx, ay + by);
+    if (ax * bx + ay * by < 0 && Math.min(incoming, outgoing) <= 6 &&
+      Math.max(incoming, outgoing) <= 15 && chord >= Math.max(incoming, outgoing) &&
+      Math.abs(ax * by - ay * bx) / chord <= 4) {
+      result.splice(i, 1);
+      i = Math.max(0, i - 2);
+    }
+  }
+  for (let i = 1; i < result.length - 2; i++) {
+    const a = result[i - 1], b = result[i];
+    const ax = (b.longitude - a.longitude) * scale;
+    const ay = (b.latitude - a.latitude) * 111_320;
+    const incoming = Math.hypot(ax, ay);
+    let distance = 0;
+    for (let j = i + 1; j < result.length; j++) {
+      const c = result[j - 1], d = result[j];
+      const bx = (d.longitude - c.longitude) * scale;
+      const by = (d.latitude - c.latitude) * 111_320;
+      const outgoing = Math.hypot(bx, by);
+      distance += outgoing;
+      const determinant = ax * by - ay * bx;
+      if (j > i + 1 && Math.abs(determinant) > 1e-8) {
+        const dx = (c.longitude - a.longitude) * scale;
+        const dy = (c.latitude - a.latitude) * 111_320;
+        const t = (dx * by - dy * bx) / determinant;
+        const u = (dx * ay - dy * ax) / determinant;
+        const loopLength = incoming * (1 - t) + distance - outgoing * (1 - u);
+        // 150도 이상 되도는 실제 회차와 긴 왕복 구간은 자르지 않는다.
+        if (t > 0 && t < 1 && u > 0 && u < 1 && loopLength <= 60 &&
+          (ax * bx + ay * by) / (incoming * outgoing) > -Math.cos(Math.PI / 6)) {
+          result.splice(i, j - i, {
+            latitude: a.latitude + (b.latitude - a.latitude) * t,
+            longitude: a.longitude + (b.longitude - a.longitude) * t,
+          });
+          i = Math.max(0, i - 2);
+          break;
+        }
+      }
+      if (distance > 120) break;
+    }
+  }
+  return result;
+}
+
+type OffsetAnchor = { at: number; offset: number; distance: number };
+
+/** 정류장 주변 240m는 보정을 유지하고 이후 120m에 걸쳐 기본 차선 간격으로 복귀한다. */
+function localRouteOffset(at: number, before?: OffsetAnchor, after?: OffsetAnchor) {
+  if (before && after && at >= before.at && at <= after.at && after.at - before.at <= 480) {
+    const t = (at - before.at) / (after.at - before.at);
+    return before.offset * (1 - t) + after.offset * t;
+  }
+  const weight = (anchor?: OffsetAnchor) => anchor
+    ? Math.max(0, Math.min(1, (360 - Math.abs(anchor.at - at)) / 120)) : 0;
+  const beforeWeight = weight(before), afterWeight = weight(after);
+  const total = beforeWeight + afterWeight;
+  return ((before?.offset ?? 0) * beforeWeight + (after?.offset ?? 0) * afterWeight
+    + 6 * Math.max(0, 1 - total)) / Math.max(1, total);
+}
+
 /**
  * 도로 진행 방향의 오른쪽으로만 보정하여 왕복 노선이 서로 교차하지 않게 한다.
  * 원본 공식 좌표는 변경하지 않고 표시용 경로만 만든다.
@@ -163,18 +236,20 @@ export function alignRouteToStops(
   stops: (Coordinate & { stationSeq: number })[],
 ) {
   /** 유효하지 않거나 연속 중복된 점을 제외한 표시용 경로 배열이다. */
-  const line = points.filter(
+  const line = trimRouteLoops(points.filter(
     (p, i) =>
       Number.isFinite(p.latitude) &&
       Number.isFinite(p.longitude) &&
       (i === 0 || p.latitude !== points[i - 1].latitude || p.longitude !== points[i - 1].longitude),
-  );
+  ));
   if (line.length < 2) return line;
 
   /** 기준 위도에서 경도 1도를 동서 방향 미터로 환산하는 계수다. */
   const eastScale = 111_320 * Math.cos((line[0].latitude * Math.PI) / 180);
   // 직진 교차로의 짧은 좌표 흔들림만 제거하고 실제 회전은 보존한다.
 
+  const sourceLine = [...line];
+  const sourceIndices = line.map((_, index) => index);
   /** i는 현재 경로 점 또는 구간의 순회 인덱스다. */
   for (let i = 1; i < line.length - 1; i++) {
     /** 직진 흔들림을 판별할 연속된 이전·현재·다음 경로점이다. */
@@ -196,7 +271,16 @@ export function alignRouteToStops(
     /** 거의 직진인 좌표 흔들림인지 판단하는 두 구간 사이의 각도다. */
     const angle = Math.abs(Math.atan2(ax * by - ay * bx, ax * bx + ay * by));
     if (chord > 0 && angle < Math.PI / 9 && Math.abs(ax * by - ay * bx) / chord <= 4) {
+      // 이미 지운 점까지 검사해 연속 단순화의 오차가 누적되지 않게 한다.
+      const withinRoad = sourceLine.slice(sourceIndices[i - 1] + 1, sourceIndices[i + 1]).every((point) => {
+        const x = (point.longitude - a.longitude) * eastScale;
+        const y = (point.latitude - a.latitude) * 111_320;
+        const t = (x * (ax + bx) + y * (ay + by)) / chord ** 2;
+        return t >= 0 && t <= 1 && Math.abs(x * (ay + by) - y * (ax + bx)) / chord <= 4;
+      });
+      if (!withinRoad) continue;
       line.splice(i, 1);
+      sourceIndices.splice(i, 1);
       i = Math.max(0, i - 2);
     }
   }
@@ -215,14 +299,18 @@ export function alignRouteToStops(
     );
 
   /** 진행 방향 우측에서 가까운 정류장이 제공하는 거리·이동량 기준점이다. */
-  const anchors: { at: number; offset: number; distance: number }[] = [];
+  const anchors: OffsetAnchor[] = [];
 
   /** stop은 공식 경로 우측 이동의 기준점 후보가 되는 현재 경유 정류장이다. */
   for (const stop of stops) {
     if (!Number.isFinite(stop.latitude) || !Number.isFinite(stop.longitude)) continue;
 
     /** 현재 정류장에 가장 가까운 유효 우측 경로 투영 후보를 유지한다. */
-    let best = { at: 0, offset: 0, distance: Infinity };
+    let best: { at: number; offset: number; distance: number } = {
+      at: 0,
+      offset: 0,
+      distance: Infinity,
+    };
 
     /** i는 현재 경로 점 또는 구간의 순회 인덱스다. */
     for (let i = 0; i < line.length - 1; i++) {
@@ -260,24 +348,57 @@ export function alignRouteToStops(
     }
     if (best.distance <= 30) anchors.push(best);
   }
-  anchors.sort((a, b) => a.at - b.at || a.distance - b.distance);
+  // 같은 방향으로 재진입하는 도로는 모든 경유에서 같은 정류장 보정 기준을 공유한다.
+  const repeatedSegments = new Map<string, number[]>();
+  for (let i = 0; i < line.length - 1; i++) {
+    const key = `${line[i].latitude},${line[i].longitude}:${line[i + 1].latitude},${line[i + 1].longitude}`;
+    const indices = repeatedSegments.get(key) ?? [];
+    indices.push(i);
+    repeatedSegments.set(key, indices);
+  }
+  anchors.sort((a, b) => a.at - b.at || a.distance - b.distance || a.offset - b.offset);
+  const offsetAt = (at: number) => {
+    const next = anchors.findIndex((anchor) => anchor.at > at);
+    return next < 0 ? localRouteOffset(at, anchors[anchors.length - 1])
+      : localRouteOffset(at, anchors[next - 1], anchors[next]);
+  };
+  const sharedAnchors = [...anchors];
+  for (const indices of repeatedSegments.values()) {
+    if (indices.length < 2) continue;
+    const sectionAnchors = anchors.flatMap((anchor) => {
+      const index = indices.find((i) => anchor.at >= distances[i] && anchor.at <= distances[i + 1]);
+      return index === undefined ? [] : [{ ...anchor, along: anchor.at - distances[index] }];
+    });
+    const first = indices[0];
+    const startOffset = offsetAt(distances[first]);
+    const endOffset = offsetAt(distances[first + 1]);
+    for (const index of indices) {
+      sharedAnchors.push(
+        { at: distances[index], offset: startOffset, distance: -1 },
+        { at: distances[index + 1], offset: endOffset, distance: -1 },
+      );
+      for (const anchor of sectionAnchors)
+        sharedAnchors.push({ at: distances[index] + anchor.along, offset: anchor.offset, distance: anchor.distance });
+    }
+  }
+  // 원래 경유 순서와 무관하게 동일 위치에서는 같은 기준을 선택한다.
+  sharedAnchors.sort((a, b) => a.at - b.at || a.distance - b.distance || a.offset - b.offset);
 
   /** 동일 누적 위치의 정류장 기준점이 겹치지 않도록 정리한 목록이다. */
-  const unique = anchors.filter((a, i) => i === 0 || Math.abs(a.at - anchors[i - 1].at) > 0.01);
-
-  /** 기본 우측 이동량의 중앙값을 얻기 위해 정렬한 기준점 이동량이다. */
-  const offsets = unique.map((a) => a.offset).sort((a, b) => a - b);
-
-  /** 유효 기준점이 없으면 6m, 있으면 중앙값을 3~12m로 제한한 기본 이동량이다. */
-  const baseline = offsets.length
-    ? Math.max(3, Math.min(12, offsets[Math.floor(offsets.length / 2)]))
-    : 6;
+  const unique = sharedAnchors.filter((a, i) => i === 0 || Math.abs(a.at - sharedAnchors[i - 1].at) > 0.01);
 
   /** 원래 경로점과 정류장 기준점의 누적 거리를 중복 없이 모은 집합이다. */
   const samples = new Set(distances);
 
   /** anchor는 보정 경로의 샘플 위치에 포함할 현재 정류장 기준점이다. */
-  for (const anchor of unique) samples.add(anchor.at);
+  for (const anchor of unique) {
+    samples.add(anchor.at);
+    // 긴 공식 구간에도 보정 시작·종료점을 넣어 정류장 영향이 직선 전체로 번지지 않게 한다.
+    for (const delta of [-360, -240, 240, 360]) {
+      const at = anchor.at + delta;
+      if (at > 0 && at < distances[distances.length - 1]) samples.add(at);
+    }
+  }
 
   /** 누적 거리 순회 중 현재 경로 구간과 정류장 기준점의 인덱스를 유지한다. */
   let segment = 0,
@@ -286,7 +407,7 @@ export function alignRouteToStops(
   /** 각 누적 거리에서 우측 이동량을 적용한 표시용 경로 좌표다. */
   const shifted = [...samples]
     .sort((a, b) => a - b)
-    .map((at) => {
+    .flatMap((at) => {
       while (segment < line.length - 2 && distances[segment + 1] <= at) segment++;
 
       /** 현재 경로 구간의 누적 거리 차이다. */
@@ -301,17 +422,7 @@ export function alignRouteToStops(
         after = unique[anchorIndex + 1];
 
       /** 진행 방향 오른쪽을 양수로 나타내는 횡방향 미터 거리다. */
-      let offset = baseline;
-      if (before && after && at >= before.at && at <= after.at) {
-        /** 두 정류장 기준점 사이 또는 곡선 위에서 사용하는 0~1 보간 비율이다. */
-        const t = (at - before.at) / (after.at - before.at);
-        offset = before.offset * (1 - t) + after.offset * t;
-      } else if (before) {
-        /** 현재 누적 거리에 더 가까운 정류장 기준점이다. */
-        const nearest =
-          after && Math.abs(after.at - at) < Math.abs(before.at - at) ? after : before;
-        offset = nearest.offset;
-      }
+      const offset = localRouteOffset(at, before, after);
 
       /** 좌표 차이를 북쪽 방향의 미터 거리로 환산한 값이다. */
       const north = (line[segment + 1].latitude - line[segment].latitude) * 111_320;
@@ -341,6 +452,23 @@ export function alignRouteToStops(
         const pe = previousNorth / previousLength,
           pn = -previousEast / previousLength;
 
+        const turn = Math.atan2(
+          previousEast * north - previousNorth * east,
+          previousEast * east + previousNorth * north,
+        );
+        // 유턴의 바깥쪽 평행선은 교점 하나로 접지 않고 회차점 주위의 원호로 잇는다.
+        if (turn >= Math.PI * 5 / 6) {
+          const radius = Math.max(3, offset);
+          const startAngle = Math.atan2(pn, pe);
+          return Array.from({ length: 17 }, (_, step) => {
+            const angle = startAngle + turn * step / 16;
+            return {
+              latitude: line[segment].latitude + Math.sin(angle) * radius / 111_320,
+              longitude: line[segment].longitude + Math.cos(angle) * radius / eastScale,
+            };
+          });
+        }
+
         /** 두 구간의 평행선 교점을 계산할 때 과도한 모서리 확장을 제한하는 분모다. */
         const denominator = 1 + pe * normalEast + pn * normalNorth;
         if (denominator > 0.5) {
@@ -348,7 +476,7 @@ export function alignRouteToStops(
           normalNorth = (pn + normalNorth) / denominator;
         }
       }
-      return {
+      return [{
         latitude:
           line[segment].latitude +
           (line[segment + 1].latitude - line[segment].latitude) * fraction +
@@ -357,8 +485,8 @@ export function alignRouteToStops(
           line[segment].longitude +
           (line[segment + 1].longitude - line[segment].longitude) * fraction +
           (normalEast * offset) / eastScale,
-      };
+      }];
     });
   // 안쪽으로 옮기기 전에 곡선을 만들면 우회전 반경이 역전되어 고리가 생긴다.
-  return roundRouteTurns(shifted);
+  return roundRouteTurns(trimRouteLoops(shifted));
 }

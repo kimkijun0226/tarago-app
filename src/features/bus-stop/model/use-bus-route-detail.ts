@@ -1,8 +1,9 @@
 /** @fileoverview 선택 정류장 경유 순번별 노선 상세 Query와 화면 활성 중 차량 위치 갱신을 관리한다. */
 
-import { useQuery } from '@tanstack/react-query';
+import type { BusArrival } from '../api/get-bus-arrivals';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 
-import { getBusRouteDetail } from '../api/get-bus-route-detail';
+import { getBusRouteDetail, type BusRouteDetail } from '../api/get-bus-route-detail';
 
 /**
  * 상세 화면이 열린 동안만 차량 순번을 갱신한다.
@@ -18,12 +19,52 @@ export function useBusRouteDetail(
   routeId: string,
   stationSeq: number,
   enabled = true,
+  source?: BusArrival['routeSource'],
 ) {
-  return useQuery({
-    queryKey: ['bus-route', stationId, routeId, stationSeq],
-    queryFn: ({ signal }) => getBusRouteDetail(stationId, routeId, stationSeq, signal),
-    enabled: enabled && Boolean(stationId && routeId),
-    refetchInterval: 10_000,
+  const client = useQueryClient();
+  const active = enabled && Boolean(stationId && routeId);
+  const sourceKey = [source?.provider ?? '', source?.stationId ?? ''];
+  const overview = useQuery<BusRouteDetail>({
+    queryKey: ['bus-route-overview', stationId, routeId, stationSeq, ...sourceKey],
+    queryFn: async ({ signal }) => {
+      const result = await getBusRouteDetail(stationId, routeId, stationSeq, signal, true, source);
+      client.setQueryData<BusRouteDetail>(['bus-route-stops', routeId, source?.provider ?? ''], previous =>
+        result.geometry.source === 'official' || previous?.geometry.source !== 'official' ? result : previous);
+      return result;
+    },
+    enabled: active,
+    staleTime: 60 * 60_000,
+    gcTime: 60 * 60_000,
+    placeholderData: () => {
+      const cached = client.getQueryData<Awaited<ReturnType<typeof getBusRouteDetail>>>([
+        'bus-route-stops',
+        routeId,
+        source?.provider ?? '',
+      ]);
+      const stop = cached?.stops.find((item) => item.stationSeq === stationSeq);
+      return cached && stop
+        ? { ...cached, selectedStationId: stop.stationId, selectedStationSeq: stationSeq }
+        : undefined;
+    },
+  });
+  const detail = useQuery({
+    queryKey: ['bus-route', stationId, routeId, stationSeq, ...sourceKey],
+    queryFn: async ({ signal }) => {
+      const result = await getBusRouteDetail(stationId, routeId, stationSeq, signal, false, source);
+      if (result.geometry.source === 'official') client.setQueryData(['bus-route-stops', routeId, source?.provider ?? ''], result);
+      return result;
+    },
+    enabled: active,
+    staleTime: 15_000,
+    refetchInterval: 15_000,
     refetchIntervalInBackground: false,
   });
+  return {
+    ...detail,
+    data: detail.data?.geometry.source === 'official' ? detail.data : overview.data ?? detail.data,
+    isPending: !detail.data && overview.isPending,
+    isError: !detail.data && !overview.data && overview.isError,
+    error: detail.error ?? overview.error,
+    refetch: () => Promise.all([overview.refetch(), detail.refetch()]),
+  };
 }

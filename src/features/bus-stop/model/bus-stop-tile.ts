@@ -108,7 +108,7 @@ export function getBusStopTilesForRegion(
  * @param region 현재 화면의 남서쪽 좌표와 범위.
  * @returns 화면과 가장자리 한 타일을 포함한 조회 목록.
  */
-export function getVisibleBusStopTiles(zoom: number | undefined, region: MapRegion) {
+export function getVisibleBusStopTiles(zoom: number | undefined, region: MapRegion, margin = 1) {
   if (zoom === undefined || zoom < BUS_STOP_MIN_ZOOM) return [];
 
   /** 현재 확대 수준에 맞춘 타일 한 변의 길이이며 단위는 미터다. */
@@ -132,9 +132,9 @@ export function getVisibleBusStopTiles(zoom: number | undefined, region: MapRegi
   const tiles: BusStopTile[] = [];
 
   /** tileX는 조회 범위의 가로 타일을 순서대로 방문하는 인덱스다. */
-  for (let tileX = southWest.tileX - 1; tileX <= northEast.tileX + 1; tileX += 1) {
+  for (let tileX = southWest.tileX - margin; tileX <= northEast.tileX + margin; tileX += 1) {
     /** tileY는 조회 범위의 세로 타일을 순서대로 방문하는 인덱스다. */
-    for (let tileY = southWest.tileY - 1; tileY <= northEast.tileY + 1; tileY += 1) {
+    for (let tileY = southWest.tileY - margin; tileY <= northEast.tileY + margin; tileY += 1) {
       tiles.push(getBusStopTileFromIndex(tileX, tileY, sizeMeters, radiusMeters));
     }
   }

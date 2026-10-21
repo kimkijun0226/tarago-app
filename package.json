@@ -5,6 +5,7 @@
   "dependencies": {
     "@expo/ui": "~57.0.19",
     "@gorhom/bottom-sheet": "^5.2.14",
+    "@mj-studio/react-native-naver-map": "^2.9.1",
     "@tanstack/react-query": "^5.104.0",
     "axios": "^1.20.0",
     "expo": "~57.0.24",
@@ -42,18 +43,17 @@
     "typescript": "~6.0.3"
   },
   "scripts": {
+    "postinstall": "node scripts/patch-naver-symbol-tap.cjs",
     "start": "expo start",
-    "start:simulator": "EXPO_PUBLIC_API_BASE_URL=https://api.tarago.cloud REACT_NATIVE_PACKAGER_HOSTNAME=localhost NODE_OPTIONS=--dns-result-order=ipv4first expo start --dev-client --localhost --port 8083",
-    "start:device": "EXPO_PUBLIC_API_BASE_URL=https://api.tarago.cloud expo start --dev-client --lan",
+    "start:simulator": "REACT_NATIVE_PACKAGER_HOSTNAME=localhost NODE_OPTIONS=--dns-result-order=ipv4first expo start --dev-client --localhost --port 8083",
+    "start:device": "expo start --dev-client --lan",
     "simulator:build": "expo prebuild && expo run:android --no-bundler && expo run:ios --no-bundler && npm run start:simulator",
     "simulator:open": "expo run:android --no-bundler && expo run:ios --no-bundler && npm run start:simulator",
     "android": "expo run:android",
     "ios": "expo run:ios",
     "lint": "expo lint",
     "test": "node --experimental-strip-types --test src/**/*.test.ts",
-    "ios:device": "EXPO_PUBLIC_API_BASE_URL=https://api.tarago.cloud expo prebuild --platform ios --no-install && EXPO_PUBLIC_API_BASE_URL=https://api.tarago.cloud expo run:ios --device",
-    "tmap:sdk": "python3 modules/tarago-tmap/install-sdk.py",
-    "eas-build-pre-install": "python3 modules/tarago-tmap/install-sdk.py \"$EAS_BUILD_PLATFORM\"",
+    "ios:device": "expo prebuild --platform ios --no-install && expo run:ios --device",
     "format": "prettier --write src plugins *.js *.json docs README.md .vscode",
     "format:check": "prettier --check src plugins *.js *.json docs README.md .vscode"
   },

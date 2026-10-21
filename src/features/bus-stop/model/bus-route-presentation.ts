@@ -6,6 +6,7 @@ type RouteStopCoordinate = {
   arsId?: string | null;
   arsIds?: string[];
   mobileNo?: string | null;
+  sourcePositions?: { latitude: number; longitude: number }[];
 };
 export type RouteSheetSnap = 'compact' | 'half' | 'full';
 
@@ -27,6 +28,11 @@ export function nextRouteSheetSnap(
   return order[Math.max(0, Math.min(index, order.length - 1))];
 }
 
+/** 통과 지점은 도로 형상에만 남기고 승하차 가능한 정류장으로 활성화하지 않는다. */
+export function isBoardingRouteStop(stop: { name: string; mobileNo?: string | null }) {
+  return !/미정차|폐지|경유|통과/.test(stop.name) && !/^0+$/.test(stop.mobileNo?.trim() ?? '');
+}
+
 /**
  * 공급자 정류장 ID와 앱 UUID가 달라도 같은 실제 위치를 알아본다.
  * 유효한 이용자용 번호가 양쪽에 있으면 번호를 우선하고, 없으면 10m 이내 좌표를 비교한다.
@@ -44,13 +50,12 @@ export function isRouteBusStop(marker: RouteStopCoordinate, routeStops: RouteSto
     if (arsId && mobileNo && arsId !== '0' && mobileNo !== '0')
       return arsId === mobileNo || Boolean(marker.arsIds?.includes(mobileNo));
 
-    /** 좌표 차이를 북쪽 방향의 미터 거리로 환산한 값이다. */
-    const north = (marker.latitude - stop.latitude) * 111_320;
-
-    /** 위도에 따른 축척을 적용한 동쪽 방향의 미터 거리다. */
-    const east =
-      (marker.longitude - stop.longitude) * 111_320 * Math.cos((marker.latitude * Math.PI) / 180);
-    return north * north + east * east <= 10 * 10;
+    return [marker, ...(marker.sourcePositions ?? [])].some((point) => {
+      const north = (point.latitude - stop.latitude) * 111_320;
+      const east =
+        (point.longitude - stop.longitude) * 111_320 * Math.cos((point.latitude * Math.PI) / 180);
+      return north * north + east * east <= 10 * 10;
+    });
   });
 }
 
