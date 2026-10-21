@@ -4,27 +4,42 @@ import type { SubwayArrival } from '../api/get-subway-arrivals';
 import type { SubwayTimetable } from '../api/get-subway-station';
 
 /**
- * 서버 수신 시각이 2분 넘게 지난 정보는 카운트다운 대신 갱신 지연을 표시한다.
+ * 전역 안내는 원문으로 유지하고 그 외에는 제공된 도착 예정 초를 분·초로 표시한다.
  * @param arrival 서버가 정규화한 열차 도착정보.
- * @param now 현재 시각의 Unix 밀리초.
+ * @param now 현재 시각의 Unix 밀리초. 운행 종료 판단에 사용할 정보 시각을 비교한다.
  * @param elapsed 서버 목록을 조회한 뒤 경과한 초.
- * @returns 표시 문구와 오래된 정보 여부.
+ * @returns 도착시간과 정보의 오래됨 여부. 예정 초가 없으면 시간 문구는 비운다.
  */
 export function getArrivalTime(arrival: SubwayArrival, now: number, elapsed: number) {
-  /** 열차별 서버 수신 시각을 밀리초로 변환한다. 없거나 잘못된 시각은 지연 정보로 취급한다. */
-  const receipt = arrival.receivedAt ? Date.parse(arrival.receivedAt) : NaN;
-  if (!Number.isFinite(receipt) || now - receipt > 120_000)
-    return { text: '갱신 지연', stale: true };
+  const receivedAt = arrival.etaSource === 'estimated' ? arrival.etaPositionReceivedAt : arrival.receivedAt;
+  const receipt = receivedAt ? Date.parse(receivedAt) : NaN;
+  const stale = !Number.isFinite(receipt) || now - receipt > 120_000;
+  const state = { '0': '진입', '1': '도착', '2': '출발' }[arrival.arrivalCode];
+  if (state) return { text: state, stale };
+  const message = arrival.arrivalMessage?.trim();
+  if (message && (['3', '4', '5'].includes(arrival.arrivalCode) || /^전역\s*(진입|도착|출발)$/.test(message)))
+    return { text: message, stale };
+  if (arrival.etaSeconds === null || !Number.isFinite(arrival.etaSeconds))
+    return { text: '', stale };
 
-  /** 목록 조회 후 흐른 시간을 빼서 음수가 되지 않도록 보정한 남은 도착 초다. */
-  const seconds = arrival.etaSeconds === null ? null : Math.max(0, arrival.etaSeconds - elapsed);
-  return {
-    text:
-      seconds !== null && Number.isFinite(seconds) && seconds > 0
-        ? `${Math.floor(seconds / 60)}분 ${seconds % 60}초`
-        : arrival.arrivalMessage || '시간 확인 중',
-    stale: false,
+  const seconds = Math.floor(arrival.etaSeconds - elapsed);
+  // 예측 시간이 소진된 것만으로 실제 도착을 확정하지 않는다.
+  if (seconds <= 0) return { text: message || '', stale };
+  return { text: `${Math.floor(seconds / 60)}분 ${seconds % 60}초`, stale };
+}
+
+/** 같은 방면의 일반·급행 후보를 실제 도착시간, 없으면 남은 역 수 순으로 정렬한다. */
+export function getUpcomingTrains(arrivals: SubwayArrival[]) {
+  const trains = arrivals.filter(arrival => arrival.arrivalCode !== '2');
+  const order = (arrival: SubwayArrival) => {
+    if (arrival.etaSeconds !== null && Number.isFinite(arrival.etaSeconds)) return arrival.etaSeconds;
+    return ['0', '1', '3', '4', '5'].includes(arrival.arrivalCode) ? 0 : Infinity;
   };
+  return [...trains].sort((a, b) => {
+    const first = order(a), second = order(b);
+    if (first !== second) return first - second;
+    return (a.remainingStations ?? Infinity) - (b.remainingStations ?? Infinity);
+  });
 }
 
 /**

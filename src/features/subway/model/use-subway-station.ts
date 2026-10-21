@@ -3,6 +3,7 @@
 import { useQuery } from '@tanstack/react-query';
 import {
   getSubwayStation,
+  getSubwayMapStations,
   getSubwayTimetable,
   getSubwayFacilities,
   type SubwayDayType,
@@ -56,5 +57,15 @@ export function useSubwayFacilities(stationName: string, enabled = true) {
     queryFn: ({ signal }) => getSubwayFacilities(stationName, signal),
     enabled: enabled && Boolean(stationName),
     staleTime: 86_400_000,
+  });
+}
+
+/** 정적 역 좌표는 하루 재사용하며 지도 이동 때마다 다시 요청하지 않는다. */
+export function useSubwayMapStations() {
+  return useQuery({
+    queryKey: ['subway', 'map-stations'],
+    queryFn: ({ signal }) => getSubwayMapStations(signal),
+    staleTime: 86_400_000,
+    gcTime: 86_400_000,
   });
 }

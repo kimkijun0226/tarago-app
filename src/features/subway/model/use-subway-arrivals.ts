@@ -1,4 +1,4 @@
-/** @fileoverview 화면 포커스 동안 역별 도착정보를 15초마다 갱신하고 Query가 요청 취소·캐시를 관리하게 한다. */
+/** @fileoverview 화면 포커스 동안 15초마다 서버 공유 정보를 갱신하고 Query가 요청 취소·캐시를 관리하게 한다. */
 
 import { useCallback, useState } from 'react';
 import { useFocusEffect } from 'expo-router';
@@ -25,6 +25,7 @@ export function useSubwayArrivals(stationName: string) {
     queryFn: ({ signal }) => getSubwayArrivals(stationName, signal),
     enabled: focused && Boolean(stationName),
     staleTime: 15_000,
+    retry: false,
     refetchInterval: 15_000,
     refetchIntervalInBackground: false,
   });

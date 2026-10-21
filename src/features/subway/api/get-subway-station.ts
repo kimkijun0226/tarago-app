@@ -118,3 +118,16 @@ export async function getSubwayFacilities(
   });
   return data;
 }
+
+/** 지도에서 누를 수 있는 공식 역·호선별 좌표다. */
+export type SubwayMapStation = {
+  id: string;
+  name: string;
+  lineName: string;
+  latitude: number;
+  longitude: number;
+};
+
+export async function getSubwayMapStations(signal?: AbortSignal): Promise<SubwayMapStation[]> {
+  return (await apiClient.get<SubwayMapStation[]>('/subway/map-stations', { signal })).data;
+}

@@ -2,7 +2,7 @@
 
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import type { SubwayArrival } from '../api/get-subway-arrivals';
-import { getArrivalTime } from '../model/subway-arrival-display';
+import { getArrivalTime, getUpcomingTrains } from '../model/subway-arrival-display';
 import { mapUi } from '@/shared/ui/map-design-tokens';
 
 /** 지하철 링크·강조 표시에 쓰는 지도 공통 파란색이다. 지연·보조 정보와 비활성 선택에 사용하는 회색이다. */
@@ -40,32 +40,28 @@ export function SubwayDirectionCard({
     !arrivals.some((arrival) => !getArrivalTime(arrival, now, elapsed).stale);
 
   /** 운행 종료가 확정된 경우 오래된 열차를 숨기고 그 외에는 서버 열차를 유지한다. */
-  const trains = ended ? [] : arrivals;
+  const trains = ended ? [] : getUpcomingTrains(arrivals);
   return (
     <View style={s.directionCard}>
-      <Pressable
-        accessibilityRole="button"
-        accessibilityLabel={`${label} 상세 도착정보`}
-        onPress={onDetail}
-        style={s.directionHeader}
-      >
-        <Text style={s.directionTitle}>{label}</Text>
-        <Text style={s.chevron}>›</Text>
-      </Pressable>
       {(detailed ? trains : trains.slice(0, 2)).map((arrival) => {
         /** 현재 시각에 맞춰 계산한 도착 문구와 수신 지연 여부다. */
         const time = getArrivalTime(arrival, now, elapsed);
+        const isExpress = /급행|특급/.test(arrival.trainType);
         return (
-          <View key={arrival.id} style={s.train}>
-            <Text style={s.trainDestination}>
+          <Pressable
+            key={arrival.id}
+            style={s.train}
+            accessibilityRole="button"
+            accessibilityLabel={`${label} ${arrival.destination || '열차'}${isExpress ? ' 급행' : ''} 상세 도착정보`}
+            onPress={onDetail}
+          >
+            <Text style={[s.trainDestination, isExpress && s.express]} numberOfLines={1}>
               {arrival.destination ? `${arrival.destination}행` : '행선지 미제공'}
+              {isExpress ? '(급)' : ''}
               {arrival.isLastTrain ? ' · 막차' : ''}
             </Text>
-            <Text style={[s.trainTime, { color: time.stale ? GRAY : '#E44136' }]}>{time.text}</Text>
-            {detailed && arrival.locationMessage ? (
-              <Text style={s.trainLocation}>{arrival.locationMessage}</Text>
-            ) : null}
-          </View>
+            {time.text ? <Text style={s.trainTime}>{time.text}</Text> : null}
+          </Pressable>
         );
       })}
       {!trains.length ? <Text style={s.serviceStatus}>{status}</Text> : null}
@@ -91,21 +87,16 @@ const s = StyleSheet.create({
     paddingTop: 9,
     paddingBottom: 10,
   },
-  directionHeader: {
-    minHeight: 34,
+  train: {
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'space-between',
     gap: 8,
-    borderBottomWidth: 1,
-    borderBottomColor: '#F0F0F0',
-    paddingBottom: 8,
+    paddingVertical: 10,
   },
-  directionTitle: { flex: 1, fontSize: 15, fontWeight: '700', color: '#444' },
-  chevron: { fontSize: 24, color: '#555' },
-  train: { gap: 3, paddingTop: 10 },
-  trainDestination: { fontSize: 12, color: '#555' },
-  trainTime: { fontSize: 14, fontWeight: '600' },
-  trainLocation: { fontSize: 12, color: GRAY },
+  trainDestination: { flex: 1, fontSize: 14, color: '#555' },
+  express: { color: '#E44136' },
+  trainTime: { flexShrink: 0, fontSize: 14, fontWeight: '600', color: '#E44136', fontVariant: ['tabular-nums'] },
   alertButton: { marginTop: 14, minHeight: 40, justifyContent: 'center' },
   link: { fontSize: 14, color: BLUE },
 });

@@ -11,11 +11,17 @@ export interface SubwayArrival {
   destination: string;
   trainId: string;
   trainType: string;
+  /** 공식 도착 순번에서 추출한 남은 역 수. 일반·급행의 각각 첫 열차를 비교한다. */
+  remainingStations?: number;
   arrivalMessage: string;
   locationMessage: string;
   arrivalCode: string;
   receivedAt: string | null;
   etaSeconds: number | null;
+  etaSource?: 'official' | 'estimated';
+  etaMethod?: 'live_position' | 'schedule_position' | 'observed_travel';
+  etaSampleCount?: number;
+  etaPositionReceivedAt?: string;
   isLastTrain: boolean;
   stationId?: string;
   previousStationId?: string;

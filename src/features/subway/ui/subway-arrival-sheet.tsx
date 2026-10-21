@@ -1,4 +1,6 @@
 /** @fileoverview 선택 역의 도착정보·시간표·시설·노선도와 지도 및 알림 화면으로의 이동을 연결한다. */
+import type { SharedValue } from 'react-native-reanimated';
+import { SheetToolbar } from '@/shared/ui/sheet-toolbar';
 
 import { useEffect, useState } from 'react';
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
@@ -54,20 +56,18 @@ export function SubwayArrivalSheet({
   initialLineName,
   onClose,
   onHeightChange,
+  animatedPosition,
   snap,
   onChangeSnap,
-  onStart,
-  onEnd,
   onSelectStation,
 }: {
   stationName: string;
   initialLineName?: string;
   onClose: () => void;
   onHeightChange: (height: number) => void;
+  animatedPosition?: SharedValue<number>;
   snap?: MapSheetSnap;
   onChangeSnap?: (snap: MapSheetSnap) => void;
-  onStart?: () => void;
-  onEnd?: () => void;
   onSelectStation?: (
     name: string,
     lineName: string,
@@ -87,7 +87,7 @@ export function SubwayArrivalSheet({
   const [now, setNow] = useState(() => Date.now());
 
   /** 사용자가 선택한 역·노선을 함께 기록해 다른 역의 이전 노선 선택이 적용되지 않게 한다. */
-  const [selection, setSelection] = useState({ stationName, lineName: '' });
+  const [selection, setSelection] = useState({ stationName, initialLineName, lineName: '' });
 
   /** 실시간 표시와 전체 시간표·첫차/막차 모달 중 현재 모드를 선택한다. */
   const [tab, setTab] = useState<'live' | 'timetable' | 'firstLast'>('live');
@@ -141,7 +141,9 @@ export function SubwayArrivalSheet({
 
   /** 현재 역에 유효한 사용자 선택을 우선하고 초기 노선·첫 노선 순으로 보완한 표시 노선이다. */
   const lineName =
-    selection.stationName === stationName && lines.some(([name]) => name === selection.lineName)
+    selection.stationName === stationName &&
+    selection.initialLineName === initialLineName &&
+    lines.some(([name]) => name === selection.lineName)
       ? selection.lineName
       : initial || lines[0]?.[0] || '';
 
@@ -237,7 +239,7 @@ export function SubwayArrivalSheet({
    * @param name 노선 이름.
    */
   const setLine = (name: string) => {
-    setSelection({ stationName, lineName: name });
+    setSelection({ stationName, initialLineName, lineName: name });
     setDetailDirection('');
     onSelectStation?.(stationName, name);
   };
@@ -282,16 +284,29 @@ export function SubwayArrivalSheet({
   /** 새벽 3시 이전은 1440분을 더해 전날 영업일에 속하도록 맞춘 현재 분이다. */
   const currentServiceMinute = kst[0] * 60 + kst[1] + (kst[0] < 3 ? 1440 : 0);
 
-  /** 즐겨찾기·닫기 버튼을 펼침 상태에 맞는 위치에서 재사용할 UI 조각이다. */
-  const controls = (
-    <>
+  const toolbar = (
+    <SheetToolbar
+      onClose={onClose}
+      closeLabel="지하철역 닫기"
+      header={
+        <View style={[s.header, activeSnap === 'full' && { paddingTop: 0 }]}>
+          <View style={s.titleRow}>
+            <Text accessibilityRole="header" style={s.title}>
+              {title} <Text style={{ color }}>{lineName}</Text>
+            </Text>
+          </View>
+          <Text style={s.subtitle}>수도권 지하철</Text>
+          {favorite.error ? <Text style={s.error}>{favorite.error}</Text> : null}
+        </View>
+      }
+    >
       <Pressable
         accessibilityRole="button"
         accessibilityLabel={favorite.saved ? '저장한 역에서 제거' : '역 저장'}
         accessibilityState={{ selected: favorite.saved, disabled: favorite.busy }}
         disabled={favorite.busy}
         onPress={() => void favorite.toggle()}
-        style={activeSnap === 'full' ? s.toolbarControl : s.round}
+        style={s.favoriteButton}
       >
         <SymbolView
           name={{ ios: favorite.saved ? 'star.fill' : 'star', android: 'star' }}
@@ -299,262 +314,213 @@ export function SubwayArrivalSheet({
           tintColor={favorite.saved ? BLUE : INK}
         />
       </Pressable>
-      <Pressable
-        accessibilityRole="button"
-        accessibilityLabel="지하철역 닫기"
-        onPress={onClose}
-        style={activeSnap === 'full' ? s.toolbarControl : s.round}
-      >
-        <SymbolView name={{ ios: 'xmark', android: 'close' }} size={24} tintColor="#444" />
-      </Pressable>
-    </>
+    </SheetToolbar>
   );
+
   return (
     <>
       <MapBottomSheet
-        edgeToEdge
+        toolbar={toolbar}
+        edgeToEdge={false}
         onHeightChange={onHeightChange}
+        animatedPosition={animatedPosition}
         snap={activeSnap}
         onChangeSnap={changeSnap}
       >
-        <BottomSheetScrollView contentContainerStyle={s.content}>
-          <View style={[s.header, activeSnap === 'full' && { paddingTop: 0 }]}>
-            {activeSnap === 'full' ? (
-              <View style={s.fullToolbar}>
-                <Pressable
-                  onPress={() => changeSnap('half')}
-                  accessibilityRole="button"
-                  accessibilityLabel="지도와 함께 보기"
-                  style={s.toolbarControl}
-                >
-                  <SymbolView
-                    name={{ ios: 'chevron.left', android: 'chevron_left' }}
-                    size={24}
-                    tintColor={INK}
-                  />
-                </Pressable>
-                <View style={{ flex: 1 }} />
-                {controls}
-              </View>
-            ) : null}
-            <View style={s.titleRow}>
-              <Text accessibilityRole="header" style={s.title}>
-                {title} <Text style={{ color }}>{lineName}</Text>
-              </Text>
-              {activeSnap !== 'full' ? controls : null}
-            </View>
-            <Text style={s.subtitle}>수도권 지하철</Text>
-            {favorite.error ? <Text style={s.error}>{favorite.error}</Text> : null}
-          </View>
-          <ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            contentContainerStyle={s.actions}
-          >
-            {onStart ? (
-              <Pressable
-                onPress={onStart}
-                accessibilityRole="button"
-                style={[s.action, s.departure]}
-              >
-                <Text style={[s.actionText, { color: BLUE }]}>출발</Text>
-              </Pressable>
-            ) : null}
-            {onEnd ? (
-              <Pressable
-                onPress={onEnd}
-                accessibilityRole="button"
-                style={[s.action, s.destination]}
-              >
-                <Text style={[s.actionText, { color: 'white' }]}>도착</Text>
-              </Pressable>
-            ) : null}
-            <Pressable
-              onPress={() => {
-                setTab('timetable');
-                changeSnap('full');
-              }}
-              accessibilityRole="button"
-              style={s.action}
+        <View style={s.sheetContent}>
+          <BottomSheetScrollView contentContainerStyle={s.content}>
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={s.actions}
             >
-              <SymbolView
-                name={{ ios: 'calendar', android: 'calendar_month' }}
-                size={18}
-                tintColor="#333"
+              <Pressable
+                onPress={() => {
+                  setTab('timetable');
+                  changeSnap('full');
+                }}
+                accessibilityRole="button"
+                style={s.action}
+              >
+                <SymbolView
+                  name={{ ios: 'calendar', android: 'calendar_month' }}
+                  size={18}
+                  tintColor="#333"
+                />
+                <Text style={s.actionText}>전체 시간표</Text>
+              </Pressable>
+              <Pressable
+                onPress={() => {
+                  setTab('firstLast');
+                  changeSnap('full');
+                }}
+                accessibilityRole="button"
+                style={s.action}
+              >
+                <SymbolView name={{ ios: 'tram', android: 'train' }} size={18} tintColor="#333" />
+                <Text style={s.actionText}>첫차·막차</Text>
+              </Pressable>
+            </ScrollView>
+            <View style={s.rule} />
+            <View style={s.arrivalSection}>
+              <SubwayStationRail
+                stationName={stationName}
+                lineName={lineName}
+                line={line}
+                color={color}
+                onSelectStation={onSelectStation}
               />
-              <Text style={s.actionText}>전체 시간표</Text>
-            </Pressable>
-            <Pressable
-              onPress={() => {
-                setTab('firstLast');
-                changeSnap('full');
-              }}
-              accessibilityRole="button"
-              style={s.action}
-            >
-              <SymbolView name={{ ios: 'tram', android: 'train' }} size={18} tintColor="#333" />
-              <Text style={s.actionText}>첫차·막차</Text>
-            </Pressable>
-          </ScrollView>
-          <View style={s.rule} />
-          <View style={s.arrivalSection}>
-            <SubwayStationRail
-              stationName={stationName}
-              lineName={lineName}
-              line={line}
-              color={color}
-              onSelectStation={onSelectStation}
-            />
-            <View style={s.liveToolbar}>
-              <View style={s.segment}>
-                <Pressable
-                  accessibilityRole="button"
-                  accessibilityState={{ selected: tab === 'live' }}
-                  onPress={() => setTab('live')}
-                  style={[s.segmentButton, tab === 'live' && s.liveSelected]}
-                >
-                  <Text style={[s.segmentText, { color: tab === 'live' ? GREEN : GRAY }]}>
-                    실시간
-                  </Text>
-                </Pressable>
-                <Pressable
-                  accessibilityRole="button"
-                  accessibilityState={{ selected: tab !== 'live' }}
-                  onPress={() => setTab('timetable')}
-                  style={[s.segmentButton, tab !== 'live' && s.scheduleSelected]}
-                >
-                  <Text style={[s.segmentText, { color: tab !== 'live' ? INK : GRAY }]}>
-                    시간표
-                  </Text>
-                </Pressable>
-              </View>
-              <View style={s.refreshRow}>
-                <Text style={s.clock}>{updatedAt}</Text>
-                <Pressable
-                  onPress={() => void query.refetch()}
-                  disabled={query.isFetching}
-                  accessibilityRole="button"
-                  accessibilityLabel="도착정보 새로고침"
-                  style={s.refresh}
-                >
-                  {query.isFetching ? (
-                    <ActivityIndicator size="small" color={GRAY} />
-                  ) : (
-                    <Text style={s.refreshIcon}>↻</Text>
-                  )}
-                </Pressable>
-              </View>
-            </View>
-            <>
-              {query.isError ? <Text style={s.error}>{errorMessage}</Text> : null}
-              {query.isPending ? <ActivityIndicator color={BLUE} /> : null}
-              {detailDirection ? (
-                <Pressable onPress={() => setDetailDirection('')} accessibilityRole="button">
-                  <Text style={s.link}>‹ 전체 방면</Text>
-                </Pressable>
-              ) : null}
-              <View style={s.directionCards}>
-                {displayedDirections.map((direction) => (
-                  <SubwayDirectionCard
-                    key={direction}
-                    arrivals={lineArrivals.filter((arrival) => arrival.direction === direction)}
-                    label={directionLabel(direction)}
-                    status={getServiceStatus(
-                      direction,
-                      timetable.data?.directions ?? [],
-                      currentServiceMinute,
-                    )}
-                    now={now}
-                    elapsed={elapsed}
-                    detailed={Boolean(detailDirection)}
-                    onDetail={() => setDetailDirection(direction)}
-                    onAlert={selectedLineId ? () => openAlert(direction) : undefined}
-                  />
-                ))}
-                {!query.isPending && !directions.length ? (
-                  <View style={s.emptyCard}>
-                    <Text style={s.unavailable}>현재 제공되는 실시간 도착정보가 없습니다.</Text>
-                  </View>
-                ) : null}
-              </View>
-            </>
-            <View style={s.transferRow}>
-              <Text style={s.transferTitle}>환승역</Text>
-              {lines.map(([name]) => (
-                <Pressable
-                  key={name}
-                  onPress={() => setLine(name)}
-                  accessibilityRole="button"
-                  accessibilityLabel={`${name} 선택`}
-                  accessibilityState={{ selected: name === lineName }}
-                  style={[s.badge, { backgroundColor: LINE_COLORS[name] ?? BLUE }]}
-                >
-                  <Text style={s.badgeText}>{name.replace('호선', '')}</Text>
-                </Pressable>
-              ))}
-            </View>
-          </View>
-          <View style={s.sectionDivider} />
-          <SubwayNetworkPanel
-            line={line}
-            lineName={lineName}
-            color={color}
-            pending={station.isPending}
-            onOpen={() => setShowNetwork(true)}
-            onSelectStation={onSelectStation}
-          />
-          <View style={s.sectionDivider} />
-          <View style={s.infoSection}>
-            <Text style={s.sectionTitle}>역정보</Text>
-            {facilities.data?.contacts
-              .filter((item) => item.lineName === lineName)
-              .map((item) => (
-                <View key={`${item.lineName}:${item.phone}`} style={{ gap: 7, marginTop: 16 }}>
-                  <Text style={s.unavailable}>{item.address}</Text>
-                  <Text style={s.unavailable}>{item.phone}</Text>
-                </View>
-              ))}
-            <View style={s.infoRule} />
-            <Text style={s.facilityTitle}>시설정보</Text>
-            {facilities.isPending ? (
-              <ActivityIndicator color={BLUE} />
-            ) : facilities.isError ? (
-              <View style={{ gap: 8 }}>
-                <Text style={s.error}>시설정보를 불러오지 못했습니다.</Text>
-                <Pressable onPress={() => void facilities.refetch()} accessibilityRole="button">
-                  <Text style={s.link}>다시 조회</Text>
-                </Pressable>
-              </View>
-            ) : facilities.data?.elevators.length ? (
-              <View style={{ gap: 10 }}>
-                <Text style={s.unavailable}>
-                  엘리베이터 위치 {facilities.data.elevators.length}개 지점 ·{' '}
-                  {facilities.data.elevatorSourceYear}년 기준
-                </Text>
-                <Text style={s.unavailable}>
-                  공식 위치 자료이며 현재 운행 여부는 제공되지 않습니다.
-                </Text>
-                {onSelectStation ? (
+              <View style={s.liveToolbar}>
+                <View style={s.segment}>
                   <Pressable
-                    onPress={() =>
-                      onSelectStation(stationName, lineName, facilities.data!.elevators[0])
-                    }
                     accessibilityRole="button"
+                    accessibilityState={{ selected: tab === 'live' }}
+                    onPress={() => setTab('live')}
+                    style={[s.segmentButton, tab === 'live' && s.liveSelected]}
                   >
-                    <Text style={s.link}>첫 번째 엘리베이터 지점 지도 보기</Text>
+                    <Text style={[s.segmentText, { color: tab === 'live' ? GREEN : GRAY }]}>
+                      실시간
+                    </Text>
+                  </Pressable>
+                  <Pressable
+                    accessibilityRole="button"
+                    accessibilityState={{ selected: tab !== 'live' }}
+                    onPress={() => setTab('timetable')}
+                    style={[s.segmentButton, tab !== 'live' && s.scheduleSelected]}
+                  >
+                    <Text style={[s.segmentText, { color: tab !== 'live' ? INK : GRAY }]}>
+                      시간표
+                    </Text>
+                  </Pressable>
+                </View>
+                <View style={s.refreshRow}>
+                  <Text style={s.clock}>{updatedAt}</Text>
+                  <Pressable
+                    onPress={() => void query.refetch()}
+                    disabled={query.isFetching}
+                    accessibilityRole="button"
+                    accessibilityLabel="도착정보 새로고침"
+                    style={s.refresh}
+                  >
+                    {query.isFetching ? (
+                      <ActivityIndicator size="small" color={GRAY} />
+                    ) : (
+                      <Text style={s.refreshIcon}>↻</Text>
+                    )}
+                  </Pressable>
+                </View>
+              </View>
+              <>
+                {query.isError ? <Text style={s.error}>{errorMessage}</Text> : null}
+                {query.isPending ? <ActivityIndicator color={BLUE} /> : null}
+                {detailDirection ? (
+                  <Pressable onPress={() => setDetailDirection('')} accessibilityRole="button">
+                    <Text style={s.link}>‹ 전체 방면</Text>
                   </Pressable>
                 ) : null}
+                <View style={s.directionCards}>
+                  {displayedDirections.map((direction) => (
+                    <SubwayDirectionCard
+                      key={direction}
+                      arrivals={lineArrivals.filter((arrival) => arrival.direction === direction)}
+                      label={directionLabel(direction)}
+                      status={getServiceStatus(
+                        direction,
+                        timetable.data?.directions ?? [],
+                        currentServiceMinute,
+                      )}
+                      now={now}
+                      elapsed={elapsed}
+                      detailed={Boolean(detailDirection)}
+                      onDetail={() => setDetailDirection(direction)}
+                      onAlert={selectedLineId ? () => openAlert(direction) : undefined}
+                    />
+                  ))}
+                  {!query.isPending && !directions.length ? (
+                    <View style={s.emptyCard}>
+                      <Text style={s.unavailable}>현재 제공되는 실시간 도착정보가 없습니다.</Text>
+                    </View>
+                  ) : null}
+                </View>
+              </>
+              <View style={s.transferRow}>
+                <Text style={s.transferTitle}>환승역</Text>
+                {lines.map(([name]) => (
+                  <Pressable
+                    key={name}
+                    onPress={() => setLine(name)}
+                    accessibilityRole="button"
+                    accessibilityLabel={`${name} 선택`}
+                    accessibilityState={{ selected: name === lineName }}
+                    style={[s.badge, { backgroundColor: LINE_COLORS[name] ?? BLUE }]}
+                  >
+                    <Text style={s.badgeText}>{name.replace('호선', '')}</Text>
+                  </Pressable>
+                ))}
               </View>
-            ) : (
-              <Text style={s.unavailable}>공개된 시설정보가 없습니다.</Text>
-            )}
-            {facilities.data ? (
-              <Text style={s.attribution}>{facilities.data.attribution}</Text>
-            ) : query.data ? (
-              <Text style={s.attribution}>{query.data.attribution}</Text>
-            ) : null}
-          </View>
-        </BottomSheetScrollView>
+            </View>
+            <View style={s.sectionDivider} />
+            <SubwayNetworkPanel
+              line={line}
+              lineName={lineName}
+              color={color}
+              pending={station.isPending}
+              onOpen={() => setShowNetwork(true)}
+              onSelectStation={onSelectStation}
+            />
+            <View style={s.sectionDivider} />
+            <View style={s.infoSection}>
+              <Text style={s.sectionTitle}>역정보</Text>
+              {facilities.data?.contacts
+                .filter((item) => item.lineName === lineName)
+                .map((item) => (
+                  <View key={`${item.lineName}:${item.phone}`} style={{ gap: 7, marginTop: 16 }}>
+                    <Text style={s.unavailable}>{item.address}</Text>
+                    <Text style={s.unavailable}>{item.phone}</Text>
+                  </View>
+                ))}
+              <View style={s.infoRule} />
+              <Text style={s.facilityTitle}>시설정보</Text>
+              {facilities.isPending ? (
+                <ActivityIndicator color={BLUE} />
+              ) : facilities.isError ? (
+                <View style={{ gap: 8 }}>
+                  <Text style={s.error}>시설정보를 불러오지 못했습니다.</Text>
+                  <Pressable onPress={() => void facilities.refetch()} accessibilityRole="button">
+                    <Text style={s.link}>다시 조회</Text>
+                  </Pressable>
+                </View>
+              ) : facilities.data?.elevators.length ? (
+                <View style={{ gap: 10 }}>
+                  <Text style={s.unavailable}>
+                    엘리베이터 위치 {facilities.data.elevators.length}개 지점 ·{' '}
+                    {facilities.data.elevatorSourceYear}년 기준
+                  </Text>
+                  <Text style={s.unavailable}>
+                    공식 위치 자료이며 현재 운행 여부는 제공되지 않습니다.
+                  </Text>
+                  {onSelectStation ? (
+                    <Pressable
+                      onPress={() =>
+                        onSelectStation(stationName, lineName, facilities.data!.elevators[0])
+                      }
+                      accessibilityRole="button"
+                    >
+                      <Text style={s.link}>첫 번째 엘리베이터 지점 지도 보기</Text>
+                    </Pressable>
+                  ) : null}
+                </View>
+              ) : (
+                <Text style={s.unavailable}>공개된 시설정보가 없습니다.</Text>
+              )}
+              {facilities.data ? (
+                <Text style={s.attribution}>{facilities.data.attribution}</Text>
+              ) : query.data ? (
+                <Text style={s.attribution}>{query.data.attribution}</Text>
+              ) : null}
+            </View>
+          </BottomSheetScrollView>
+        </View>
       </MapBottomSheet>
       <SubwayTimetableModal
         stationName={stationName}
@@ -580,19 +546,11 @@ export function SubwayArrivalSheet({
 /** 이 파일의 지하철 표시 요소가 사용하는 고정 스타일을 모듈 범위에서 한 번 만든다. */
 const s = StyleSheet.create({
   content: { paddingBottom: 32, backgroundColor: 'white' },
-  header: { paddingHorizontal: 16, paddingTop: 8 },
-  fullToolbar: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 0 },
-  toolbarControl: { width: 36, height: 40, alignItems: 'center', justifyContent: 'center' },
+  header: { paddingVertical: 8 },
+  sheetContent: { flex: 1 },
+  favoriteButton: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center' },
   titleRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
   title: { fontSize: 25, fontWeight: '700', color: INK, flex: 1, letterSpacing: -0.8 },
-  round: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: '#F2F3F5',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
   subtitle: { fontSize: 17, color: '#555', marginTop: 12 },
   actions: { paddingHorizontal: 16, gap: 5, paddingVertical: 20 },
   action: {
@@ -607,8 +565,6 @@ const s = StyleSheet.create({
     gap: 6,
   },
   actionText: { fontSize: 16, fontWeight: '500', color: INK },
-  departure: { backgroundColor: '#E8F1FF', borderColor: '#E8F1FF', minWidth: 70 },
-  destination: { backgroundColor: BLUE, borderColor: BLUE, minWidth: 70 },
   rule: { height: 1, backgroundColor: '#F0F0F0' },
   arrivalSection: { paddingHorizontal: 18, paddingTop: 24 },
   badge: {
