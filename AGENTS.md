@@ -1,59 +1,63 @@
-This is an Expo/React Native application targeting iOS and Android only. Prioritize mobile performance and compatibility between these two platforms. Do not add web-specific files, configuration, or dependencies.
+# 타라고 앱 프로젝트 지침
 
-## Expo has changed — do not trust your training data
+이 프로젝트는 iOS와 Android 전용 Expo/React Native 앱이다. 두 플랫폼의 성능과 호환성을 우선하며 웹 전용 파일·설정·의존성을 추가하지 않는다.
 
-Expo ships breaking changes every SDK release. APIs you remember are likely renamed, moved, or removed. Before writing any code that touches an Expo, EAS, or React Native API:
+## Expo API 확인
 
-1. Read the major version of the `expo` package in `package.json`.
-2. Fetch the matching versioned docs: `https://docs.expo.dev/versions/v<major>.0.0/`
-3. For anything else, fetch https://docs.expo.dev/llms.txt — an index of all Expo docs with corrections to common LLM misconceptions. Follow its links to the specific page you need; never answer from memory.
+Expo는 SDK 버전마다 API가 변경될 수 있으므로 기억에 의존하지 않는다. Expo, EAS, React Native API를 사용하는 코드를 작성하기 전에 다음을 확인한다.
 
-## Commands
+1. `package.json`에서 `expo`의 메이저 버전을 확인한다.
+2. 해당 버전 문서 `https://docs.expo.dev/versions/v<major>.0.0/`를 확인한다.
+3. 그 외 항목은 https://docs.expo.dev/llms.txt 에서 관련 문서를 찾아 확인한다.
 
-Use `bunx` instead of `npx` if the project uses bun (`bun.lock` present).
+## 명령어와 검증
+
+`bun.lock`이 있는 프로젝트는 `npx` 대신 `bunx`를 사용한다.
 
 ```bash
-npx expo install <package>  # ALWAYS use instead of npm/yarn/pnpm/bun add — resolves SDK-compatible versions
-npx expo start              # start the dev server
-npx expo lint               # lint
-npx tsc --noEmit            # typecheck
-npx expo-doctor             # diagnose dependency and config issues
-npx expo install --fix      # fix incompatible package versions
+npx expo install <package>  # SDK 호환 버전 설치. 다른 패키지 관리자의 add 대신 사용한다.
+npx expo start              # 개발 서버 실행
+npx expo lint               # 린트 검사
+npx tsc --noEmit            # 타입 검사
+npx expo-doctor             # 의존성과 설정 진단
+npx expo install --fix      # SDK와 호환되지 않는 패키지 버전 수정
 ```
 
-Run lint and typecheck before declaring any task done.
+완료 전에 린트와 타입 검사를 실행한다. 사용자가 명시적으로 요청하기 전에는 테스트 코드를 만들거나 추가하지 않는다. 현재 검증은 린트·타입 검사·관련 설정 확인으로 수행한다.
 
-Do not create or add test code unless the user explicitly requests it. Use lint, typecheck, and relevant configuration checks for current verification.
+## 내비게이션과 라우팅
 
-## Navigation & Routing
+- 모든 화면 이동은 **Expo Router**를 사용한다.
+- `src/app/`에는 화면과 `_layout.tsx` 내비게이터만 둔다. 컴포넌트·훅·유틸리티는 외부에 둔다.
+- `Link`, `router`, `useLocalSearchParams`는 `expo-router`에서 가져온다.
+- 문서: https://docs.expo.dev/router/introduction.md
 
-- Use **Expo Router** for all navigation. Routes live in `src/app/` — every file there is a screen, `_layout.tsx` files define navigators. Keep non-route code (components, hooks, utils) outside `src/app/`.
-- Import `Link`, `router`, and `useLocalSearchParams` from `expo-router`.
-- Docs: https://docs.expo.dev/router/introduction.md
+## 상태 관리
 
-## State Management
+- 정류장·도착정보·노선·지하철·저장된 알림 등 모든 서버 상태는 **TanStack Query**로 관리한다.
+- 조회·캐시·로딩·오류·재시도·폴링·캐시 무효화는 TanStack Query가 담당한다.
+- **Zustand**는 선택한 정류장·노선, 지도 UI, 바텀 시트 등 공유 클라이언트 상태에만 사용한다.
+- 한 컴포넌트만 사용하는 상태는 로컬 React 상태로 관리한다.
+- TanStack Query 응답을 Zustand에 복사하지 않고 데이터의 원본을 하나로 유지한다.
+- 서버 데이터를 변경하면 관련 Query 캐시를 갱신하거나 무효화한다.
 
-- Use **TanStack Query** for all server state, including bus stops, arrivals, routes, subway data, and saved alerts.
-- TanStack Query owns fetching, caching, loading and error states, retries, polling, and cache invalidation.
-- Use **Zustand** only for shared client state, such as the selected stop or route, map UI state, and BottomSheet state.
-- Use local React state for state that belongs to only one component.
-- Never copy TanStack Query response data into Zustand. Keep a single source of truth.
-- After a server mutation, update or invalidate the relevant TanStack Query cache.
+## API 클라이언트
 
-## API Client
+- HTTP 요청은 `src/shared/api/`의 공통 **Axios** 클라이언트를 사용한다.
+- 기본 API 주소·타임아웃·공통 요청 동작은 이 클라이언트에 설정한다.
+- 기능별 요청 함수는 각 기능의 `api/`에 두고 Query 또는 Mutation 함수에서 호출한다.
+- 화면에서 Axios를 직접 호출하거나 API 클라이언트에 응답 상태를 저장하지 않는다.
+- 비밀 API 키를 `EXPO_PUBLIC_` 변수나 앱에 넣지 않는다. 외부 서비스의 비밀 키는 백엔드에 둔다.
 
-- Use **Axios** for HTTP requests through one shared client in `src/shared/api/`.
-- Configure the API base URL, timeout, and truly shared request behavior on that client.
-- Keep feature-specific request functions in each feature's `api/` directory and call them from TanStack Query query or mutation functions.
-- Do not call Axios directly from screens or store server responses in the API client.
-- Never put secret API keys in `EXPO_PUBLIC_` variables or the mobile application. External service keys stay on the backend.
+## EAS 빌드와 배포
 
-## Building with EAS
+클라우드 빌드·서명·제출은 EAS의 `eas build`, `eas submit`을 사용하고 OTA 업데이트는 `eas update`를 사용한다. 로컬 Xcode나 Android Studio는 필수가 아니다.
 
-Use EAS to build, sign, and submit the app in the cloud (`eas build`, `eas submit`) and to ship over-the-air updates (`eas update`) — no local Xcode or Android Studio required. Run EAS CLI as `bunx eas-cli <command>` in Bun projects, or `npx eas-cli@latest <command>` otherwise; substitute that for bare `eas` in docs examples.
-Docs: https://docs.expo.dev/eas/index.md
+Bun 프로젝트는 `bunx eas-cli <명령어>`, 그 외에는 `npx eas-cli@latest <명령어>`로 실행한다. 문서의 `eas` 명령도 이 형식으로 바꿔 실행한다.
 
-## Rules
+문서: https://docs.expo.dev/eas/index.md
+
+## 규칙
 
 ### Git 커밋 메시지
 
@@ -68,9 +72,13 @@ Docs: https://docs.expo.dev/eas/index.md
 
 ### 구현 규칙
 
-- Add concise `/** ... */` comments to non-obvious modules, public functions, and data-flow boundaries; explain their purpose or reason, not syntax. Do not add comments to trivial code.
-- Before adding a service, parser, hook, or test, check whether the same behavior already exists and whether it is called by the running app.
-- Keep tests for behavior with real regression risk (for example data replacement and map coverage), not generated starter examples or one-line wiring.
-- If `ios/` and `android/` directories do not exist, they are generated (Continuous Native Generation). Never create or edit them by hand — configure native behavior in `app.json` and config plugins.
-- Expo Go only includes its bundled native modules. After adding a library with native code, the app needs a development build: `npx expo run:ios|android` locally, or `eas build --profile development`.
-- Prefer recommended Expo modules over third-party libraries, and check your available skills before adding dependencies. Docs: https://docs.expo.dev/versions/latest/index.md
+- 의도가 명확하지 않은 모듈·공개 함수·데이터 흐름 경계에는 짧은 `/** ... */` 주석으로 목적이나 이유를 설명한다. 단순한 코드에는 주석을 추가하지 않는다.
+- 서비스·파서·훅·테스트를 추가하기 전에 같은 기능이 이미 존재하고 실행 중인 앱에서 사용되는지 확인한다.
+- 테스트는 데이터 교체·지도 영역 처리처럼 실제 회귀 위험이 있는 동작에 집중하며, 생성된 예제나 단순 연결만 확인하는 테스트를 남기지 않는다. 신규 테스트 추가는 사용자의 명시적 요청이 있을 때만 진행한다.
+- `ios/`, `android/`가 없다면 자동 생성 대상이다. 직접 만들거나 수정하지 않고 `app.json`과 설정 플러그인으로 네이티브 동작을 설정한다.
+- Expo Go에는 기본 포함된 네이티브 모듈만 있다. 네이티브 코드가 있는 라이브러리를 추가하면 로컬 `npx expo run:ios|android` 또는 `eas build --profile development`로 개발 빌드가 필요하다.
+- 외부 라이브러리보다 권장 Expo 모듈을 우선하고, 의존성 추가 전에 사용 가능한 스킬을 확인한다. 문서: https://docs.expo.dev/versions/latest/index.md
+
+### 스타일 규칙
+
+- 타이틀과 서브타이틀 사이의 세로 간격은 React Native 스타일 기준 `4`로 통일한다.

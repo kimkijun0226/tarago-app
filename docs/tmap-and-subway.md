@@ -2,20 +2,21 @@
 
 ## 지도
 
-TMAP Vector Map SDK 3.7의 Android/iOS 네이티브 뷰가 지도를 렌더링한다.
+네이버 지도의 Android/iOS 네이티브 SDK가 지도를 렌더링한다.
 정류장·선택 장소·노선·길찾기 경로를 표시하며 버스 차량 위치는 지도에 표시하지 않는다.
-React 연결은 `shared/ui/tmap/tmap-view.tsx`, 플랫폼 구현은 `modules/tarago-tmap`에 있다.
+React 연결은 `shared/ui/map/map-view.tsx`이며 `@mj-studio/react-native-naver-map`을 사용한다.
 
 ## 인증 변수
 
-| 변수                                    | 사용 위치·역할                                               |
-| --------------------------------------- | ------------------------------------------------------------ |
-| `TMAP_API_KEY`                          | 서버의 장소 검색·보행자·대중교통 경로와 모바일 지도 SDK 인증 |
-| `SEOUL_SUBWAY_REALTIME_ARRIVAL_API_KEY` | 서버의 서울 지하철 실시간·역 정보·시간표·시설 조회           |
-| `EXPO_PUBLIC_API_BASE_URL`              | 앱에서 접근하는 타라고 API의 공개 주소                       |
+| 변수                                    | 사용 위치·역할                                     |
+| --------------------------------------- | -------------------------------------------------- |
+| `NAVER_MAP_CLIENT_ID`                   | 앱의 네이버 지도 SDK 인증                          |
+| `TMAP_API_KEY`                          | 서버의 장소 검색·보행자·대중교통 경로 조회         |
+| `SEOUL_SUBWAY_REALTIME_ARRIVAL_API_KEY` | 서버의 서울 지하철 실시간·역 정보·시간표·시설 조회 |
+| `EXPO_PUBLIC_API_BASE_URL`              | 앱에서 접근하는 타라고 API의 공개 주소             |
 
-지도 SDK는 기기에서 인증하므로 TMAP 모바일 키가 바이너리에 포함된다.
-`plugins/with-tmap.js`가 빌드 환경의 값을 Info.plist·AndroidManifest에 주입한다.
+지도 SDK는 기기에서 인증하므로 네이버 Client ID가 바이너리에 포함된다. Client Secret은 앱에 넣지 않는다.
+`plugins/with-naver-map.js`가 빌드 환경의 값을 Info.plist·AndroidManifest에 주입한다.
 다른 공공데이터 인증키는 서버에만 존재한다.
 
 ## 서버 응답

@@ -35,7 +35,7 @@
 | [src/features/bus-stop/model/bus-route-sheet-data.ts](../src/features/bus-stop/model/bus-route-sheet-data.ts)       | 노선 상세 시트가 소비할 도착 차량 선택과 정류장별 차량 그룹화를 담당한다.                            |
 | [src/features/bus-stop/model/bus-stop-tile.ts](../src/features/bus-stop/model/bus-stop-tile.ts)                     | 지도 조회 영역을 Web Mercator 타일로 나눠 이동 중에도 정류장 Query 캐시를 재사용한다.                |
 | [src/features/bus-stop/model/combine-bus-stops.ts](../src/features/bus-stop/model/combine-bus-stops.ts)             | 여러 타일의 정류장 응답을 서버 정류장 ID 기준으로 합치는 순수 결합 함수를 제공한다.                  |
-| [src/features/bus-stop/model/map-markers.ts](../src/features/bus-stop/model/map-markers.ts)                         | 로컬 정류장 이미지를 현재 Tmap 오버레이 계약으로 변환한다. 네이버 지도 SDK에 의존하지 않는다.        |
+| [src/features/bus-stop/model/map-markers.ts](../src/features/bus-stop/model/map-markers.ts)                         | 로컬 정류장 이미지를 공통 지도 마커 입력으로 변환한다.                                               |
 | [src/features/bus-stop/model/route-direction-markers.ts](../src/features/bus-stop/model/route-direction-markers.ts) | 공식 노선 좌표의 표시용 우측 보정·모서리 곡선·방향 마커를 계산한다. 보정값은 실제 차선 GPS가 아니다. |
 | [src/features/bus-stop/model/use-bus-arrivals.ts](../src/features/bus-stop/model/use-bus-arrivals.ts)               | 정류장 도착 Query의 폴링·재시도와 폐쇄 정류장의 지도 캐시 제거를 관리한다.                           |
 | [src/features/bus-stop/model/use-bus-route-detail.ts](../src/features/bus-stop/model/use-bus-route-detail.ts)       | 선택 정류장 경유 순번별 노선 상세 Query와 화면 활성 중 차량 위치 갱신을 관리한다.                    |
@@ -100,42 +100,35 @@
 
 ## 공용 코드
 
-| 파일                                                                        | 책임                                                                                                                                                                                               |
-| --------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| [src/hooks/use-current-location.ts](../src/hooks/use-current-location.ts)   | foreground 현재 위치 권한·GPS 조회·중복 요청·구독 해제를 관리하는 공용 훅. 서버 데이터가 아닌 기기 센서 상태이므로 Query 캐시 대신 React state와 ref로 관리한다.                                   |
-| [src/shared/api/client.ts](../src/shared/api/client.ts)                     | 앱에서 사용하는 유일한 Axios 인스턴스. 서버 주소와 공통 타임아웃만 관리하며 기능별 응답 캐시는 Query가 소유한다.                                                                                   |
-| [src/shared/api/config.ts](../src/shared/api/config.ts)                     | 공개 API 서버 주소 설정. 환경변수가 없으면 운영 서버를 사용하며 비밀 인증키는 다루지 않는다.                                                                                                       |
-| [src/shared/lib/query-client.ts](../src/shared/lib/query-client.ts)         | 화면과 알림 런타임이 공유하는 서버 상태 캐시. 모듈 범위의 단일 QueryClient로 화면 전환 후에도 결과를 재사용한다.                                                                                   |
-| [src/shared/model/app-store.ts](../src/shared/model/app-store.ts)           | 앱 전역 UI 상태인 탭 숨김 여부와 알림 런타임 오류를 관리하는 Zustand 스토어.                                                                                                                       |
-| [src/shared/types/geo.ts](../src/shared/types/geo.ts)                       | 지도 SDK와 이동 기능이 함께 사용하는 WGS84 좌표 계약. 특정 기능이나 네이티브 SDK에 의존하지 않는다.                                                                                                |
-| [src/shared/ui/app-button.tsx](../src/shared/ui/app-button.tsx)             | 로딩·비활성·강조 상태를 일관되게 표시하는 공통 터치 버튼.                                                                                                                                          |
-| [src/shared/ui/app-section.tsx](../src/shared/ui/app-section.tsx)           | 제목·카드·하단 설명으로 설정 항목을 묶는 공통 레이아웃.                                                                                                                                            |
-| [src/shared/ui/index.ts](../src/shared/ui/index.ts)                         | 공통 UI의 공개 진입점. 실제 책임은 테마·버튼·섹션 파일로 분리한다.                                                                                                                                 |
-| [src/shared/ui/map-bottom-sheet.tsx](../src/shared/ui/map-bottom-sheet.tsx) | 지도 위 시트의 공통 제스처·높이·안전 영역을 관리한다. 내부 내용이나 서버 조회는 하위 기능이 담당한다.                                                                                              |
-| [src/shared/ui/map-design-tokens.ts](../src/shared/ui/map-design-tokens.ts) | 지도 검색·길찾기·지하철 시트가 공유하는 고정 시각 토큰. 앱 공통 테마 위에 지도 화면 전용 색상·규격을 정의한다.                                                                                     |
-| [src/shared/ui/theme.ts](../src/shared/ui/theme.ts)                         | 앱 공통 색상·간격·글자·모서리 토큰. 컴포넌트나 서버 상태는 관리하지 않는다.                                                                                                                        |
-| [src/shared/ui/tmap/tmap-view.tsx](../src/shared/ui/tmap/tmap-view.tsx)     | React 화면과 로컬 TaragoTmap 네이티브 지도 모듈 사이의 어댑터. SDK의 이벤트를 일반 좌표·ID로 바꾸고 카메라 명령의 일련번호를 관리한다. 정류장 조회·알림·길찾기 규칙은 이 계층에서 처리하지 않는다. |
+| 파일                                                                        | 책임                                                                                                                                                             |
+| --------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| [src/hooks/use-current-location.ts](../src/hooks/use-current-location.ts)   | foreground 현재 위치 권한·GPS 조회·중복 요청·구독 해제를 관리하는 공용 훅. 서버 데이터가 아닌 기기 센서 상태이므로 Query 캐시 대신 React state와 ref로 관리한다. |
+| [src/shared/api/client.ts](../src/shared/api/client.ts)                     | 앱에서 사용하는 유일한 Axios 인스턴스. 서버 주소와 공통 타임아웃만 관리하며 기능별 응답 캐시는 Query가 소유한다.                                                 |
+| [src/shared/api/config.ts](../src/shared/api/config.ts)                     | 공개 API 서버 주소 설정. 환경변수가 없으면 운영 서버를 사용하며 비밀 인증키는 다루지 않는다.                                                                     |
+| [src/shared/lib/query-client.ts](../src/shared/lib/query-client.ts)         | 화면과 알림 런타임이 공유하는 서버 상태 캐시. 모듈 범위의 단일 QueryClient로 화면 전환 후에도 결과를 재사용한다.                                                 |
+| [src/shared/model/app-store.ts](../src/shared/model/app-store.ts)           | 앱 전역 UI 상태인 탭 숨김 여부와 알림 런타임 오류를 관리하는 Zustand 스토어.                                                                                     |
+| [src/shared/types/geo.ts](../src/shared/types/geo.ts)                       | 지도 SDK와 이동 기능이 함께 사용하는 WGS84 좌표 계약. 특정 기능이나 네이티브 SDK에 의존하지 않는다.                                                              |
+| [src/shared/ui/app-button.tsx](../src/shared/ui/app-button.tsx)             | 로딩·비활성·강조 상태를 일관되게 표시하는 공통 터치 버튼.                                                                                                        |
+| [src/shared/ui/app-section.tsx](../src/shared/ui/app-section.tsx)           | 제목·카드·하단 설명으로 설정 항목을 묶는 공통 레이아웃.                                                                                                          |
+| [src/shared/ui/index.ts](../src/shared/ui/index.ts)                         | 공통 UI의 공개 진입점. 실제 책임은 테마·버튼·섹션 파일로 분리한다.                                                                                               |
+| [src/shared/ui/map-bottom-sheet.tsx](../src/shared/ui/map-bottom-sheet.tsx) | 지도 위 시트의 공통 제스처·높이·안전 영역을 관리한다. 내부 내용이나 서버 조회는 하위 기능이 담당한다.                                                            |
+| [src/shared/ui/map-design-tokens.ts](../src/shared/ui/map-design-tokens.ts) | 지도 검색·길찾기·지하철 시트가 공유하는 고정 시각 토큰. 앱 공통 테마 위에 지도 화면 전용 색상·규격을 정의한다.                                                   |
+| [src/shared/ui/theme.ts](../src/shared/ui/theme.ts)                         | 앱 공통 색상·간격·글자·모서리 토큰. 컴포넌트나 서버 상태는 관리하지 않는다.                                                                                      |
+| [src/shared/ui/map/map-view.tsx](../src/shared/ui/map/map-view.tsx)         | 네이버 지도 SDK에 앱의 카메라·마커·노선·현재 위치를 연결한다.                                                                                                    |
 
 ## 빌드·설정·네이티브
 
-| 파일                                                                                                                                                                              | 책임                                                                                   |
-| --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------- |
-| [package.json](../package.json)                                                                                                                                                   | 앱 의존성과 개발·검증·SDK 설치 명령. package-lock.json은 같은 설치 결과를 고정한다.    |
-| [app.json](../app.json)                                                                                                                                                           | Expo 앱 식별자·아이콘·권한·config plugin·실험 옵션.                                    |
-| [eas.json](../eas.json)                                                                                                                                                           | EAS 개발·프리뷰·운영 빌드 프로필과 환경.                                               |
-| [.env.example](../.env.example)                                                                                                                                                   | 공개 서버 주소와 지도 SDK 빌드 키의 변수 이름만 안내. 실제 키를 커밋하지 않는다.       |
-| [plugins/with-tmap.js](../plugins/with-tmap.js)                                                                                                                                   | prebuild 시 지도 SDK 인증 설정을 생성되는 iOS·Android 프로젝트에 주입.                 |
-| [modules/tarago-tmap/expo-module.config.json](../modules/tarago-tmap/expo-module.config.json)                                                                                     | 플랫폼별 로컬 네이티브 모듈 클래스 등록.                                               |
-| [modules/tarago-tmap/ios/TaragoTmapModule.swift](../modules/tarago-tmap/ios/TaragoTmapModule.swift)                                                                               | iOS TMAP 지도 뷰의 props·이벤트·카메라·오버레이 구현.                                  |
-| [modules/tarago-tmap/android/src/main/java/expo/modules/taragotmap/TaragoTmapModule.kt](../modules/tarago-tmap/android/src/main/java/expo/modules/taragotmap/TaragoTmapModule.kt) | Android TMAP 지도 뷰의 props·이벤트·카메라·오버레이 구현.                              |
-| [modules/tarago-tmap/install-sdk.py](../modules/tarago-tmap/install-sdk.py)                                                                                                       | 공식 SDK를 다운로드하고 체크섬·압축 경로를 검사한 뒤 빌드 위치에 설치.                 |
-| [modules/tarago-tmap/ios/TaragoTmap.podspec](../modules/tarago-tmap/ios/TaragoTmap.podspec)                                                                                       | iOS 로컬 모듈과 공식 프레임워크를 CocoaPods에 연결.                                    |
-| [modules/tarago-tmap/android/build.gradle](../modules/tarago-tmap/android/build.gradle)                                                                                           | Android 로컬 모듈과 공식 AAR 의존성을 Gradle에 연결.                                   |
-| [modules/tarago-tmap/android/src/main/AndroidManifest.xml](../modules/tarago-tmap/android/src/main/AndroidManifest.xml)                                                           | 로컬 지도 모듈의 Android Manifest. 앱 수준 설정은 Expo config plugin이 생성.           |
-| [eslint.config.js](../eslint.config.js)                                                                                                                                           | Expo 기반 린트 규칙.                                                                   |
-| [tsconfig.json](../tsconfig.json)                                                                                                                                                 | 별칭·엄격한 타입 검사·대상 파일 설정.                                                  |
-| [.gitignore](../.gitignore)                                                                                                                                                       | 의존성·생성 네이티브 프로젝트·SDK 바이너리·비밀 환경 파일을 Git에서 제외.              |
-| [AGENTS.md](../AGENTS.md)                                                                                                                                                         | 이 저장소에서 작업하는 에이전트의 구조·검증·Git 규칙.                                  |
-| [CLAUDE.md](../CLAUDE.md)                                                                                                                                                         | 동일한 AGENTS.md 지침을 다른 에이전트에도 연결.                                        |
-| [assets/images](../assets/images)                                                                                                                                                 | 앱 아이콘·스플래시와 TMAP 오버레이의 로컬 이미지. 마커 SVG는 PNG 편집 원본.            |
-| [assets/expo.icon](../assets/expo.icon)                                                                                                                                           | app.json에서 사용하는 iOS 앱 아이콘 원본. 폴더 이름만 보고 미사용으로 판단하지 않는다. |
+| 파일                                                      | 책임                                                                                   |
+| --------------------------------------------------------- | -------------------------------------------------------------------------------------- |
+| [package.json](../package.json)                           | 앱 의존성과 개발·검증·SDK 설치 명령. package-lock.json은 같은 설치 결과를 고정한다.    |
+| [app.json](../app.json)                                   | Expo 앱 식별자·아이콘·권한·config plugin·실험 옵션.                                    |
+| [eas.json](../eas.json)                                   | EAS 개발·프리뷰·운영 빌드 프로필과 환경.                                               |
+| [.env.example](../.env.example)                           | 공개 서버 주소와 지도 SDK 빌드 키의 변수 이름만 안내. 실제 키를 커밋하지 않는다.       |
+| [plugins/with-naver-map.js](../plugins/with-naver-map.js) | prebuild 시 지도 SDK 인증 설정을 생성되는 iOS·Android 프로젝트에 주입.                 |
+| [eslint.config.js](../eslint.config.js)                   | Expo 기반 린트 규칙.                                                                   |
+| [tsconfig.json](../tsconfig.json)                         | 별칭·엄격한 타입 검사·대상 파일 설정.                                                  |
+| [.gitignore](../.gitignore)                               | 의존성·생성 네이티브 프로젝트·SDK 바이너리·비밀 환경 파일을 Git에서 제외.              |
+| [AGENTS.md](../AGENTS.md)                                 | 이 저장소에서 작업하는 에이전트의 구조·검증·Git 규칙.                                  |
+| [CLAUDE.md](../CLAUDE.md)                                 | 동일한 AGENTS.md 지침을 다른 에이전트에도 연결.                                        |
+| [assets/images](../assets/images)                         | 앱 아이콘·스플래시와 지도 오버레이의 로컬 이미지. 마커 SVG는 PNG 편집 원본.            |
+| [assets/expo.icon](../assets/expo.icon)                   | app.json에서 사용하는 iOS 앱 아이콘 원본. 폴더 이름만 보고 미사용으로 판단하지 않는다. |

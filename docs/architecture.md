@@ -21,9 +21,9 @@ shared/api의 Axios → 타라고 서버 → 외부 공급자
 지도 렌더링은 별도 경로다.
 
 ```text
-MapScreen → shared/ui/tmap/TmapView
-  → modules/tarago-tmap (Swift/Kotlin)
-  → TMAP Vector Map SDK
+MapScreen → shared/ui/map/MapView
+  → @mj-studio/react-native-naver-map
+  → NAVER Map SDK
 ```
 
 ## 상태 소유권
@@ -42,17 +42,18 @@ MapScreen → shared/ui/tmap/TmapView
 - `features/map/model/use-initial-map-position.ts`: 최초 좌표 준비와 재시도.
 - `features/map/model/use-map-overlays.ts`: 표시용 마커·선 계산.
 - `hooks/use-current-location.ts`: 위치 권한·GPS 구독·최근 좌표·시간 초과 처리.
-- `shared/ui/tmap/tmap-view.tsx`: SDK와 React 사이의 명령·이벤트 계약.
+- `shared/ui/map/map-view.tsx`: SDK와 React 사이의 명령·이벤트 계약.
 
 ## 데이터 공급자
 
-- 지도·장소 검색·보행자/대중교통 길찾기: TMAP.
+- 지도: NAVER Map SDK.
+- 장소 검색·보행자/대중교통 길찾기: 서버 TMAP API.
 - 버스 정류장·도착·노선: 타라고 서버가 TAGO·서울·경기 등 기관 응답을 정규화.
 - 지하철 실시간·역 정보·시간표·시설: 타라고 서버가 서울 공공 API 응답을 정규화.
 - 푸시: 앱의 Expo Notifications와 서버 발송 계층, 최종 수신은 APNs/FCM.
 
 관련 명세: [TMAP·지하철](tmap-and-subway.md), [버스 알림](bus-alerts.md).
-앱은 외부 기관의 비밀 키를 소유하지 않는다. 네이티브 지도 SDK가 요구하는 TMAP 모바일 인증 키만 빌드 플러그인에서 주입한다.
+앱은 외부 기관의 비밀 키를 소유하지 않는다. 네이티브 지도 SDK가 요구하는 네이버 지도 Client ID만 빌드 플러그인에서 주입한다.
 
 ## 캐시와 메모이제이션
 

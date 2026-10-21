@@ -9,7 +9,7 @@
 | -------------------------------- | ----------------------------------------- |
 | Expo · React Native · TypeScript | 모바일 실행 환경과 타입 검사              |
 | Expo Router                      | 화면 경로와 탭·스택 구성                  |
-| TMAP Vector Map SDK              | 네이티브 지도와 오버레이                  |
+| NAVER Map SDK                    | 네이티브 지도와 오버레이                  |
 | TanStack Query · Axios           | 서버 상태 캐시와 공통 HTTP 요청           |
 | Zustand `app-store.ts`           | 탭 숨김 여부와 알림 런타임 오류 공유      |
 | SQLite KV · SecureStore          | 최근 검색·기기 사본과 알림 인증 정보 저장 |
@@ -32,11 +32,10 @@
 | ------------------------- | ------------------------------------------- |
 | `npm run start:simulator` | 운영 API와 연결하는 시뮬레이터용 Metro 서버 |
 | `npm run start:device`    | 실기기용 LAN Metro 서버                     |
-| `npm run tmap:sdk`        | 공식 TMAP 네이티브 SDK 설치                 |
 | `npm run format`          | Prettier 서식 적용                          |
 | `npm run format:check`    | Prettier 서식 검사                          |
 | `npm run lint`            | ESLint 검사                                 |
 | `npx tsc --noEmit`        | 산출물 없는 타입 검사                       |
 
-`EXPO_PUBLIC_API_BASE_URL`은 공개 API 주소, `TMAP_API_KEY`는 지도 SDK의 빌드 인증 변수다.
+`EXPO_PUBLIC_API_BASE_URL`은 공개 API 주소, `NAVER_MAP_CLIENT_ID`는 지도 SDK의 빌드 인증 변수다. TMAP 검색·길찾기 키는 서버에서 관리한다.
 프리뷰 빌드는 Metro 없이 실행되는 설치 파일이고, 개발 빌드는 Metro의 JS 번들을 사용한다.
