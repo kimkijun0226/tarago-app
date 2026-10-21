@@ -32,7 +32,7 @@ export default function RootLayout() {
         <ThemeProvider value={DefaultTheme}>
           <AnimatedSplashOverlay />
           <AlertRuntime />
-          <Stack screenOptions={{ headerShown: false }}>
+          <Stack screenOptions={{ headerShown: false, animation: 'default', gestureEnabled: true }}>
             <Stack.Screen name="(tabs)" />
             <Stack.Screen name="subway-alerts" />
           </Stack>
