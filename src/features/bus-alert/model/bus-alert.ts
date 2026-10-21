@@ -97,7 +97,7 @@ export function proximityMessage(
         const time =
           bus.etaSeconds === null
             ? formatEta(null, bus.serviceStatus)
-            : bus.etaSeconds <= 30
+            : !bus.etaSource && bus.etaSeconds <= 30
               ? '곧 도착'
               : `${bus.etaSource ? '예상 ' : ''}${Math.max(1, Math.ceil(bus.etaSeconds / 60))}분 후`;
 

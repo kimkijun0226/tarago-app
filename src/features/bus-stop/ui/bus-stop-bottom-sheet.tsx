@@ -1,27 +1,31 @@
 /** @fileoverview 선택 정류장의 도착 목록·새로고침·노선 및 알림 진입 UI를 구성한다. 서버 상태는 Query 훅이 소유한다. */
+import type { SharedValue } from 'react-native-reanimated';
 
+import type { BusArrival } from '../api/get-bus-arrivals';
+import { useAppStore } from '@/shared/model/app-store';
 import type { Point } from '@/shared/types/geo';
 import { useAppTheme } from '@/shared/ui';
-import { isAxiosError } from 'axios';
-import { memo, useCallback, useEffect, useMemo, useState } from 'react';
-import { router } from 'expo-router';
-import { SymbolView } from 'expo-symbols';
-import { useAppStore } from '@/shared/model/app-store';
-import { ActivityIndicator, Alert, Pressable, Share, StyleSheet, Text, View } from 'react-native';
-import { BottomSheetFlatList } from '@gorhom/bottom-sheet';
-import { ArrivalRefreshButton } from './arrival-refresh-button';
-import { useSavedBusItem } from '../model/use-saved-bus-item';
-import { mapUi } from '@/shared/ui/map-design-tokens';
 import { MapBottomSheet, type MapSheetSnap } from '@/shared/ui/map-bottom-sheet';
+import { isAxiosError } from 'axios';
+import { router } from 'expo-router';
+import { memo, useCallback, useEffect, useMemo, useState } from 'react';
+import {
+  ActivityIndicator,
+  Alert,
+  FlatList,
+  Pressable,
+  StyleSheet,
+  Text,
+  View,
+} from 'react-native';
+import { ArrivalRefreshButton } from './arrival-refresh-button';
 
 import type { BusStop } from '@/features/bus-stop/api/get-nearby-bus-stops';
-import {
-  getBusRouteBadge,
-  groupBusArrivals,
-  type BusArrivalGroup,
-} from '@/features/bus-stop/model/bus-arrival';
-import { BusArrivalRow } from './bus-arrival-row';
+import { groupBusArrivals, type BusArrivalGroup } from '@/features/bus-stop/model/bus-arrival';
 import { useBusArrivals } from '@/features/bus-stop/model/use-bus-arrivals';
+import { BusArrivalRow } from './bus-arrival-row';
+import { SoonBusArrivals } from './soon-bus-arrivals';
+import { BusStopSheetHeader } from './bus-stop-sheet-header';
 
 /** 응답 전에도 같은 빈 배열 참조를 사용해 파생 계산을 불필요하게 반복하지 않는다. */
 const EMPTY_ARRIVALS: import('../api/get-bus-arrivals').BusArrival[] = [];
@@ -30,11 +34,10 @@ type BusStopBottomSheetProps = {
   busStop: BusStop;
   position: Point | null;
   onClose: () => void;
-  onChangeSnap: (snap: MapSheetSnap) => void;
-  onStart: () => void;
-  onEnd: () => void;
+  onChangeSnap?: (snap: MapSheetSnap) => void;
   onHeightChange: (height: number) => void;
-  onSelectRoute: (routeId: string, stationSeq: number) => void;
+  animatedPosition?: SharedValue<number>;
+  onSelectRoute: (routeId: string, stationSeq: number, source?: BusArrival['routeSource']) => void;
 };
 
 /**
@@ -55,41 +58,26 @@ export const BusStopBottomSheet = memo(function BusStopBottomSheet({
   position,
   onClose,
   onHeightChange,
+  animatedPosition,
   onSelectRoute,
   onChangeSnap,
-  onStart,
-  onEnd,
 }: BusStopBottomSheetProps) {
   /** 시트의 정착 높이다. 제스처 중간 프레임은 네이티브에서 처리한다. */
   const [snap, setSnap] = useState<MapSheetSnap>('half');
 
-  /** 기기에 저장하는 정류장 즐겨찾기 상태다. */
-  const favorite = useSavedBusItem(busStop.id);
-
   /** 현재 시트 높이를 부모 배경과 동기화한다. 개발 중 새로고침에서도 전체 화면과 검색창 상태가 어긋나지 않게 한다. */
   useEffect(() => {
-    onChangeSnap(snap);
+    onChangeSnap?.(snap);
   }, [onChangeSnap, snap]);
 
   /** 정착 높이만 부모에 공유해 검색창과 상태 표시줄 배경을 함께 전환한다. */
   const changeSnap = useCallback(
     (next: MapSheetSnap) => {
       setSnap(next);
-      onChangeSnap(next);
+      onChangeSnap?.(next);
     },
     [onChangeSnap],
   );
-
-  /** 시스템 공유 실패를 사용자에게 알린다. 좌표와 정류장 번호를 함께 전달한다. */
-  const shareStop = async () => {
-    try {
-      await Share.share({
-        message: `${busStop.name} · ${busStop.arsId ?? ''}\n위도 ${busStop.latitude}, 경도 ${busStop.longitude}`,
-      });
-    } catch {
-      Alert.alert('공유 실패', '정류장 정보를 공유하지 못했습니다.');
-    }
-  };
 
   /** API 거리는 지도 타일 중심 기준이다. 화면의 거리는 이용자의 실제 현재 위치에서 계산한다. */
   const distanceMeters = position
@@ -119,7 +107,7 @@ export const BusStopBottomSheet = memo(function BusStopBottomSheet({
     isFetching,
     isPending,
     refetch,
-  } = useBusArrivals(busStop.id);
+  } = useBusArrivals(busStop.id, snap !== 'compact');
 
   /**
    * 공식 조회가 410으로 정차 노선 부재를 확인하면 시트를 닫고 이용자에게 알린다.
@@ -144,26 +132,11 @@ export const BusStopBottomSheet = memo(function BusStopBottomSheet({
   /** 응답 배열이 바뀔 때만 다시 묶는 노선·경유 순번별 최대 두 차량 목록이다. */
   const arrivalGroups = useMemo(() => groupBusArrivals(arrivals), [arrivals]);
 
-  /** 실제 경유 노선에 포함된 유형 배지다. 도착 목록 변경 시에만 중복 유형을 정리한다. */
-  const routeBadges = useMemo(
-    () => [
-      ...new Map(
-        arrivalGroups.flatMap((group) => {
-          /** 제공된 노선 유형을 화면의 이름과 색상으로 변환한 값이다. */
-          const badge = getBusRouteBadge(group.routeType);
-          return badge ? [[badge.label, badge] as const] : [];
-        }),
-      ).values(),
-    ],
-    [arrivalGroups],
-  );
-
-  /** 첫 차량이 60초 안에 도착하는 노선 번호이며 그룹 변경 시에만 다시 계산한다. */
-  const soonBusNumbers = useMemo(
+  /** 첫 차량이 60초 안에 도착하는 노선 그룹이며 그룹 변경 시에만 다시 계산한다. */
+  const soonGroups = useMemo(
     () =>
       arrivalGroups
-        .filter((group) => group.first.etaSeconds !== null && group.first.etaSeconds <= 60)
-        .map((group) => group.busNumber),
+        .filter((group) => group.first.etaSeconds !== null && group.first.etaSeconds <= 60),
     [arrivalGroups],
   );
 
@@ -192,128 +165,6 @@ export const BusStopBottomSheet = memo(function BusStopBottomSheet({
     [busStop, setMapTabHidden],
   );
 
-  /** 목록을 스크롤해도 닫기·뒤로·즐겨찾기는 화면 상단에 유지하는 고정 툴바다. */
-  const toolbar = (
-    <View style={styles.toolbar}>
-      {snap === 'full' ? (
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel="지도로 돌아가기"
-          onPress={() => changeSnap('half')}
-          style={styles.iconButton}
-        >
-          <SymbolView
-            name={{ ios: 'chevron.left', android: 'arrow_back' }}
-            size={30}
-            tintColor={mapUi.text}
-          />
-        </Pressable>
-      ) : (
-        <View style={styles.iconButton} />
-      )}
-      <View style={styles.toolbarActions}>
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel={`정류장 즐겨찾기 ${favorite.saved ? '해제' : '추가'}`}
-          disabled={favorite.busy}
-          onPress={() => void favorite.toggle()}
-          style={styles.iconButton}
-        >
-          <SymbolView
-            name={{
-              ios: favorite.saved ? 'star.fill' : 'star',
-              android: favorite.saved ? 'star' : 'star_border',
-            }}
-            size={29}
-            tintColor={favorite.saved ? '#F5B800' : mapUi.text}
-          />
-        </Pressable>
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel="정류장 정보 닫기"
-          onPress={onClose}
-          style={styles.iconButton}
-        >
-          <SymbolView name={{ ios: 'xmark', android: 'close' }} size={28} tintColor={mapUi.text} />
-        </Pressable>
-      </View>
-    </View>
-  );
-
-  /** 정적 메타데이터와 Query 결과를 함께 표시한다. 미제공 방면·시간표는 임의로 생성하지 않는다. */
-  const header = (
-    <View style={styles.headerBackground}>
-      <View style={styles.header}>
-        <View style={styles.badges}>
-          {routeBadges.map((badge) => (
-            <Text key={badge.label} style={[styles.badge, { backgroundColor: badge.color }]}>
-              {badge.label}
-            </Text>
-          ))}
-        </View>
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel="정류장 정보 펼치기"
-          onPress={() => changeSnap('full')}
-        >
-          <Text accessibilityRole="header" style={styles.title}>
-            {busStop.name}
-          </Text>
-        </Pressable>
-        <Text style={styles.subtitle}>
-          {distanceMeters === null
-            ? ''
-            : distanceMeters >= 1000
-              ? `${(distanceMeters / 1000).toFixed(1)}km · `
-              : `${Math.round(distanceMeters)}m · `}
-          {busStop.arsIds?.join(', ') || busStop.arsId || '정류장 번호 없음'}
-        </Text>
-        <View style={styles.pills}>
-          <Pressable
-            accessibilityRole="button"
-            onPress={onStart}
-            style={[styles.pill, styles.startPill]}
-          >
-            <Text style={styles.startText}>출발</Text>
-          </Pressable>
-          <Pressable
-            accessibilityRole="button"
-            onPress={onEnd}
-            style={[styles.pill, styles.endPill]}
-          >
-            <Text style={styles.endText}>도착</Text>
-          </Pressable>
-          <Pressable
-            accessibilityRole="button"
-            onPress={() => void shareStop()}
-            style={[styles.pill, styles.sharePill]}
-          >
-            <SymbolView
-              name={{ ios: 'square.and.arrow.up', android: 'share' }}
-              size={19}
-              tintColor={mapUi.text}
-            />
-            <Text style={styles.shareText}>공유</Text>
-          </Pressable>
-        </View>
-        {favorite.error ? (
-          <Text accessibilityRole="alert" style={styles.retryText}>
-            {favorite.error}
-          </Text>
-        ) : null}
-      </View>
-      <View style={styles.soonRow}>
-        <Text style={styles.soonBadge}>곧도착</Text>
-        <Text style={styles.soonNumbers}>{soonBusNumbers.join(', ') || '-'}</Text>
-      </View>
-      {isError && arrivalGroups.length > 0 ? (
-        <Text accessibilityRole="alert" style={styles.retryText}>
-          {errorMessage}
-        </Text>
-      ) : null}
-    </View>
-  );
-
   /** 현재 로딩·오류·빈 응답 또는 축소 상태를 안내하는 목록 대체 요소다. */
   const empty = (
     <View style={styles.stateContainer}>
@@ -332,21 +183,42 @@ export const BusStopBottomSheet = memo(function BusStopBottomSheet({
       ) : null}
     </View>
   );
+
   return (
     <>
       <MapBottomSheet
-        edgeToEdge
+        edgeToEdge={false}
         snap={snap}
         onChangeSnap={changeSnap}
         onHeightChange={onHeightChange}
+        animatedPosition={animatedPosition}
+        toolbar={
+          <View
+            style={
+              snap !== 'compact' && soonGroups.length === 0 ? styles.headerDivider : undefined
+            }
+          >
+            <BusStopSheetHeader
+              busStop={busStop}
+              distanceMeters={distanceMeters}
+              onExpand={() => changeSnap('full')}
+              onClose={onClose}
+            />
+          </View>
+        }
       >
+        {/* 캐시된 목록은 유지하고 공통 시트의 높이·클리핑으로만 가려 드래그 중 바로 드러나게 한다. */}
         <View style={styles.sheetContent}>
-          {toolbar}
-          <BottomSheetFlatList<BusArrivalGroup>
+          <SoonBusArrivals groups={soonGroups} onSelectRoute={onSelectRoute} />
+          {isError && arrivalGroups.length > 0 ? (
+            <Text accessibilityRole="alert" style={styles.retryText}>
+              {errorMessage}
+            </Text>
+          ) : null}
+          <FlatList<BusArrivalGroup>
             style={styles.list}
             data={arrivalGroups}
             keyExtractor={(group) => `${group.routeId}:${group.stationSeq ?? ''}`}
-            ListHeaderComponent={header}
             ListEmptyComponent={empty}
             ListFooterComponent={
               <Text
@@ -363,11 +235,10 @@ export const BusStopBottomSheet = memo(function BusStopBottomSheet({
               </Text>
             }
             contentContainerStyle={styles.arrivalList}
-            showsVerticalScrollIndicator={false}
+            showsVerticalScrollIndicator={true}
             renderItem={({ item: group }) => (
               <BusArrivalRow
                 group={group}
-                stationId={busStop.id}
                 onSelectRoute={onSelectRoute}
                 onConfigureAlert={configureAlert}
               />
@@ -375,11 +246,13 @@ export const BusStopBottomSheet = memo(function BusStopBottomSheet({
           />
         </View>
       </MapBottomSheet>
-      <ArrivalRefreshButton
-        updatedAt={dataUpdatedAt}
-        fetching={isFetching}
-        onRefresh={() => void refetch()}
-      />
+      {snap !== 'compact' ? (
+        <ArrivalRefreshButton
+          updatedAt={dataUpdatedAt}
+          fetching={isFetching}
+          onRefresh={() => void refetch()}
+        />
+      ) : null}
     </>
   );
 });
@@ -388,57 +261,11 @@ export const BusStopBottomSheet = memo(function BusStopBottomSheet({
 const createStyles = (colors: ReturnType<typeof useAppTheme>['colors']) =>
   StyleSheet.create({
     sheetContent: { flex: 1 },
+    headerDivider: {
+      borderBottomWidth: StyleSheet.hairlineWidth,
+      borderBottomColor: colors.separator,
+    },
     list: { flex: 1 },
-    badges: { flexDirection: 'row', gap: 5, marginBottom: 12 },
-    badge: {
-      color: '#FFFFFF',
-      paddingHorizontal: 7,
-      paddingVertical: 5,
-      borderRadius: 3,
-      fontSize: 12,
-      fontWeight: '500',
-    },
-    headerBackground: { backgroundColor: '#FFFFFF' },
-    toolbar: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      justifyContent: 'space-between',
-      paddingHorizontal: 10,
-      paddingTop: 6,
-      paddingBottom: 12,
-    },
-    toolbarActions: { flexDirection: 'row', gap: 6 },
-    iconButton: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center' },
-    pills: { flexDirection: 'row', gap: 6, paddingTop: 18, paddingBottom: 4 },
-    pill: {
-      minHeight: 40,
-      paddingHorizontal: 22,
-      borderRadius: 24,
-      flexDirection: 'row',
-      gap: 6,
-      alignItems: 'center',
-      justifyContent: 'center',
-    },
-    startPill: { backgroundColor: '#E7F0FF' },
-    endPill: { backgroundColor: '#0068FF' },
-    sharePill: { borderWidth: 1, borderColor: '#E5E5E5', paddingHorizontal: 16 },
-    startText: { color: '#0068FF', fontSize: 17, fontWeight: '600' },
-    endText: { color: '#FFFFFF', fontSize: 17, fontWeight: '600' },
-    shareText: { color: '#242424', fontSize: 16 },
-    header: {
-      paddingHorizontal: 20,
-      paddingBottom: 16,
-    },
-    title: {
-      color: colors.text,
-      fontSize: 22,
-      fontWeight: '700',
-    },
-    subtitle: {
-      marginTop: 12,
-      color: colors.secondaryText,
-      fontSize: 16,
-    },
     stateContainer: {
       minHeight: 120,
       alignItems: 'center',
@@ -455,29 +282,6 @@ const createStyles = (colors: ReturnType<typeof useAppTheme>['colors']) =>
       color: colors.accent,
       fontSize: 14,
       fontWeight: '600',
-    },
-    soonRow: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: 12,
-      paddingHorizontal: 20,
-      paddingVertical: 16,
-      borderBottomWidth: StyleSheet.hairlineWidth,
-      borderBottomColor: colors.separator,
-    },
-    soonBadge: {
-      color: colors.danger,
-      borderColor: colors.danger,
-      borderWidth: 1,
-      borderRadius: 14,
-      paddingHorizontal: 8,
-      paddingVertical: 4,
-      fontWeight: '600',
-    },
-    soonNumbers: {
-      color: colors.text,
-      fontSize: 17,
-      fontWeight: '700',
     },
     arrivalList: {
       paddingBottom: 110,

@@ -8,6 +8,10 @@ import type { BusRouteDetail } from '../api/get-bus-route-detail';
 import type { BusArrival } from '../api/get-bus-arrivals';
 import { formatEta, formatRemainingStops } from '../model/bus-arrival';
 
+/** 목록 위치 계산과 실제 행 높이가 같은 값을 사용한다. */
+export const ROUTE_STOP_ROW_HEIGHT = 56;
+export const SELECTED_ROUTE_STOP_ROW_HEIGHT = 104;
+
 type Props = {
   stop: BusRouteDetail['stops'][number];
   selected: boolean;
@@ -55,7 +59,18 @@ export const RouteStopRow = memo(function RouteStopRow({
             last && styles.railEnd,
           ]}
         />
-        <View style={[styles.railDot, selected && styles.selectedDot]} />
+        {stop.stationSeq === turnStationSeq ? (
+          <View style={[styles.turnBadge, { borderColor: color }]}>
+            <Text style={styles.turnLabel}>회차</Text>
+            <SymbolView
+              name={{ ios: 'arrow.uturn.down', android: 'u_turn_left' }}
+              size={16}
+              tintColor={color}
+            />
+          </View>
+        ) : (
+          <View style={[styles.railDot, selected && styles.selectedDot]} />
+        )}
         {vehicleCount ? (
           <View style={styles.busOnRail}>
             <SymbolView
@@ -71,8 +86,9 @@ export const RouteStopRow = memo(function RouteStopRow({
       </View>
       <View style={styles.rowBody}>
         <View style={styles.rowTitle}>
-          <Text style={[styles.stopName, selected && styles.selectedName]}>{stop.name}</Text>
-          {stop.stationSeq === turnStationSeq ? <Text style={styles.turnBadge}>회차 ↪</Text> : null}
+          <Text numberOfLines={1} style={[styles.stopName, selected && styles.selectedName]}>
+            {stop.name}
+          </Text>
         </View>
         {selected ? (
           <>
@@ -105,13 +121,13 @@ const createStyles = (colors: ReturnType<typeof useAppTheme>['colors']) =>
   StyleSheet.create({
     row: {
       flexDirection: 'row',
-      minHeight: 67,
+      height: ROUTE_STOP_ROW_HEIGHT,
       borderBottomWidth: StyleSheet.hairlineWidth,
       borderBottomColor: colors.separator,
     },
-    selectedRow: { backgroundColor: colors.accentSurface },
+    selectedRow: { height: SELECTED_ROUTE_STOP_ROW_HEIGHT, backgroundColor: colors.accentSurface },
     rail: { width: 72, alignItems: 'center', justifyContent: 'center' },
-    railLine: { position: 'absolute', width: 5, top: 0, bottom: 0, left: 35 },
+    railLine: { position: 'absolute', width: 5, top: 0, bottom: 0, left: 33.5 },
     railStart: { top: '50%' },
     railEnd: { bottom: '50%' },
     railDot: {
@@ -145,22 +161,25 @@ const createStyles = (colors: ReturnType<typeof useAppTheme>['colors']) =>
     rowBody: {
       flex: 1,
       justifyContent: 'center',
-      paddingVertical: 16,
+      paddingVertical: 4,
       paddingRight: 16,
     },
     rowTitle: { flexDirection: 'row', alignItems: 'center', gap: 8 },
     stopName: { flexShrink: 1, fontSize: 17, color: colors.text },
     selectedName: { fontWeight: '700' },
     turnBadge: {
-      borderRadius: 10,
-      borderWidth: 1,
-      borderColor: colors.separator,
-      paddingHorizontal: 5,
-      paddingVertical: 1,
-      color: colors.secondaryText,
-      fontSize: 11,
+      width: 38,
+      height: 44,
+      borderRadius: 999,
+      borderWidth: 1.5,
+      backgroundColor: colors.surface,
+      alignItems: 'center',
+      justifyContent: 'center',
+      gap: 1,
+      zIndex: 3,
     },
-    selectedLabel: { marginTop: 4, color: colors.accent, fontSize: 12 },
-    arrivalText: { marginTop: 4, color: colors.danger, fontSize: 14 },
-    vehicleText: { marginTop: 4, color: colors.success, fontSize: 12 },
+    turnLabel: { fontSize: 11, fontWeight: '600', color: colors.secondaryText },
+    selectedLabel: { marginTop: 2, color: colors.accent, fontSize: 12 },
+    arrivalText: { marginTop: 2, color: colors.danger, fontSize: 14 },
+    vehicleText: { marginTop: 2, color: colors.success, fontSize: 12 },
   });

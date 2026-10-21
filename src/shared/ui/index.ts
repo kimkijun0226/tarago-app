@@ -2,3 +2,4 @@
 export { useAppTheme } from './theme';
 export { AppButton } from './app-button';
 export { AppSection } from './app-section';
+export { SheetToolbar } from './sheet-toolbar';
