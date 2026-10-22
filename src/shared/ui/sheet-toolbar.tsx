@@ -35,13 +35,13 @@ export function SheetToolbar({
             accessibilityRole="button"
             accessibilityLabel={closeLabel}
             onPress={onClose}
-            style={styles.button}
+            style={({ pressed }) => [styles.button, pressed && styles.pressed]}
           >
             <SymbolView
               name={{ ios: 'xmark', android: 'close' }}
               weight={{ ios: 'bold', android: bold }}
-              size={20}
-              tintColor={mapUi.text}
+              size={18}
+              tintColor={mapUi.blue}
             />
           </Pressable>
         ) : null}
@@ -63,11 +63,15 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     gap: 6,
   },
+  pressed: { transform: [{ translateY: 1 }, { scale: 0.97 }], boxShadow: 'none' },
   button: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: '#F0F1F2',
+    width: 44,
+    height: 44,
+    borderRadius: 16,
+    backgroundColor: mapUi.blueSurface,
+    borderWidth: 1,
+    borderColor: mapUi.accentBorder,
+    boxShadow: '0 2px 0 #FFD1DA',
     alignItems: 'center',
     justifyContent: 'center',
   },

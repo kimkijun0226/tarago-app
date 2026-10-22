@@ -6,10 +6,7 @@ import type { BusArrival } from '../api/get-bus-arrivals';
 import { SheetToolbar, useAppTheme } from '@/shared/ui';
 import { memo, useMemo, useRef, useEffect, useCallback } from 'react';
 import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
-import {
-  BottomSheetFlatList,
-  type BottomSheetFlatListMethods,
-} from '@gorhom/bottom-sheet';
+import { BottomSheetFlatList, type BottomSheetFlatListMethods } from '@gorhom/bottom-sheet';
 import { MapBottomSheet } from '@/shared/ui/map-bottom-sheet';
 import type { BusRouteDetail } from '../api/get-bus-route-detail';
 
@@ -79,10 +76,7 @@ export const BusRouteBottomSheet = memo(function BusRouteBottomSheet({
   const { data: arrivals = EMPTY_ARRIVALS, refetch: refetchArrivals } = useBusArrivals(stationId);
 
   /** 통과 지점은 경로 계산에만 남기고 승하차할 수 있는 정류장 목록에서는 제외한다. */
-  const visibleStops = useMemo(
-    () => data?.stops.filter(isBoardingRouteStop) ?? [],
-    [data?.stops],
-  );
+  const visibleStops = useMemo(() => data?.stops.filter(isBoardingRouteStop) ?? [], [data?.stops]);
 
   /** 선택 행 전후의 높이를 알아야 먼 정류장도 중간 행 측정 없이 바로 표시할 수 있다. */
   const selectedIndex =
@@ -118,10 +112,13 @@ export const BusRouteBottomSheet = memo(function BusRouteBottomSheet({
     });
   }, [selectedIndex, positionKey]);
 
-  const handleSettled = useCallback((height: number) => {
-    viewportHeight.current = height;
-    centerSelectedStop();
-  }, [centerSelectedStop]);
+  const handleSettled = useCallback(
+    (height: number) => {
+      viewportHeight.current = height;
+      centerSelectedStop();
+    },
+    [centerSelectedStop],
+  );
 
   useEffect(() => {
     centerSelectedStop();
@@ -146,7 +143,7 @@ export const BusRouteBottomSheet = memo(function BusRouteBottomSheet({
   );
 
   /** 목록과 같은 기준으로 표시하는 노선 유형 배지다. */
-  const selectedArrival = arrivals.find(arrival => arrival.routeId === routeId);
+  const selectedArrival = arrivals.find((arrival) => arrival.routeId === routeId);
   const badge = getBusRouteBadge(data?.routeType ?? selectedArrival?.routeType ?? '');
 
   /** 현재 Query와 테마 상태를 직접 반영하는 시트 헤더 요소다. 짧은 JSX에는 별도 캐시를 두지 않는다. */
@@ -187,9 +184,11 @@ export const BusRouteBottomSheet = memo(function BusRouteBottomSheet({
       <ActivityIndicator color={colors.accent} />
     ) : isError ? (
       <Pressable onPress={() => void refetchRoute()}>
-        <Text style={styles.notice}>{isAxiosError(error) && error.response?.data?.code === 'SEOUL_ROUTE_UNAUTHORIZED'
-          ? '서울 노선 정보 이용 승인이 필요합니다. 서버 인증키 설정을 확인해주세요.'
-          : '노선 정보를 불러오지 못했습니다. 다시 시도'}</Text>
+        <Text style={styles.notice}>
+          {isAxiosError(error) && error.response?.data?.code === 'SEOUL_ROUTE_UNAUTHORIZED'
+            ? '서울 노선 정보 이용 승인이 필요합니다. 서버 인증키 설정을 확인해주세요.'
+            : '노선 정보를 불러오지 못했습니다. 다시 시도'}
+        </Text>
       </Pressable>
     ) : null;
   return (
@@ -272,7 +271,7 @@ const createStyles = (colors: ReturnType<typeof useAppTheme>['colors']) =>
       fontSize: 13,
       paddingHorizontal: 8,
       paddingVertical: 4,
-      borderRadius: 6,
+      borderRadius: 12,
     },
     title: { fontSize: 23, fontWeight: '700', color: colors.text },
     action: {
@@ -295,6 +294,9 @@ const createStyles = (colors: ReturnType<typeof useAppTheme>['colors']) =>
       color: colors.secondaryText,
     },
     footer: {
+      margin: 16,
+      borderRadius: 20,
+      backgroundColor: colors.background,
       flexDirection: 'row',
       justifyContent: 'space-between',
       alignItems: 'center',

@@ -1,5 +1,10 @@
 /** @fileoverview 루트에서 위치 감지와 알림 응답 구독을 연결하고 오류를 앱 스토어에 공유한다. */
 import { useEffect, useRef } from 'react';
+import { useSubwayAlerts } from '@/features/subway/model/use-subway-alerts';
+import { useSubwayMonitoringSessions } from '@/features/subway/model/use-subway-monitoring-sessions';
+import { readCachedSubwayAlerts } from '@/features/subway/model/subway-alert-storage';
+import type { SubwayAlert } from '@/features/subway/model/subway-alert';
+import { getSubwayAlerts } from '@/features/subway/api/subway-alerts';
 import { AppState } from 'react-native';
 import * as Location from 'expo-location';
 import * as Notifications from 'expo-notifications';
@@ -20,6 +25,13 @@ export function useAlertRuntime() {
 
   /** 접근 동의 시 감시 시작, 만료 안내의 연장·중지 액션을 처리하는 서버 조작 함수들이다. */
   const { begin, extend, stop } = useMonitoringSessions();
+  const {
+    begin: beginSubway,
+    extend: extendSubway,
+    stop: stopSubway,
+  } = useSubwayMonitoringSessions();
+  const { data: subwayAlerts } = useSubwayAlerts();
+  const latestSubway = useRef<SubwayAlert[]>([]);
 
   /** 마지막 처리 키는 화면 상태가 아니므로 ref에 보관해 렌더 없이 동일 응답 중복 처리를 막는다. 재마운트 시에는 초기화된다. */
   const handledResponse = useRef<string | undefined>(undefined);
@@ -60,16 +72,18 @@ export function useAlertRuntime() {
         const saved = alerts ?? (await readCachedAlerts());
         if (disposed) return;
         latest.current = saved;
+        const savedSubway = subwayAlerts ?? (await readCachedSubwayAlerts());
+        latestSubway.current = savedSubway;
         if (alerts) await cacheAlerts(alerts);
         if (disposed) return;
-        await syncGeofences(saved);
+        await syncGeofences(saved, savedSubway);
         if (disposed) return;
         setError(null);
-        if (!saved.some((a) => a.enabled && a.proximityEnabled)) return;
+        if (![...saved, ...savedSubway].some((a) => a.enabled && a.proximityEnabled)) return;
         subscription = await Location.watchPositionAsync(
           { accuracy: Location.Accuracy.Balanced, timeInterval: 10_000, distanceInterval: 30 },
           (position) => {
-            void checkNearbyStops(position, latest.current).catch(() => {
+            void checkNearbyStops(position, latest.current, latestSubway.current).catch(() => {
               if (!disposed) setError('접근 알림에 실패했어요. 위치·알림 권한을 확인해주세요.');
             });
           },
@@ -84,7 +98,7 @@ export function useAlertRuntime() {
       disposed = true;
       subscription?.remove();
     };
-  }, [alerts, setError]);
+  }, [alerts, subwayAlerts, setError]);
 
   /** 루트 내비게이션 준비 후 마지막 응답과 새 알림·토큰·앱 복귀 이벤트를 연결한다. 의존하는 캐시·조작 함수가 바뀌면 재구독하고 이전 리스너를 모두 제거한다. */
   useEffect(() => {
@@ -108,10 +122,77 @@ export function useAlertRuntime() {
       handledResponse.current = responseKey;
       setMapTabHidden(false);
       try {
+        if (
+          data.kind === 'subway-proximity-prompt' ||
+          data.kind === 'subway-monitoring-extension'
+        ) {
+          const all = await queryClient.fetchQuery({
+            queryKey: ['subway-alerts'],
+            queryFn: () => getSubwayAlerts(),
+            staleTime: 0,
+          });
+          const listParams = {
+            alertTransport: 'subway',
+            alertKind: 'location',
+            alertId: '',
+            sourceAlertId: '',
+            sourceAlertIds: '',
+            stationId: '',
+            routeId: '',
+            requestId: responseKey,
+          };
+          if (data.kind === 'subway-proximity-prompt') {
+            const ids = Array.isArray(data.alertIds)
+              ? data.alertIds.filter((id): id is string => typeof id === 'string')
+              : [data.alertId];
+            const day = new Date(Date.now() + 9 * 60 * 60_000).getUTCDay();
+            const sources = all.filter(
+              (a) => ids.includes(a.id) && a.enabled && a.proximityEnabled && a.days.includes(day),
+            );
+            if (!sources.length) throw new Error('위치 기반 알림이 삭제되었거나 꺼져 있습니다.');
+            if (response.actionIdentifier === 'OPEN_SETTINGS') {
+              router.navigate({
+                pathname: '/subway-alerts',
+                params: {
+                  alertKind: 'location',
+                  stationName: sources[0].stationName,
+                  alertId: sources[0].id,
+                  requestId: responseKey,
+                },
+              });
+            } else {
+              if (response.actionIdentifier === 'START_MONITORING') {
+                for (const source of sources) await beginSubway(source);
+              } else {
+                listParams.sourceAlertId = sources[0].id;
+                listParams.sourceAlertIds = sources.map((source) => source.id).join(',');
+              }
+              router.navigate({ pathname: '/alerts', params: listParams });
+            }
+          } else {
+            const selected = all.find(
+              (a) =>
+                a.id === data.alertId &&
+                a.enabled &&
+                a.monitoringSourceId &&
+                a.monitoringEndsAt === data.monitoringEndsAt,
+            );
+            if (selected && response.actionIdentifier === 'EXTEND_MONITORING')
+              await extendSubway(selected);
+            if (selected && response.actionIdentifier === 'STOP_MONITORING')
+              await stopSubway(selected);
+            router.navigate({ pathname: '/alerts', params: listParams });
+          }
+          await Notifications.clearLastNotificationResponseAsync();
+          return;
+        }
         if (data.kind === 'subway-arrival' && typeof data.stationName === 'string') {
           router.navigate({
             pathname: '/subway-alerts',
             params: {
+              alertKind: 'time',
+              sourceAlertId: '',
+              sourceAlertIds: '',
               stationName: data.stationName,
               alertId: data.alertId,
               requestId: responseKey,
@@ -142,6 +223,8 @@ export function useAlertRuntime() {
             router.navigate({
               pathname: '/alerts',
               params: {
+                alertTransport: 'bus',
+                alertKind: 'location',
                 requestId: responseKey,
                 monitoringId: sources[0].id,
                 sourceAlertId: '',
@@ -155,6 +238,8 @@ export function useAlertRuntime() {
             router.navigate({
               pathname: '/alerts',
               params: {
+                alertTransport: 'bus',
+                alertKind: 'location',
                 sourceAlertId: sources[0].id,
                 sourceAlertIds: sources.map((a) => a.id).join(','),
                 requestId: responseKey,
@@ -188,6 +273,8 @@ export function useAlertRuntime() {
             router.navigate({
               pathname: '/alerts',
               params: {
+                alertTransport: 'bus',
+                alertKind: 'location',
                 monitoringId: session.id,
                 requestId: responseKey,
                 sourceAlertId: '',
@@ -279,5 +366,16 @@ export function useAlertRuntime() {
       tokenListener.remove();
       appListener.remove();
     };
-  }, [queryClient, setMapTabHidden, setError, navigation?.key, begin, extend, stop]);
+  }, [
+    queryClient,
+    setMapTabHidden,
+    setError,
+    navigation?.key,
+    begin,
+    extend,
+    stop,
+    beginSubway,
+    extendSubway,
+    stopSubway,
+  ]);
 }

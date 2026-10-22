@@ -5,7 +5,7 @@ import {
   NaverMapPolylineOverlay,
   type NaverMapViewRef,
 } from '@mj-studio/react-native-naver-map';
-import { forwardRef, memo, useImperativeHandle, useRef } from 'react';
+import { forwardRef, memo, useImperativeHandle, useRef, useState } from 'react';
 import type { ViewProps } from 'react-native';
 import type { MapSymbol, Point } from '@/shared/types/geo';
 
@@ -35,6 +35,7 @@ export type MapViewRef = {
   animateCameraWithTwoCoords: (camera: { coord1: Point; coord2: Point; duration?: number }) => void;
 };
 type Props = ViewProps & {
+  subwaySelection?: boolean;
   initialCamera: Camera;
   markers: MapMarker[];
   lines: MapLine[];
@@ -51,6 +52,7 @@ type Props = ViewProps & {
 /** 카메라는 명시적인 화면 요청으로만 이동하며 사용자 제스처는 네이버 SDK가 처리한다. */
 export const MapView = forwardRef<MapViewRef, Props>(function MapView(
   {
+    subwaySelection = false,
     initialCamera,
     markers,
     lines,
@@ -66,6 +68,10 @@ export const MapView = forwardRef<MapViewRef, Props>(function MapView(
   ref,
 ) {
   const map = useRef<NaverMapViewRef>(null);
+  const [cameraZoom, setCameraZoom] = useState(initialCamera.zoom ?? 17);
+  // 축소 상태에서만 확대하고 가까워지면 기본 크기로 되돌린다.
+  const symbolScale = subwaySelection ? 1 + 0.3 * Math.min(1, Math.max(0, 15 - cameraZoom)) : 1;
+  const subwayStyleId = process.env.EXPO_PUBLIC_SUBWAY_MAP_STYLE_ID?.trim();
 
   useImperativeHandle(
     ref,
@@ -81,9 +87,21 @@ export const MapView = forwardRef<MapViewRef, Props>(function MapView(
       {...props}
       ref={map}
       initialCamera={initialCamera}
+      customStyleId={subwaySelection ? subwayStyleId : undefined}
+      symbolScale={symbolScale}
+      onCameraChanged={({ zoom }) => {
+        if (subwaySelection && zoom !== undefined && Number.isFinite(zoom)) {
+          setCameraZoom(Math.round(zoom * 10) / 10);
+        }
+      }}
+      onCustomStyleLoadFailed={() =>
+        console.warn(
+          '지하철 전용 지도 스타일을 불러오지 못했습니다. 스타일 ID와 발행 상태를 확인해주세요.',
+        )
+      }
       mapPadding={padding}
       layerGroups={{
-        BUILDING: true,
+        BUILDING: !subwaySelection,
         TRANSIT: true,
         TRAFFIC: false,
         BICYCLE: false,
@@ -121,9 +139,17 @@ export const MapView = forwardRef<MapViewRef, Props>(function MapView(
         let symbols: MapSymbol[] = [];
         try {
           const parsed: unknown = JSON.parse(visibleSymbols || '[]');
-          if (Array.isArray(parsed)) symbols = parsed.slice(0, 512).filter((item): item is MapSymbol =>
-            item !== null && typeof item === 'object' && Number.isFinite(item.latitude)
-            && Number.isFinite(item.longitude) && typeof item.caption === 'string');
+          if (Array.isArray(parsed))
+            symbols = parsed
+              .slice(0, 512)
+              .filter(
+                (item): item is MapSymbol =>
+                  item !== null &&
+                  typeof item === 'object' &&
+                  Number.isFinite(item.latitude) &&
+                  Number.isFinite(item.longitude) &&
+                  typeof item.caption === 'string',
+              );
         } catch {
           console.warn('지도 심벌 좌표를 읽지 못했습니다.');
         }

@@ -30,6 +30,7 @@ const ROUTE_DIRECTION_PATTERN = require('@/assets/images/route-direction-triangl
 const SUBWAY_STATION_MARKER = require('@/assets/images/subway-station-marker.png');
 
 type OverlayInput = {
+  subwaySelection?: boolean;
   busStops: BusStop[];
   selectedBusStop: BusStop | null;
   selectedBusStopPoint: Point | null;
@@ -44,9 +45,6 @@ type OverlayInput = {
   subwayStops: SubwayMapStation[];
   subwayStation: string | null;
   subwayLineName: string | undefined;
-  journeyEndpoints: { start: Place | null; end: Place | null };
-  journeyLines: Point[][];
-  routeColor: string;
 };
 
 /**
@@ -55,6 +53,7 @@ type OverlayInput = {
  * @returns 네이티브 마커·선 배열 및 마커 클릭에 사용할 중복 제거된 노선 정류장.
  */
 export function useMapOverlays({
+  subwaySelection = false,
   busStops,
   selectedBusStop,
   selectedBusStopPoint,
@@ -69,15 +68,26 @@ export function useMapOverlays({
   subwayStops,
   subwayStation,
   subwayLineName,
-  journeyEndpoints,
-  journeyLines,
-  routeColor,
 }: OverlayInput) {
-  const searchKey = `named-subway-v2:${searchResults.map(place => place.id).sort().join('|')}`;
-  const [confirmedSearchSymbols, setConfirmedSearchSymbols] = useState({ key: '', positions: new Map<string, Point>() });
+  const searchKey = `named-subway-v2:${searchResults
+    .map((place) => place.id)
+    .sort()
+    .join('|')}`;
+  const [confirmedSearchSymbols, setConfirmedSearchSymbols] = useState({
+    key: '',
+    positions: new Map<string, Point>(),
+  });
   const searchSymbolPositions = useMemo(() => {
-    const fresh = matchSearchSymbols(searchResults, visibleMapSymbols, [...busStops, ...searchBusStops], subwayStops);
-    const previous = confirmedSearchSymbols.key === searchKey ? confirmedSearchSymbols.positions : new Map<string, Point>();
+    const fresh = matchSearchSymbols(
+      searchResults,
+      visibleMapSymbols,
+      [...busStops, ...searchBusStops],
+      subwayStops,
+    );
+    const previous =
+      confirmedSearchSymbols.key === searchKey
+        ? confirmedSearchSymbols.positions
+        : new Map<string, Point>();
     const changed = [...fresh].some(([id, point]) => {
       const known = previous.get(id);
       return !known || known.latitude !== point.latitude || known.longitude !== point.longitude;
@@ -90,8 +100,19 @@ export function useMapOverlays({
       next.set(id, point);
     }
     return next;
-  }, [searchResults, visibleMapSymbols, busStops, searchBusStops, subwayStops, searchKey, confirmedSearchSymbols]);
-  if (confirmedSearchSymbols.key !== searchKey || confirmedSearchSymbols.positions !== searchSymbolPositions)
+  }, [
+    searchResults,
+    visibleMapSymbols,
+    busStops,
+    searchBusStops,
+    subwayStops,
+    searchKey,
+    confirmedSearchSymbols,
+  ]);
+  if (
+    confirmedSearchSymbols.key !== searchKey ||
+    confirmedSearchSymbols.positions !== searchSymbolPositions
+  )
     setConfirmedSearchSymbols({ key: searchKey, positions: searchSymbolPositions });
 
   /** 서버가 반환한 선택 노선의 공식 좌표 형상이다. */
@@ -169,12 +190,16 @@ export function useMapOverlays({
     /** 최종 네이티브 마커 배열을 누적하는 지역 변수다. 이 계산 밖에 별도 상태로 보관하지 않는다. */
     // 네이버 심벌이 확인되지 않은 위치에 노선 정류장 마커를 만들지 않는다.
     const items: MapMarker[] = [];
+    if (subwaySelection) return items;
     searchResults.forEach((place, index) => {
       const point = searchSymbolPositions.get(place.id);
       if (!point) return;
       items.push({
-        ...point, id: `search-result:${place.id}`, kind: 'place',
-        caption: place.id === selectedSearchId ? `${index + 1}. ${place.name}` : String(index + 1), captionMinZoom: 0,
+        ...point,
+        id: `search-result:${place.id}`,
+        kind: 'place',
+        caption: place.id === selectedSearchId ? `${index + 1}. ${place.name}` : String(index + 1),
+        captionMinZoom: 0,
         width: place.id === selectedSearchId ? 40 : 28,
         height: place.id === selectedSearchId ? 48 : 36,
         anchor: { x: 0.5, y: 1 },
@@ -201,7 +226,8 @@ export function useMapOverlays({
     const selectedPoint =
       selectedBusStopPoint ??
       selectedSymbolPoint ??
-      routeSymbolPositions.get(routeDetail?.selectedStationId ?? '') ?? null;
+      routeSymbolPositions.get(routeDetail?.selectedStationId ?? '') ??
+      null;
     if (selectedBusStop && selectedPoint) {
       // 핀 끝의 정류소 아이콘도 별도 오버레이로 확대해 기본 심벌의 표시 여부에 영향받지 않게 한다.
       items.push({
@@ -224,10 +250,8 @@ export function useMapOverlays({
     }
     if (
       selectedPlace &&
-      !searchResults.some(place => place.id === selectedPlace.id) &&
-      (!selectedPlace.id.startsWith('subway:') || subwayStation) &&
-      !journeyEndpoints.start &&
-      !journeyEndpoints.end
+      !searchResults.some((place) => place.id === selectedPlace.id) &&
+      (!selectedPlace.id.startsWith('subway:') || subwayStation)
     )
       items.push({
         ...selectedPlace,
@@ -244,20 +268,6 @@ export function useMapOverlays({
             }
           : { kind: 'place' as const, width: 32, height: 40 }),
       });
-    for (const [label, place] of [
-      ['출발', journeyEndpoints.start],
-      ['도착', journeyEndpoints.end],
-    ] as const) {
-      if (place)
-        items.push({
-          ...place,
-          id: `endpoint:${label}:${place.id}`,
-          caption: `${label} · ${place.name}`,
-          kind: 'place',
-          width: 32,
-          height: 40,
-        });
-    }
     if (selectedRoute)
       items.push(
         ...directionMarkers.map((marker) => ({
@@ -275,6 +285,7 @@ export function useMapOverlays({
     /** 일반 아이콘과 선택 핀은 서로 다른 ID로 유지하고 같은 ID의 중복만 제거한다. */
     return [...new Map(items.map((marker) => [marker.id, marker])).values()];
   }, [
+    subwaySelection,
     selectedRoute,
     routeStops,
     routeSymbolPositions,
@@ -287,7 +298,6 @@ export function useMapOverlays({
     selectedSearchId,
     searchSymbolPositions,
     directionMarkers,
-    journeyEndpoints,
     subwayStation,
     subwayLineName,
   ]);
@@ -305,14 +315,8 @@ export function useMapOverlays({
             },
           ]
         : []),
-      ...journeyLines.map((points, index) => ({
-        id: `journey:${index}`,
-        points,
-        color: routeColor,
-        width: 6,
-      })),
     ],
-    [selectedRoute, routeCoordinates, journeyLines, routeColor],
+    [selectedRoute, routeCoordinates],
   );
   return { markers, lines, routeStops, searchSymbolPositions };
 }

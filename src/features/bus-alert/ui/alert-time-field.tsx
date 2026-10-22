@@ -1,82 +1,149 @@
-/** @fileoverview 한국 시간 HH:mm 값을 플랫폼 시간 선택기의 Date와 상호 변환해 부모 폼에 전달한다. */
 import { DateTimePicker } from '@expo/ui/community/datetime-picker';
 import { useState } from 'react';
-import { Platform, Pressable, Text, View } from 'react-native';
-import { useAppTheme } from '@/shared/ui';
+import { Modal, Platform, Pressable, Text, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { AlertIconButton } from './alert-components';
+import { alertColors as colors } from './alert-design';
 
-/** 한국 시간 예약을 iOS 휠 또는 Android 시계 선택기로 편집한다. */
-export function AlertTimeField({
-  label,
-  value,
+/** 한국 시간 예약을 편집한다. 휠은 전체 너비로 열어 작은 화면에서도 시간 열이 잘리지 않게 한다. */
+export function AlertTimeRange({
+  startTime,
+  endTime,
   onChange,
+  disabled = false,
 }: {
-  label: string;
-  value: string;
-  onChange: (value: string) => void;
+  startTime: string;
+  endTime: string;
+  onChange: (value: { startTime: string; endTime: string }) => void;
+  disabled?: boolean;
 }) {
-  /** 현재 테마의 의미별 색상을 읽어 밝은 모드와 어두운 모드에 같은 화면 규칙을 적용한다. */
-  const { colors } = useAppTheme();
-
-  /** 시간 선택기 노출 여부이며 사용자의 펼침·닫기 조작을 다시 렌더한다. */
-  const [expanded, setExpanded] = useState(false);
-
-  // 문자열 분해와 Date 생성은 작은 입력 변환이라 메모 캐시 없이 현재 value로 계산한다.
-  /** HH:mm을 나눈 시·분으로 Android의 로컬 Date를 구성한다. */
+  const [active, setActive] = useState<'startTime' | 'endTime' | null>(null);
+  const insets = useSafeAreaInsets();
+  const value = active === 'endTime' ? endTime : startTime;
   const [hours, minutes] = value.split(':').map(Number);
-
-  /** iOS는 한국 시간 절대 시각, Android는 시·분 로컬 값으로 선택기에 전달할 Date다. */
   const date =
     Platform.OS === 'ios'
       ? new Date(`2000-01-01T${value}:00+09:00`)
       : new Date(2000, 0, 1, hours, minutes);
-  return (
-    <View style={{ flex: 1 }}>
-      <Pressable
-        accessibilityRole="button"
-        accessibilityLabel={`${label} 시간 선택, ${value}`}
-        accessibilityState={{ expanded }}
-        style={{
-          minHeight: 52,
-          flexDirection: 'row',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          gap: 12,
+  const close = () => setActive(null);
+  const picker =
+    active && !disabled ? (
+      <DateTimePicker
+        value={date}
+        mode="time"
+        display={Platform.OS === 'ios' ? 'spinner' : 'default'}
+        presentation={Platform.OS === 'android' ? 'dialog' : 'inline'}
+        locale="ko_KR"
+        timeZoneName="Asia/Seoul"
+        is24Hour
+        themeVariant="light"
+        accentColor={colors.accent}
+        disabled={disabled}
+        style={{ width: '100%' }}
+        onDismiss={close}
+        onValueChange={(_, selected) => {
+          const time =
+            Platform.OS === 'ios'
+              ? new Date(selected.getTime() + 9 * 3600_000).toISOString().slice(11, 16)
+              : `${String(selected.getHours()).padStart(2, '0')}:${String(selected.getMinutes()).padStart(2, '0')}`;
+          onChange({ startTime, endTime, [active]: time });
+          if (Platform.OS === 'android') close();
         }}
-        onPress={() => setExpanded(!expanded)}
-      >
-        <Text style={{ color: colors.text, fontSize: 17 }}>{label}</Text>
-        <Text
-          style={{
-            fontSize: 20,
-            color: colors.accent,
-            paddingVertical: 10,
-            fontVariant: ['tabular-nums'],
-          }}
+      />
+    ) : null;
+  return (
+    <>
+      <View style={{ flexDirection: 'row', gap: 12 }}>
+        {(['startTime', 'endTime'] as const).map((field) => (
+          <Pressable
+            key={field}
+            disabled={disabled}
+            accessibilityRole="button"
+            accessibilityLabel={`${field === 'startTime' ? '시작' : '종료'} 시간 선택, ${field === 'startTime' ? startTime : endTime}`}
+            accessibilityState={{ disabled, expanded: active === field }}
+            onPress={() => setActive(field)}
+            style={({ pressed }) => ({
+              flex: 1,
+              gap: 4,
+              minHeight: 88,
+              backgroundColor: active === field ? colors.accentSurface : colors.secondarySurface,
+              borderRadius: 20,
+              borderWidth: 1,
+              borderBottomWidth: pressed ? 1 : 3,
+              borderColor: active === field ? colors.accentBorder : colors.separator,
+              padding: 12,
+              transform: [{ translateY: pressed ? 2 : 0 }],
+            })}
+          >
+            <Text style={{ fontSize: 14, color: colors.secondaryText }}>
+              {field === 'startTime' ? '시작' : '종료'}
+            </Text>
+            <Text
+              style={{
+                fontSize: 22,
+                fontWeight: '700',
+                color: colors.text,
+                fontVariant: ['tabular-nums'],
+              }}
+            >
+              {field === 'startTime' ? startTime : endTime}
+            </Text>
+          </Pressable>
+        ))}
+      </View>
+      {Platform.OS === 'ios' ? (
+        <Modal
+          visible={active !== null && !disabled}
+          transparent
+          animationType="slide"
+          onRequestClose={close}
         >
-          {value}
-        </Text>
-      </Pressable>
-      {expanded && (
-        <DateTimePicker
-          value={date}
-          mode="time"
-          display={Platform.OS === 'ios' ? 'spinner' : 'default'}
-          presentation={Platform.OS === 'android' ? 'dialog' : 'inline'}
-          locale="ko_KR"
-          timeZoneName="Asia/Seoul"
-          is24Hour
-          onDismiss={() => setExpanded(false)}
-          onValueChange={(_, selected) => {
-            /** 선택한 Date를 플랫폼 변환 규칙에 따라 한국 시간 HH:mm 입력 문자열로 바꾼 값이다. */
-            const time =
-              Platform.OS === 'ios'
-                ? new Date(selected.getTime() + 9 * 60 * 60_000).toISOString().slice(11, 16)
-                : `${String(selected.getHours()).padStart(2, '0')}:${String(selected.getMinutes()).padStart(2, '0')}`;
-            onChange(time);
-            if (Platform.OS === 'android') setExpanded(false);
-          }}
-        />
+          <View style={{ flex: 1, justifyContent: 'flex-end' }}>
+            <Pressable
+              style={{
+                position: 'absolute',
+                top: 0,
+                left: 0,
+                right: 0,
+                bottom: 0,
+                backgroundColor: 'rgba(0,0,0,0.2)',
+              }}
+              accessibilityRole="button"
+              accessibilityLabel="시간 선택 닫기"
+              onPress={close}
+            />
+            <View
+              style={{
+                backgroundColor: colors.surface,
+                borderTopLeftRadius: 24,
+                borderTopRightRadius: 24,
+                padding: 20,
+                paddingBottom: Math.max(insets.bottom, 20),
+              }}
+            >
+              <View
+                style={{
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                }}
+              >
+                <Text style={{ fontSize: 16, fontWeight: '600', color: colors.text }}>
+                  {active === 'endTime' ? '종료' : '시작'}
+                </Text>
+                <AlertIconButton
+                  name={{ ios: 'checkmark', android: 'check' }}
+                  label="시간 선택 완료"
+                  onPress={close}
+                />
+              </View>
+              {picker}
+            </View>
+          </View>
+        </Modal>
+      ) : (
+        picker
       )}
-    </View>
+    </>
   );
 }

@@ -7,6 +7,8 @@ export interface SubwayAlertInput {
   lineName?: string;
   direction: string;
   destination?: string;
+  nextStationName?: string;
+  destinationNames?: string[];
   days: number[];
   startTime: string;
   endTime: string;
@@ -14,6 +16,14 @@ export interface SubwayAlertInput {
   /** thresholdMinutes 이하의 알림 단계. 0은 곧 도착 알림이다. */
   notificationStages: number[];
   enabled: boolean;
+  scheduledEnabled?: boolean;
+  proximityEnabled?: boolean;
+  radius?: 100 | 200 | 300 | 500;
+  latitude?: number;
+  longitude?: number;
+  monitoringStartedAt?: string;
+  monitoringEndsAt?: string;
+  monitoringSourceId?: string;
 }
 /** 서버가 예약 ID를 부여한 저장 결과. */
 export interface SubwayAlert extends SubwayAlertInput {

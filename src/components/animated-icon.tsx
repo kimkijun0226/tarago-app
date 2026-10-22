@@ -1,6 +1,7 @@
 /** @fileoverview 네이티브 스플래시와 React 화면 사이의 시작 전환 오버레이. 위치 조회는 지도 기능이 별도로 담당한다. */
 import { Image } from 'expo-image';
 import * as SplashScreen from 'expo-splash-screen';
+import { appColors } from '@/shared/ui/theme';
 import { useState } from 'react';
 import { StyleSheet, View } from 'react-native';
 import Animated, { Easing, Keyframe } from 'react-native-reanimated';
@@ -81,7 +82,7 @@ const styles = StyleSheet.create({
   },
   splashOverlay: {
     ...StyleSheet.absoluteFill,
-    backgroundColor: '#208AEF',
+    backgroundColor: appColors.brand,
     alignItems: 'center',
     justifyContent: 'center',
     zIndex: 1000,

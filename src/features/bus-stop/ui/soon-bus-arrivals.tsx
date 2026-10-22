@@ -33,9 +33,10 @@ export const SoonBusArrivals = memo(function SoonBusArrivals({ groups, onSelectR
               onPress={() =>
                 onSelectRoute(group.routeId, group.stationSeq ?? 0, group.first.routeSource)
               }
-              style={[
+              style={({ pressed }) => [
                 styles.card,
                 { backgroundColor: colors.surface, borderColor: colors.separator },
+                pressed && styles.pressed,
               ]}
             >
               <View style={styles.heading}>
@@ -63,15 +64,23 @@ const styles = StyleSheet.create({
   container: { paddingVertical: 10, borderBottomWidth: StyleSheet.hairlineWidth },
   label: { paddingHorizontal: 18, marginBottom: 8, fontSize: 13, fontWeight: '700' },
   cards: { paddingHorizontal: 18, gap: 8 },
-  card: { minWidth: 140, maxWidth: 220, padding: 12, borderWidth: 1, borderRadius: 12 },
+  card: {
+    minWidth: 140,
+    maxWidth: 220,
+    padding: 14,
+    borderWidth: 1,
+    borderRadius: 20,
+    boxShadow: '0px 3px 0px #22222208',
+  },
   heading: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   badge: {
     color: '#FFFFFF',
     paddingHorizontal: 5,
     paddingVertical: 2,
-    borderRadius: 4,
+    borderRadius: 8,
     fontSize: 11,
   },
   number: { fontSize: 20, fontWeight: '700' },
   detail: { fontSize: 12, marginTop: 4 },
+  pressed: { opacity: 0.7, transform: [{ scale: 0.98 }] },
 });

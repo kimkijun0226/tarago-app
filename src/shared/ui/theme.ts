@@ -1,29 +1,36 @@
 /** @fileoverview 앱 공통 색상·간격·글자·모서리 토큰. 컴포넌트나 서버 상태는 관리하지 않는다. */
-/** 기기 모드와 무관하게 앱이 사용하는 공통 라이트 색상표다. */
-const palettes = {
-  light: {
-    background: '#F2F2F7',
-    surface: '#FFFFFF',
-    secondarySurface: '#E5E5EA',
-    text: '#1C1C1E',
-    secondaryText: '#636366',
-    tertiaryText: '#8E8E93',
-    separator: '#D1D1D6',
-    accent: '#007AFF',
-    accentSurface: '#EAF3FF',
-    onAccent: '#FFFFFF',
-    danger: '#FF3B30',
-    warning: '#8A5900',
-    warningSurface: '#FFF4D6',
-    success: '#248A3D',
-  },
+/** Airbnb의 흰 표면·Rausch 코랄을 공유한다. 작은 글자와 흰 CTA 글자는 대비를 확보한 코랄을 쓴다. */
+export const appColors = {
+  background: '#FFFFFF',
+  surface: '#FFFFFF',
+  secondarySurface: '#F7F7F7',
+  strongSurface: '#F2F2F2',
+  text: '#222222',
+  bodyText: '#3F3F3F',
+  secondaryText: '#6A6A6A',
+  tertiaryText: '#929292',
+  separator: '#EBEBEB',
+  borderStrong: '#DDDDDD',
+  brand: '#FF385C',
+  accent: '#D92850',
+  accentActive: '#E00B41',
+  accentSurface: '#FFF7F8',
+  accentBorder: '#FFD1DA',
+  onAccent: '#FFFFFF',
+  danger: '#C13515',
+  warning: '#855000',
+  warningSurface: '#FFF7E8',
+  success: '#24735C',
+  luxe: '#460479',
+  plus: '#92174D',
+  legalLink: '#428BFF',
 };
 
 /** 작은 여백부터 큰 여백까지 재사용하는 논리 픽셀 간격 토큰이다. */
 const spacing = { xs: 4, sm: 8, md: 12, lg: 16, xl: 20, xxl: 24 };
 
 /** 버튼·카드·시트 모서리 크기를 통일하는 토큰이다. */
-const radius = { sm: 8, md: 12, lg: 16, sheet: 24 };
+const radius = { sm: 12, md: 16, lg: 20, sheet: 28 };
 
 /** 제목·본문·설명의 글자 크기와 두께를 통일하는 텍스트 토큰이다. */
 const type = {
@@ -43,5 +50,5 @@ const type = {
 export function useAppTheme() {
   /** 현재 공통 테마가 항상 라이트임을 알리는 고정 반환값이다. */
   const isDark = false;
-  return { colors: palettes.light, spacing, radius, type, isDark };
+  return { colors: appColors, spacing, radius, type, isDark };
 }

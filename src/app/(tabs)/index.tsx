@@ -8,7 +8,10 @@ import { MobilitySearch } from '@/features/mobility/ui/mobility-search';
 import { SubwayArrivalSheet } from '@/features/subway/ui/subway-arrival-sheet';
 import { mapUi } from '@/shared/ui/map-design-tokens';
 import { MapView } from '@/shared/ui/map/map-view';
-import { useEffect } from 'react';
+import { useCallback, useEffect } from 'react';
+import { router, useFocusEffect } from 'expo-router';
+import { useAppStore } from '@/shared/model/app-store';
+import { AlertMapPicker } from '@/features/map/ui/alert-map-picker';
 import Animated, {
   Easing,
   useSharedValue,
@@ -16,7 +19,7 @@ import Animated, {
   withTiming,
 } from 'react-native-reanimated';
 import { SymbolView } from 'expo-symbols';
-import { ActivityIndicator, Pressable, View, useWindowDimensions } from 'react-native';
+import { ActivityIndicator, BackHandler, Pressable, View, useWindowDimensions } from 'react-native';
 import { useMapController } from '@/features/map/model/use-map-controller';
 import { MapLocationGate } from '@/features/map/ui/map-location-gate';
 import { styles } from '@/features/map/ui/map-screen.styles';
@@ -27,9 +30,13 @@ import { styles } from '@/features/map/ui/map-screen.styles';
  */
 export default function MapScreen() {
   const { height: screenHeight } = useWindowDimensions();
+  const alertSelection = useAppStore((state) => state.alertSelection);
+  const finishAlertSelection = useAppStore((state) => state.finishAlertSelection);
   /** 지도 표시 값과 사용자 동작을 컨트롤러에서 받아 UI에 연결한다. 각 상태와 동작의 의미는 해당 훅의 선언에서 설명한다. */
   const {
     colors,
+    selectedPlace,
+    resetAlertMapSelection,
     initialPosition,
     preparingLocation,
     prepareInitialPosition,
@@ -38,7 +45,7 @@ export default function MapScreen() {
     lines,
     position,
     insets,
-    planningActive,
+    searchActive,
     sheetHeight,
     locationBottomPadding,
     onMapInitialized,
@@ -57,16 +64,13 @@ export default function MapScreen() {
     closeBusStop,
     selectBusRoute,
     selectPlace,
-    showJourney,
     activateSearch,
     setSearchMapRequest,
     selectedSearchId,
     selectSearchResult,
     searchMapActive,
     openSubway,
-    getCurrentLocation,
-    onPlanningChange,
-    onEndpoints,
+    onSearchActiveChange,
     subwayStation,
     subwaySheetSnap,
     subwayLineName,
@@ -74,9 +78,24 @@ export default function MapScreen() {
     setSubwaySheetSnap,
     selectSubwayStation,
   } = useMapController();
+  const cancelAlertSelection = useCallback(() => {
+    resetAlertMapSelection();
+    finishAlertSelection();
+    router.navigate('/alerts');
+  }, [resetAlertMapSelection, finishAlertSelection]);
+  useFocusEffect(
+    useCallback(() => {
+      if (!alertSelection) return;
+      const subscription = BackHandler.addEventListener('hardwareBackPress', () => {
+        cancelAlertSelection();
+        return true;
+      });
+      return () => subscription.remove();
+    }, [alertSelection, cancelAlertSelection]),
+  );
   /** 정착 높이 상태 대신 시트의 UI 스레드 위치를 사용해 드래그 중에도 버튼을 동기화한다. */
   const sheetPosition = useSharedValue(screenHeight);
-  const hasSheet = Boolean(selectedBusStop || subwayStation);
+  const hasSheet = Boolean((alertSelection && !searchActive) || selectedBusStop || subwayStation);
   useEffect(() => {
     if (!hasSheet) sheetPosition.value = withTiming(screenHeight, { duration: 180 });
   }, [hasSheet, screenHeight, sheetPosition]);
@@ -84,8 +103,8 @@ export default function MapScreen() {
     const coveredHeight = Math.max(0, screenHeight - sheetPosition.value);
     return { transform: [{ translateY: -coveredHeight - Math.min(8, coveredHeight) }] };
   });
-  /** 버스 노선 상세에서만 검색 영역을 숨기고 지하철 시트에서는 길찾기 진입을 유지한다. */
-  const hideSearch = Boolean(selectedRoute && showRouteSheet);
+  /** 알림 선택 중에도 검색창을 유지한다. */
+  const hideSearch = Boolean(!alertSelection && selectedRoute && showRouteSheet);
   const searchOpacity = useSharedValue(1);
   useEffect(() => {
     searchOpacity.value = withTiming(hideSearch ? 0 : 1, {
@@ -98,14 +117,37 @@ export default function MapScreen() {
     transform: [{ translateY: -8 * (1 - searchOpacity.value) }],
   }));
 
+  const alertBackButton = (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel="알림 설정으로 돌아가기"
+      onPress={cancelAlertSelection}
+      style={[styles.backButton, { top: insets.top + 12, backgroundColor: colors.surface }]}
+    >
+      <SymbolView
+        name={{ ios: 'chevron.left', android: 'arrow_back' }}
+        size={24}
+        tintColor={colors.accent}
+      />
+    </Pressable>
+  );
   if (!initialPosition)
-    return <MapLocationGate preparing={preparingLocation} onRetry={prepareInitialPosition} />;
+    return (
+      <View style={styles.container}>
+        <MapLocationGate preparing={preparingLocation} onRetry={prepareInitialPosition} />
+        {alertSelection ? alertBackButton : null}
+      </View>
+    );
   return (
     <View style={styles.container}>
       <MapView
         ref={mapRef}
         style={styles.container}
-        initialCamera={{ ...initialPosition, zoom: 17 }}
+        initialCamera={{
+          ...initialPosition,
+          zoom: alertSelection ? (alertSelection.transport === 'subway' ? 14 : 16) : 17,
+        }}
+        subwaySelection={alertSelection?.transport === 'subway'}
         markers={markers}
         lines={lines}
         position={position}
@@ -118,11 +160,13 @@ export default function MapScreen() {
             : Math.max(insets.bottom + 72, sheetHeight + insets.bottom + 20)
         }
         padding={{
-          top: insets.top + (planningActive ? 150 : 120),
+          top: insets.top + 76,
           // 선택 시 가림 영역은 고정해 시트 드래그가 지도 카메라를 바꾸지 않도록 한다.
           bottom:
-            locationBottomPadding ??
-            (selectedBusStop || subwayStation || searchMapActive ? screenHeight * 0.47 + insets.bottom + 8 : 0),
+            (alertSelection ? sheetHeight + insets.bottom + 8 : locationBottomPadding) ??
+            (selectedBusStop || subwayStation || searchMapActive
+              ? screenHeight * 0.47 + insets.bottom + 8
+              : 0),
         }}
         onReady={onMapInitialized}
         onCameraIdle={onCameraIdle}
@@ -130,7 +174,9 @@ export default function MapScreen() {
         onSymbolPress={onSymbolPress}
       />
 
-      {selectedBusStop && selectedRoute && showRouteSheet ? (
+      {alertSelection && !searchActive ? (
+        alertBackButton
+      ) : selectedBusStop && selectedRoute && showRouteSheet ? (
         <Pressable
           accessibilityRole="button"
           accessibilityLabel="정류장 버스 목록으로 돌아가기"
@@ -143,48 +189,54 @@ export default function MapScreen() {
               android: 'arrow_back',
             }}
             size={24}
-            tintColor={colors.text}
+            tintColor={colors.accent}
           />
         </Pressable>
       ) : null}
 
-      {!planningActive ? (
-        <Animated.View style={[{
-          position: 'absolute', right: 16, bottom: insets.bottom + 16, zIndex: 25,
-        }, locationStyle]}>
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel="현재 위치로 지도 이동"
-            accessibilityState={{ disabled: loading, busy: loading }}
-            disabled={loading}
-            onPress={moveToMyLocation}
-            style={({ pressed }) => [
-              styles.locationButton,
-              {
-                backgroundColor: colors.surface,
-                position: 'relative',
-                right: 0,
-              },
-              pressed && styles.pressed,
-            ]}
-          >
-            {loading ? (
-              <ActivityIndicator color={colors.accent} />
-            ) : (
-              <SymbolView
-                name={{
-                  ios: 'scope',
-                  android: 'my_location',
-                }}
-                size={24}
-                tintColor={mapUi.text}
-              />
-            )}
-          </Pressable>
-        </Animated.View>
-      ) : null}
+      <Animated.View
+        style={[
+          {
+            position: 'absolute',
+            right: 16,
+            bottom: insets.bottom + 16,
+            zIndex: 25,
+          },
+          alertSelection ? { transform: [{ translateY: -sheetHeight }] } : locationStyle,
+        ]}
+      >
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="현재 위치로 지도 이동"
+          accessibilityState={{ disabled: loading, busy: loading }}
+          disabled={loading}
+          onPress={moveToMyLocation}
+          style={({ pressed }) => [
+            styles.locationButton,
+            {
+              backgroundColor: colors.surface,
+              position: 'relative',
+              right: 0,
+            },
+            pressed && styles.pressed,
+          ]}
+        >
+          {loading ? (
+            <ActivityIndicator color={colors.accent} />
+          ) : (
+            <SymbolView
+              name={{
+                ios: 'scope',
+                android: 'my_location',
+              }}
+              size={24}
+              tintColor={mapUi.blue}
+            />
+          )}
+        </Pressable>
+      </Animated.View>
 
-      {selectedBusStop && selectedRoute && showRouteSheet ? (
+      {alertSelection ? null : selectedBusStop && selectedRoute && showRouteSheet ? (
         <BusRouteBottomSheet
           key={`${selectedBusStop.id}:${selectedRoute.routeId}:${selectedRoute.stationSeq}`}
           stationId={selectedRoute.stationId}
@@ -218,25 +270,24 @@ export default function MapScreen() {
         ]}
       >
         <MobilitySearch
+          key={alertSelection?.requestId ?? 'map-search'}
           position={position ?? initialPosition}
           top={insets.top + 12}
-          left={selectedRoute && showRouteSheet ? 76 : 16}
+          left={alertSelection && !searchActive ? 76 : 16}
+          alertTransport={alertSelection?.transport}
           onPlace={selectPlace}
-          onGeometry={showJourney}
           onActivate={activateSearch}
           onSearchMap={setSearchMapRequest}
           selectedSearchId={selectedSearchId}
           onSearchSelect={selectSearchResult}
           onSheetHeight={setSheetHeight}
           onSubway={openSubway}
-          getPosition={getCurrentLocation}
-          onPlanningChange={onPlanningChange}
-          onEndpoints={onEndpoints}
+          onSearchActiveChange={onSearchActiveChange}
           suspended={Boolean(subwayStation || selectedBusStop)}
         />
       </Animated.View>
 
-      {subwayStation ? (
+      {!alertSelection && subwayStation ? (
         <SubwayArrivalSheet
           initialLineName={subwayLineName}
           stationName={subwayStation}
@@ -248,6 +299,18 @@ export default function MapScreen() {
           onSelectStation={(name, lineName, point) =>
             void selectSubwayStation(name, lineName, point)
           }
+        />
+      ) : null}
+      {alertSelection && !searchActive ? (
+        <AlertMapPicker
+          key={subwayStation ?? alertSelection.requestId}
+          busStop={selectedBusStop}
+          stationName={subwayStation}
+          initialLineName={subwayLineName}
+          stationPoint={selectedPlace}
+          bottom={insets.bottom}
+          onHeightChange={setSheetHeight}
+          onComplete={resetAlertMapSelection}
         />
       ) : null}
     </View>

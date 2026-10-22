@@ -29,7 +29,11 @@ export function MapSearchResults({
           </Text>
           <Text style={styles.subtitle}>검색 결과 {places.length}곳</Text>
         </View>
-        <Pressable accessibilityRole="button" onPress={onClose} style={styles.action}>
+        <Pressable
+          accessibilityRole="button"
+          onPress={onClose}
+          style={({ pressed }) => [styles.action, pressed && styles.pressed]}
+        >
           <Text style={styles.link}>목록 보기</Text>
         </Pressable>
       </View>
@@ -44,7 +48,7 @@ export function MapSearchResults({
               accessibilityRole="button"
               accessibilityLabel={`${index + 1}. ${item.name} 지도에서 선택`}
               onPress={() => onSelect(item)}
-              style={styles.place}
+              style={({ pressed }) => [styles.place, pressed && styles.pressed]}
             >
               <Text style={styles.number}>{index + 1}</Text>
               <View style={styles.titleArea}>
@@ -60,7 +64,7 @@ export function MapSearchResults({
               accessibilityRole="button"
               accessibilityLabel={`${item.name} 상세 보기`}
               onPress={() => onChoose(item)}
-              style={styles.action}
+              style={({ pressed }) => [styles.action, pressed && styles.pressed]}
             >
               <Text style={styles.link}>상세</Text>
             </Pressable>
@@ -87,11 +91,15 @@ const styles = StyleSheet.create({
   row: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 16,
-    borderBottomWidth: StyleSheet.hairlineWidth,
+    paddingHorizontal: 14,
+    marginHorizontal: 16,
+    marginTop: 8,
+    borderWidth: 1,
+    borderBottomWidth: 3,
+    borderRadius: 20,
     borderColor: mapUi.border,
   },
-  selected: { backgroundColor: mapUi.blueSurface },
+  selected: { backgroundColor: mapUi.blueSurface, borderColor: mapUi.accentBorder },
   place: {
     flex: 1,
     flexDirection: 'row',
@@ -104,5 +112,6 @@ const styles = StyleSheet.create({
   name: { color: mapUi.text, fontSize: 16, fontWeight: '600' },
   action: { minWidth: 52, minHeight: 44, alignItems: 'center', justifyContent: 'center' },
   link: { color: mapUi.blue, fontSize: 14, fontWeight: '600' },
+  pressed: { backgroundColor: mapUi.blueSurface, transform: [{ scale: 0.98 }, { translateY: 1 }] },
   empty: { padding: 24, color: mapUi.secondaryText, textAlign: 'center' },
 });

@@ -1,5 +1,6 @@
 /** @fileoverview 지도 화면의 배치와 터치 버튼 스타일. 서버 상태나 지도 선택 로직은 포함하지 않는다. */
 import { StyleSheet } from 'react-native';
+import { mapUi } from '@/shared/ui/map-design-tokens';
 
 /** 이 컴포넌트의 배치·간격·색상을 정의한 스타일이다. */
 export const styles = StyleSheet.create({
@@ -12,12 +13,12 @@ export const styles = StyleSheet.create({
     width: 48,
     height: 48,
     borderRadius: 24,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: mapUi.background,
     borderWidth: 1,
-    borderColor: '#DADCE0',
+    borderColor: mapUi.border,
     zIndex: 25,
     elevation: 6,
-    boxShadow: '0px 0px 14px 2px rgba(0, 0, 0, 0.14)',
+    boxShadow: '0 3px 0 #22222212, 0 5px 12px #2222220A',
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -28,7 +29,7 @@ export const styles = StyleSheet.create({
     width: 50,
     height: 50,
     borderRadius: 25,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: mapUi.background,
     alignItems: 'center',
     justifyContent: 'center',
     elevation: 5,
@@ -37,6 +38,7 @@ export const styles = StyleSheet.create({
     shadowRadius: 6,
   },
   pressed: {
-    opacity: 0.7,
+    backgroundColor: mapUi.blueSurface,
+    transform: [{ scale: 0.96 }, { translateY: 1 }],
   },
 });

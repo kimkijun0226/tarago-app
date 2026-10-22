@@ -7,10 +7,10 @@ import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from
 import { SymbolView } from 'expo-symbols';
 import { BottomSheetScrollView } from '@gorhom/bottom-sheet';
 import { isAxiosError } from 'axios';
+import { subwayDirectionPresentation, stationLabel } from '../model/subway-direction';
 import { router } from 'expo-router';
 import { getServiceStatus } from '@/features/subway/model/subway-arrival-display';
 import { useSubwayArrivals } from '@/features/subway/model/use-subway-arrivals';
-import { useSavedSubwayStation } from '@/features/subway/model/use-saved-subway-station';
 import {
   useSubwayFacilities,
   useSubwayStation,
@@ -23,11 +23,10 @@ import { SubwayTimetableModal } from '@/features/subway/ui/subway-timetable-moda
 import { MapBottomSheet, type MapSheetSnap } from '@/shared/ui/map-bottom-sheet';
 import { mapUi } from '@/shared/ui/map-design-tokens';
 
-/** 지하철 링크·강조 표시에 쓰는 지도 공통 파란색이다. 실시간 선택 표시의 지도 공통 녹색이다. 지하철 제목과 주요 본문에 쓰는 지도 공통 글자색이다. 지연·보조 정보와 비활성 선택에 사용하는 회색이다. */
+/** 노선 고유색과 구분되는 공통 강조색·본문·보조 글자색이다. */
 const BLUE = mapUi.blue,
-  GREEN = mapUi.green,
   INK = mapUi.text,
-  GRAY = '#919191';
+  GRAY = mapUi.secondaryText;
 
 /** 주요 지하철 노선의 표시색이다. 목록에 없는 노선은 서버 색 또는 기본 파란색을 사용한다. */
 const LINE_COLORS: Record<string, string> = {
@@ -135,7 +134,7 @@ export function SubwayArrivalSheet({
     ]).entries(),
   ].sort((a, b) => Number(a[1]) - Number(b[1]));
 
-  /** 길찾기 또는 검색에서 전달받은 초기 노선명에서 수도권 접두어를 제거한 이름이다. */
+  /** 검색에서 전달받은 초기 노선명에서 수도권 접두어를 제거한 이름이다. */
   const initial = initialLineName?.replace(/^수도권/, '') ?? '';
   if (initial && !lines.some(([name]) => name === initial)) lines.unshift([initial, '']);
 
@@ -205,9 +204,6 @@ export function SubwayArrivalSheet({
     ? Math.max(0, Math.floor((now - Date.parse(query.data.fetchedAt)) / 1000))
     : 0;
 
-  /** 현재 역·노선의 기기 즐겨찾기 상태와 저장 동작이다. */
-  const favorite = useSavedSubwayStation(stationName, lineName);
-
   /** 도착 조회의 서버 오류 문구를 문자열일 때 우선 사용한 화면 안내다. */
   const errorMessage =
     isAxiosError(query.error) && typeof query.error.response?.data?.message === 'string'
@@ -218,20 +214,12 @@ export function SubwayArrivalSheet({
   const title = stationName.endsWith('역') ? stationName : `${stationName}역`;
 
   /**
-   * 공식 종착역을 우선해 방면을 표시하고 없으면 실시간 행선 방향을 사용한다.
+   * 실시간 방면과 공식 인접역을 대조해 다음 역 기준으로 표시한다.
    * @param direction 서버 방면 이름.
    */
   const directionLabel = (direction: string) => {
-    /** 선택 방면의 첫 실시간 열차가 제공한 원본 행선 방향이다. */
-    const raw = lineArrivals.find(
-      (arrival) => arrival.direction === direction,
-    )?.destinationDirection;
-
-    /** 상행·하행에 대응하는 공식 종착역 이름이다. 다른 방면에는 인덱스를 지정하지 않는다. */
-    const terminal = line?.terminals[direction === '상행' ? 0 : direction === '하행' ? 1 : -1];
-    return terminal
-      ? `${terminal} 방면`
-      : raw?.split(' - ').slice(1).join(' - ').replace(/방면$/, ' 방면') || direction;
+    const info = subwayDirectionPresentation(line, direction, arrivals, timetable.data?.directions);
+    return info.nextStationName ? `${stationLabel(info.nextStationName)} 방면` : '다음 역 확인 중';
   };
 
   /**
@@ -255,10 +243,21 @@ export function SubwayArrivalSheet({
     router.push({
       pathname: '/subway-alerts',
       params: {
+        alertKind: 'time',
+        alertId: '',
+        sourceAlertId: '',
+        sourceAlertIds: '',
         stationName,
         lineId: selectedLineId,
         lineName,
         direction,
+        nextStationName:
+          subwayDirectionPresentation(line, direction, arrivals, timetable.data?.directions)
+            .nextStationName ?? '',
+        destinationNames: JSON.stringify(
+          subwayDirectionPresentation(line, direction, arrivals, timetable.data?.directions)
+            .destinationNames,
+        ),
         requestId: String(now),
       },
     });
@@ -296,25 +295,9 @@ export function SubwayArrivalSheet({
             </Text>
           </View>
           <Text style={s.subtitle}>수도권 지하철</Text>
-          {favorite.error ? <Text style={s.error}>{favorite.error}</Text> : null}
         </View>
       }
-    >
-      <Pressable
-        accessibilityRole="button"
-        accessibilityLabel={favorite.saved ? '저장한 역에서 제거' : '역 저장'}
-        accessibilityState={{ selected: favorite.saved, disabled: favorite.busy }}
-        disabled={favorite.busy}
-        onPress={() => void favorite.toggle()}
-        style={s.favoriteButton}
-      >
-        <SymbolView
-          name={{ ios: favorite.saved ? 'star.fill' : 'star', android: 'star' }}
-          size={25}
-          tintColor={favorite.saved ? BLUE : INK}
-        />
-      </Pressable>
-    </SheetToolbar>
+    />
   );
 
   return (
@@ -340,7 +323,7 @@ export function SubwayArrivalSheet({
                   changeSnap('full');
                 }}
                 accessibilityRole="button"
-                style={s.action}
+                style={({ pressed }) => [s.action, pressed && s.pressed]}
               >
                 <SymbolView
                   name={{ ios: 'calendar', android: 'calendar_month' }}
@@ -355,7 +338,7 @@ export function SubwayArrivalSheet({
                   changeSnap('full');
                 }}
                 accessibilityRole="button"
-                style={s.action}
+                style={({ pressed }) => [s.action, pressed && s.pressed]}
               >
                 <SymbolView name={{ ios: 'tram', android: 'train' }} size={18} tintColor="#333" />
                 <Text style={s.actionText}>첫차·막차</Text>
@@ -376,9 +359,13 @@ export function SubwayArrivalSheet({
                     accessibilityRole="button"
                     accessibilityState={{ selected: tab === 'live' }}
                     onPress={() => setTab('live')}
-                    style={[s.segmentButton, tab === 'live' && s.liveSelected]}
+                    style={({ pressed }) => [
+                      s.segmentButton,
+                      tab === 'live' && s.liveSelected,
+                      pressed && s.pressed,
+                    ]}
                   >
-                    <Text style={[s.segmentText, { color: tab === 'live' ? GREEN : GRAY }]}>
+                    <Text style={[s.segmentText, { color: tab === 'live' ? BLUE : GRAY }]}>
                       실시간
                     </Text>
                   </Pressable>
@@ -386,9 +373,13 @@ export function SubwayArrivalSheet({
                     accessibilityRole="button"
                     accessibilityState={{ selected: tab !== 'live' }}
                     onPress={() => setTab('timetable')}
-                    style={[s.segmentButton, tab !== 'live' && s.scheduleSelected]}
+                    style={({ pressed }) => [
+                      s.segmentButton,
+                      tab !== 'live' && s.scheduleSelected,
+                      pressed && s.pressed,
+                    ]}
                   >
-                    <Text style={[s.segmentText, { color: tab !== 'live' ? INK : GRAY }]}>
+                    <Text style={[s.segmentText, { color: tab !== 'live' ? BLUE : GRAY }]}>
                       시간표
                     </Text>
                   </Pressable>
@@ -400,7 +391,7 @@ export function SubwayArrivalSheet({
                     disabled={query.isFetching}
                     accessibilityRole="button"
                     accessibilityLabel="도착정보 새로고침"
-                    style={s.refresh}
+                    style={({ pressed }) => [s.refresh, pressed && s.pressed]}
                   >
                     {query.isFetching ? (
                       <ActivityIndicator size="small" color={GRAY} />
@@ -452,7 +443,12 @@ export function SubwayArrivalSheet({
                     accessibilityRole="button"
                     accessibilityLabel={`${name} 선택`}
                     accessibilityState={{ selected: name === lineName }}
-                    style={[s.badge, { backgroundColor: LINE_COLORS[name] ?? BLUE }]}
+                    style={({ pressed }) => [
+                      s.badge,
+                      { backgroundColor: LINE_COLORS[name] ?? BLUE },
+                      name === lineName && s.selectedBadge,
+                      pressed && s.pressed,
+                    ]}
                   >
                     <Text style={s.badgeText}>{name.replace('호선', '')}</Text>
                   </Pressable>
@@ -548,17 +544,19 @@ const s = StyleSheet.create({
   content: { paddingBottom: 32, backgroundColor: 'white' },
   header: { paddingVertical: 8 },
   sheetContent: { flex: 1 },
-  favoriteButton: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center' },
+  pressed: { opacity: 0.7, transform: [{ scale: 0.98 }] },
+  selectedBadge: { borderWidth: 3, borderColor: mapUi.blueSurface },
   titleRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
   title: { fontSize: 25, fontWeight: '700', color: INK, flex: 1, letterSpacing: -0.8 },
-  subtitle: { fontSize: 17, color: '#555', marginTop: 12 },
+  subtitle: { fontSize: 14, color: GRAY, marginTop: 4 },
   actions: { paddingHorizontal: 16, gap: 5, paddingVertical: 20 },
   action: {
-    height: 41,
+    height: 44,
     paddingHorizontal: 13,
     borderRadius: 24,
     borderWidth: 1,
-    borderColor: '#E5E5E5',
+    borderColor: mapUi.border,
+    backgroundColor: mapUi.separator,
     alignItems: 'center',
     justifyContent: 'center',
     flexDirection: 'row',
@@ -568,10 +566,10 @@ const s = StyleSheet.create({
   rule: { height: 1, backgroundColor: '#F0F0F0' },
   arrivalSection: { paddingHorizontal: 18, paddingTop: 24 },
   badge: {
-    minWidth: 19,
-    height: 20,
-    paddingHorizontal: 5,
-    borderRadius: 11,
+    minWidth: 44,
+    height: 44,
+    paddingHorizontal: 10,
+    borderRadius: 22,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -583,24 +581,25 @@ const s = StyleSheet.create({
     marginTop: 16,
     marginBottom: 10,
   },
-  segment: { flexDirection: 'row', borderWidth: 1, borderColor: '#E6E6E6', borderRadius: 20 },
+  segment: { flexDirection: 'row', padding: 4, backgroundColor: mapUi.separator, borderRadius: 24 },
   segmentButton: {
     paddingHorizontal: 12,
-    height: 31,
+    height: 44,
     justifyContent: 'center',
     borderWidth: 1,
     borderColor: 'transparent',
     borderRadius: 20,
   },
-  liveSelected: { borderColor: GREEN },
-  scheduleSelected: { borderColor: GRAY },
+  liveSelected: { borderColor: mapUi.blueSurface, backgroundColor: mapUi.blueSurface },
+  scheduleSelected: { borderColor: mapUi.blueSurface, backgroundColor: mapUi.blueSurface },
   segmentText: { fontSize: 14, fontWeight: '600' },
   refreshRow: { flexDirection: 'row', alignItems: 'center', gap: 7 },
-  clock: { color: GRAY, fontSize: 17 },
+  clock: { color: GRAY, fontSize: 13 },
   refresh: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: mapUi.separator,
     borderWidth: 1,
     borderColor: '#E8E8E8',
     alignItems: 'center',
@@ -610,13 +609,14 @@ const s = StyleSheet.create({
   directionCards: { flexDirection: 'row', alignItems: 'stretch', gap: 9 },
   transferRow: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
     alignItems: 'center',
     gap: 8,
     marginTop: 20,
     marginBottom: 20,
   },
   transferTitle: { fontSize: 15, fontWeight: '700', color: INK },
-  sectionDivider: { height: 9, backgroundColor: '#F1F1F1' },
+  sectionDivider: { height: 8, backgroundColor: mapUi.separator },
   infoSection: { paddingHorizontal: 18, paddingVertical: 20 },
   sectionTitle: { fontSize: 19, fontWeight: '700', color: INK },
   infoRule: { height: 1, backgroundColor: '#EEE', marginHorizontal: -18, marginVertical: 16 },
@@ -627,7 +627,8 @@ const s = StyleSheet.create({
     flex: 1,
     borderWidth: 1,
     borderColor: '#E1E1E1',
-    borderRadius: 6,
+    borderRadius: 20,
+    backgroundColor: mapUi.separator,
     alignItems: 'center',
     justifyContent: 'center',
     padding: 14,

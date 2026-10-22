@@ -1,7 +1,8 @@
 /** @fileoverview 접근 알림의 감시 제안과 현재 임시 감시의 남은 시간 및 시작·연장·중지 조작을 표시한다. */
 import { useEffect, useState } from 'react';
 import { ActivityIndicator, Alert, Text, View } from 'react-native';
-import { AppButton, AppSection, useAppTheme } from '@/shared/ui';
+import { AppButton, AppSection } from '@/shared/ui';
+import { alertColors as colors } from './alert-design';
 import type { BusAlert } from '../model/bus-alert';
 import { useMonitoringSessions } from '../model/use-monitoring-sessions';
 
@@ -13,9 +14,6 @@ export function MonitoringSessionsPanel({
   sources: BusAlert[];
   onDismiss: () => void;
 }) {
-  /** 현재 테마의 의미별 색상을 읽어 밝은 모드와 어두운 모드에 같은 화면 규칙을 적용한다. */
-  const { colors } = useAppTheme();
-
   /** 진행 중인 임시 감시와 시작·연장·중지 함수를 서버 알림 훅에서 얻는다. */
   const { sessions, begin, extend, stop } = useMonitoringSessions();
 

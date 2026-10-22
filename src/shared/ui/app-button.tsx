@@ -37,13 +37,22 @@ export function AppButton({
       disabled={disabled || loading}
       onPress={onPress}
       style={({ pressed }) => ({
-        minHeight: 50,
-        borderRadius: 12,
+        minHeight: 52,
+        borderRadius: 18,
         paddingHorizontal: 16,
         alignItems: 'center',
         justifyContent: 'center',
         backgroundColor: variant === 'primary' ? colors.accent : colors.secondarySurface,
-        opacity: disabled || loading ? 0.5 : pressed ? 0.7 : 1,
+        borderWidth: 1,
+        borderColor: variant === 'primary' ? colors.accent : colors.separator,
+        boxShadow:
+          disabled || loading || pressed
+            ? 'none'
+            : variant === 'primary'
+              ? '0 3px 0 #FFD1DA'
+              : '0 3px 0 #EBEBEB',
+        transform: [{ translateY: pressed && !disabled && !loading ? 2 : 0 }],
+        opacity: disabled || loading ? 0.5 : pressed ? 0.9 : 1,
       })}
     >
       {loading ? (

@@ -13,8 +13,6 @@ type Props = {
   onClose: () => void;
   onText: (text: string) => void;
   onSubmit: () => void;
-  onSaved: () => void;
-  onDirections: () => void;
 };
 
 export function MobilitySearchBar({
@@ -26,12 +24,14 @@ export function MobilitySearchBar({
   onClose,
   onText,
   onSubmit,
-  onSaved,
-  onDirections,
 }: Props) {
   const logo = (
     <View style={styles.logo}>
-      <Text style={styles.logoText}>T</Text>
+      <SymbolView
+        name={{ ios: 'magnifyingglass', android: 'search' }}
+        size={21}
+        tintColor="#FFFFFF"
+      />
     </View>
   );
   return (
@@ -41,13 +41,9 @@ export function MobilitySearchBar({
           accessibilityRole="button"
           accessibilityLabel="검색 닫기"
           onPress={onClose}
-          style={styles.close}
+          style={({ pressed }) => [styles.close, pressed && styles.pressed]}
         >
-          <SymbolView
-            name={{ ios: 'xmark', android: 'close' }}
-            size={22}
-            tintColor={mapUi.text}
-          />
+          <SymbolView name={{ ios: 'xmark', android: 'close' }} size={22} tintColor={mapUi.text} />
         </Pressable>
       ) : null}
       <View style={[styles.pill, open && styles.searchPill]}>
@@ -84,7 +80,7 @@ export function MobilitySearchBar({
             accessibilityRole="button"
             accessibilityLabel="장소 검색"
             onPress={onOpen}
-            style={styles.search}
+            style={({ pressed }) => [styles.search, pressed && styles.pressed]}
           >
             {logo}
             <Text numberOfLines={1} style={styles.placeholder}>
@@ -92,31 +88,7 @@ export function MobilitySearchBar({
             </Text>
           </Pressable>
         )}
-        {!open ? <Pressable
-          accessibilityRole="button"
-          accessibilityLabel="내 장소"
-          onPress={onSaved}
-          style={styles.saved}
-        >
-          <SymbolView
-            name={{ ios: 'person.fill', android: 'person' }}
-            size={23}
-            tintColor="#559C8A"
-          />
-        </Pressable> : null}
       </View>
-      {!open ? <Pressable
-        accessibilityRole="button"
-        accessibilityLabel="길찾기"
-        onPress={onDirections}
-        style={styles.directions}
-      >
-        <SymbolView
-          name={{ ios: 'arrow.turn.up.right', android: 'turn_right' }}
-          size={28}
-          tintColor="#FFFFFF"
-        />
-      </Pressable> : null}
     </View>
   );
 }
@@ -125,7 +97,7 @@ const styles = StyleSheet.create({
   row: { flexDirection: 'row', gap: 8, alignItems: 'center' },
   pill: {
     flex: 1,
-    height: 50,
+    height: 56,
     flexDirection: 'row',
     alignItems: 'center',
     gap: 10,
@@ -133,52 +105,37 @@ const styles = StyleSheet.create({
     backgroundColor: mapUi.background,
     paddingLeft: 16,
     paddingRight: 12,
-    boxShadow: '0 2px 6px #00000024',
-  },
-  search: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 12, height: 50 },
-  searchPill: {
-    borderRadius: 16,
-    paddingHorizontal: 16,
     borderWidth: 1,
-    borderColor: '#E5E7EB',
+    borderColor: mapUi.border,
+    boxShadow: '0 4px 0 #2222220C, 0 5px 12px #2222220A',
+  },
+  search: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 12, height: 56 },
+  searchPill: {
+    borderRadius: 28,
+    paddingHorizontal: 16,
+    borderColor: mapUi.accentBorder,
   },
   close: {
     width: 44,
-    height: 50,
+    height: 56,
     borderRadius: 16,
     backgroundColor: mapUi.background,
     alignItems: 'center',
     justifyContent: 'center',
-    boxShadow: '0 2px 6px #00000024',
+    borderWidth: 1,
+    borderColor: mapUi.border,
+    boxShadow: '0 4px 0 #2222220C, 0 5px 12px #2222220A',
   },
   logo: {
-    width: 26,
-    height: 31,
-    borderRadius: 14,
-    borderBottomRightRadius: 4,
-    backgroundColor: mapUi.blue,
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: mapUi.brand,
     justifyContent: 'center',
     alignItems: 'center',
   },
-  logoText: { fontSize: 20, color: '#FFFFFF', fontWeight: '800' },
-  placeholder: { fontSize: 17, color: '#44474A', flex: 1 },
-  input: { flex: 1, minWidth: 0, height: 50, color: mapUi.text, fontSize: 17, paddingVertical: 0 },
-  clear: { minWidth: 24, minHeight: 44, alignItems: 'center', justifyContent: 'center' },
-  saved: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: '#DBEEEA',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  directions: {
-    height: 50,
-    width: 50,
-    borderRadius: 25,
-    backgroundColor: mapUi.blue,
-    alignItems: 'center',
-    justifyContent: 'center',
-    boxShadow: '0 2px 6px #00000024',
-  },
+  placeholder: { fontSize: 17, color: mapUi.text, flex: 1 },
+  input: { flex: 1, minWidth: 0, height: 56, color: mapUi.text, fontSize: 17, paddingVertical: 0 },
+  clear: { minWidth: 44, minHeight: 44, alignItems: 'center', justifyContent: 'center' },
+  pressed: { transform: [{ scale: 0.97 }, { translateY: 1 }] },
 });

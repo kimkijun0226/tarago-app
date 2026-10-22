@@ -1,4 +1,11 @@
 /** @fileoverview React 외부에서도 실행되는 접근 감지 작업과 네이티브 권한·푸시·지오펜스 경계를 연결한다. */
+import {
+  subwayProximityRegions,
+  handleSubwayEntry,
+  handleSubwayExit,
+} from '@/features/subway/model/subway-proximity';
+import { readCachedSubwayAlerts } from '@/features/subway/model/subway-alert-storage';
+import type { SubwayAlert } from '@/features/subway/model/subway-alert';
 import Constants from 'expo-constants';
 import * as Device from 'expo-device';
 import * as Location from 'expo-location';
@@ -173,6 +180,12 @@ if (!TaskManager.isTaskDefined(TASK)) {
     }
     if (!data?.region.identifier) return;
     try {
+      if (data.region.identifier.startsWith('subway:')) {
+        if (data.eventType === Location.LocationGeofencingEventType.Enter)
+          await handleSubwayEntry(data.region.identifier);
+        else await handleSubwayExit(data.region.identifier);
+        return;
+      }
       if (data.eventType === Location.LocationGeofencingEventType.Enter)
         await handleStopEntry(data.region.identifier);
       else await handleStopExit(data.region.identifier);
@@ -263,17 +276,20 @@ export async function preparePush(
 let geofenceSync: Promise<void> = Promise.resolve();
 
 /** 네이티브 영역 등록을 직렬화해 이전 설정이 새로운 감시를 덮어쓰지 않게 한다. */
-export function syncGeofences(alerts: BusAlert[]) {
+export function syncGeofences(alerts: BusAlert[], subwayAlerts?: SubwayAlert[]) {
   /** 이전 등록 실패와 무관하게 이번 목록을 순서대로 적용할 갱신 Promise다. */
-  const next = geofenceSync.catch(() => undefined).then(() => applyGeofences(alerts));
+  const next = geofenceSync.catch(() => undefined).then(() => applyGeofences(alerts, subwayAlerts));
   geofenceSync = next;
   return next;
 }
 
 /** 최신 알림을 네이티브 감시 영역에 적용하며 권한과 최대 영역 수를 검사한다. */
-async function applyGeofences(alerts: BusAlert[]) {
+async function applyGeofences(alerts: BusAlert[], subwayAlerts?: SubwayAlert[]) {
   /** 같은 정류소의 접근 알림을 합친 네이티브 감시 영역들이다. */
-  const regions = proximityRegions(alerts);
+  const regions = [
+    ...proximityRegions(alerts),
+    ...subwayProximityRegions(subwayAlerts ?? (await readCachedSubwayAlerts())),
+  ];
 
   /** 백그라운드 위치 허용 여부로, 접근 감지 권한 요청과 영역 등록 가능 여부를 판단한다. */
   const background = await Location.getBackgroundPermissionsAsync();
@@ -289,15 +305,23 @@ async function applyGeofences(alerts: BusAlert[]) {
     if (registered) await Location.stopGeofencingAsync(TASK);
     return;
   }
-  if (regions.length > 20) throw new Error('접근 알림은 최대 20개 정류소까지 설정할 수 있어요.');
+  if (regions.length > 20)
+    throw new Error('접근 알림은 버스 정류소와 지하철역을 합쳐 최대 20곳까지 설정할 수 있어요.');
   await Location.startGeofencingAsync(TASK, regions);
   await alertStorage.removeItem('tarago-proximity-error');
 }
 
 /** foreground에서도 현재 영역을 판정하며 50m 여유를 두어 GPS 흔들림을 줄인다. */
-export async function checkNearbyStops(position: Location.LocationObject, alerts: BusAlert[]) {
+export async function checkNearbyStops(
+  position: Location.LocationObject,
+  alerts: BusAlert[],
+  subwayAlerts?: SubwayAlert[],
+) {
   if (position.coords.accuracy !== null && position.coords.accuracy > 100) return;
-  for (const region of proximityRegions(alerts)) {
+  for (const region of [
+    ...proximityRegions(alerts),
+    ...subwayProximityRegions(subwayAlerts ?? (await readCachedSubwayAlerts())),
+  ]) {
     /** 위도 차이를 미터 단위 남북 거리로 근사한 값이다. */
     const north = (position.coords.latitude - region.latitude) * 111_320;
 
@@ -309,7 +333,12 @@ export async function checkNearbyStops(position: Location.LocationObject, alerts
 
     /** 정류소 중심과 현재 위치의 근사 거리로 진입 반경·이탈 여유 50m와 비교한다. */
     const distance = Math.hypot(north, east);
-    if (distance <= region.radius) await handleStopEntry(region.identifier);
-    else if (distance > region.radius + 50) await handleStopExit(region.identifier);
+    if (distance <= region.radius) {
+      if (region.identifier.startsWith('subway:')) await handleSubwayEntry(region.identifier);
+      else await handleStopEntry(region.identifier);
+    } else if (distance > region.radius + 50) {
+      if (region.identifier.startsWith('subway:')) await handleSubwayExit(region.identifier);
+      else await handleStopExit(region.identifier);
+    }
   }
 }

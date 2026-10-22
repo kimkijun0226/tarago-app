@@ -31,6 +31,7 @@ export function BusStopSheetHeader({
             accessibilityRole="button"
             accessibilityLabel="정류장 정보 펼치기"
             onPress={onExpand}
+            style={({ pressed }) => [styles.expand, pressed && styles.pressed]}
           >
             <Text accessibilityRole="header" style={[styles.title, { color: colors.text }]}>
               {busStop.name}
@@ -52,6 +53,8 @@ export function BusStopSheetHeader({
 
 const styles = StyleSheet.create({
   header: { paddingVertical: 4 },
-  title: { fontSize: 20, fontWeight: '700' },
+  expand: { minHeight: 44, justifyContent: 'center' },
+  pressed: { opacity: 0.7 },
+  title: { fontSize: 22, fontWeight: '700' },
   subtitle: { marginTop: 4, fontSize: 14 },
 });

@@ -2,6 +2,7 @@
 import { useEffect, useState } from 'react';
 import { ActivityIndicator, AppState, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { mapUi } from '@/shared/ui/map-design-tokens';
 import { BUS_ARRIVALS_REFRESH_INTERVAL } from '../model/use-bus-arrivals';
 
 type Props = { updatedAt: number; fetching: boolean; onRefresh: () => void };
@@ -40,7 +41,7 @@ export function ArrivalRefreshButton({ updatedAt, fetching, onRefresh }: Props) 
         accessibilityState={{ busy: fetching, disabled: fetching }}
         disabled={fetching}
         onPress={onRefresh}
-        style={styles.button}
+        style={({ pressed }) => [styles.button, pressed && styles.pressed]}
       >
         {fetching ? (
           <ActivityIndicator color="#FFFFFF" />
@@ -67,11 +68,11 @@ const styles = StyleSheet.create({
     width: 54,
     height: 54,
     borderRadius: 27,
-    backgroundColor: '#383D41',
+    backgroundColor: mapUi.blue,
     alignItems: 'center',
     justifyContent: 'center',
-    elevation: 5,
-    boxShadow: '0px 3px 10px #00000025',
+    elevation: 3,
+    boxShadow: '0px 4px 0px #D9285020',
   },
   ring: {
     width: 31,
@@ -89,7 +90,8 @@ const styles = StyleSheet.create({
     position: 'absolute',
     right: -9,
     bottom: -3,
-    backgroundColor: '#383D41',
+    backgroundColor: mapUi.blue,
   },
-  updatedAt: { color: '#85888B', fontSize: 10 },
+  updatedAt: { color: mapUi.secondaryText, fontSize: 10 },
+  pressed: { opacity: 0.75, transform: [{ scale: 0.96 }] },
 });

@@ -55,7 +55,8 @@
     "test": "node --experimental-strip-types --test src/**/*.test.ts",
     "ios:device": "expo prebuild --platform ios --no-install && expo run:ios --device",
     "format": "prettier --write src plugins *.js *.json docs README.md .vscode",
-    "format:check": "prettier --check src plugins *.js *.json docs README.md .vscode"
+    "format:check": "prettier --check src plugins *.js *.json docs README.md .vscode",
+    "ios:release": "expo run:ios --configuration Release --device --no-bundler"
   },
   "private": true
 }

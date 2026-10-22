@@ -25,7 +25,16 @@ export function AppSection({
           {title}
         </Text>
       ) : null}
-      <View style={{ backgroundColor: colors.surface, borderRadius: 16, padding: 16, gap: 12 }}>
+      <View
+        style={{
+          backgroundColor: colors.surface,
+          borderRadius: 20,
+          borderWidth: 1,
+          borderColor: colors.separator,
+          padding: 18,
+          gap: 12,
+        }}
+      >
         {children}
       </View>
       {footer ? (

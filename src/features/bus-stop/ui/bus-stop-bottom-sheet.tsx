@@ -135,8 +135,9 @@ export const BusStopBottomSheet = memo(function BusStopBottomSheet({
   /** 첫 차량이 60초 안에 도착하는 노선 그룹이며 그룹 변경 시에만 다시 계산한다. */
   const soonGroups = useMemo(
     () =>
-      arrivalGroups
-        .filter((group) => group.first.etaSeconds !== null && group.first.etaSeconds <= 60),
+      arrivalGroups.filter(
+        (group) => group.first.etaSeconds !== null && group.first.etaSeconds <= 60,
+      ),
     [arrivalGroups],
   );
 
@@ -150,6 +151,11 @@ export const BusStopBottomSheet = memo(function BusStopBottomSheet({
       router.navigate({
         pathname: '/alerts',
         params: {
+          alertTransport: 'bus',
+          alertKind: 'time',
+          sourceAlertId: '',
+          sourceAlertIds: '',
+          monitoringId: '',
           stationId: busStop.id,
           stationName: busStop.name,
           latitude: String(busStop.latitude),
@@ -194,9 +200,7 @@ export const BusStopBottomSheet = memo(function BusStopBottomSheet({
         animatedPosition={animatedPosition}
         toolbar={
           <View
-            style={
-              snap !== 'compact' && soonGroups.length === 0 ? styles.headerDivider : undefined
-            }
+            style={snap !== 'compact' && soonGroups.length === 0 ? styles.headerDivider : undefined}
           >
             <BusStopSheetHeader
               busStop={busStop}
@@ -267,7 +271,11 @@ const createStyles = (colors: ReturnType<typeof useAppTheme>['colors']) =>
     },
     list: { flex: 1 },
     stateContainer: {
-      minHeight: 120,
+      margin: 16,
+      borderRadius: 20,
+      backgroundColor: colors.background,
+      padding: 20,
+      minHeight: 140,
       alignItems: 'center',
       justifyContent: 'center',
       gap: 10,

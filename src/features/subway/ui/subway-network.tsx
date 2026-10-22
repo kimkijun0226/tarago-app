@@ -8,7 +8,7 @@ import { mapUi } from '@/shared/ui/map-design-tokens';
 
 /** 지하철 제목과 주요 본문에 쓰는 지도 공통 글자색이다. 지연·보조 정보와 비활성 선택에 사용하는 회색이다. */
 const INK = mapUi.text,
-  GRAY = '#919191';
+  GRAY = mapUi.secondaryText;
 type NetworkProps = {
   line: SubwayStationLine | undefined;
   lineName: string;
@@ -35,7 +35,7 @@ export function SubwayStationRail({
           onPress={() => onSelectStation(line.previousStation!.name, lineName)}
           accessibilityRole="button"
           accessibilityLabel={`이전 역 ${line.previousStation.name}`}
-          style={s.adjacentButton}
+          style={({ pressed }) => [s.adjacentButton, pressed && s.pressed]}
         >
           <Text numberOfLines={1} style={s.adjacentText}>
             ‹ {line.previousStation.name}
@@ -55,7 +55,7 @@ export function SubwayStationRail({
           onPress={() => onSelectStation(line.nextStation!.name, lineName)}
           accessibilityRole="button"
           accessibilityLabel={`다음 역 ${line.nextStation.name}`}
-          style={s.adjacentButton}
+          style={({ pressed }) => [s.adjacentButton, pressed && s.pressed]}
         >
           <Text numberOfLines={1} style={[s.adjacentText, { textAlign: 'right' }]}>
             {line.nextStation.name} ›
@@ -86,7 +86,11 @@ export function SubwayNetworkPanel({
       <Text style={s.sectionTitle}>노선도</Text>
       <View style={s.networkPanel}>
         {line?.stations.length ? (
-          <Pressable onPress={onOpen} accessibilityRole="button" style={s.networkLabel}>
+          <Pressable
+            onPress={onOpen}
+            accessibilityRole="button"
+            style={({ pressed }) => [s.networkLabel, pressed && s.pressed]}
+          >
             <SymbolView
               name={{ ios: 'tram.circle', android: 'train' }}
               tintColor={color}
@@ -117,7 +121,11 @@ export function SubwayNetworkPanel({
                 accessibilityLabel={`${item.name}역 선택`}
                 accessibilityState={{ selected: item.stationCode === line.stationCode }}
                 onPress={() => onSelectStation?.(item.name, lineName)}
-                style={s.networkStation}
+                style={({ pressed }) => [
+                  s.networkStation,
+                  item.stationCode === line.stationCode && s.selectedStation,
+                  pressed && s.pressed,
+                ]}
               >
                 <View style={[s.networkTrack, { backgroundColor: color }]} />
                 <View
@@ -174,7 +182,7 @@ export function SubwayNetworkModal({
               onPress={onClose}
               accessibilityRole="button"
               accessibilityLabel="노선도 닫기"
-              style={s.toolbarControl}
+              style={({ pressed }) => [s.toolbarControl, pressed && s.pressed]}
             >
               <SymbolView
                 name={{ ios: 'chevron.left', android: 'chevron_left' }}
@@ -194,7 +202,11 @@ export function SubwayNetworkModal({
                   onSelectStation?.(item.name, lineName);
                 }}
                 accessibilityRole="button"
-                style={s.stationListRow}
+                style={({ pressed }) => [
+                  s.stationListRow,
+                  item.stationCode === line?.stationCode && s.selectedStation,
+                  pressed && s.pressed,
+                ]}
               >
                 <View style={[s.badge, { backgroundColor: color }]}>
                   <Text style={s.badgeText}>{item.stationNumber}</Text>
@@ -212,7 +224,16 @@ export function SubwayNetworkModal({
 /** 이 파일의 지하철 표시 요소가 사용하는 고정 스타일을 모듈 범위에서 한 번 만든다. */
 const s = StyleSheet.create({
   fullToolbar: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 0 },
-  toolbarControl: { width: 36, height: 40, alignItems: 'center', justifyContent: 'center' },
+  toolbarControl: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: mapUi.separator,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  pressed: { opacity: 0.7, transform: [{ scale: 0.98 }] },
+  selectedStation: { backgroundColor: mapUi.blueSurface },
   adjacentButton: { flex: 1, minHeight: 44, justifyContent: 'center', paddingHorizontal: 8 },
   adjacentText: { color: 'white', fontSize: 13 },
   networkLabel: {
@@ -221,7 +242,8 @@ const s = StyleSheet.create({
     borderRadius: 24,
     backgroundColor: 'white',
     paddingHorizontal: 12,
-    paddingVertical: 7,
+    paddingVertical: 12,
+    minHeight: 44,
     alignSelf: 'flex-end',
     margin: 8,
     flexDirection: 'row',
@@ -230,7 +252,13 @@ const s = StyleSheet.create({
   },
   networkLabelText: { fontSize: 14, color: INK },
   networkStations: { paddingTop: 25, paddingBottom: 22 },
-  networkStation: { width: 59, minHeight: 65, alignItems: 'center', paddingTop: 12 },
+  networkStation: {
+    width: 59,
+    minHeight: 80,
+    borderRadius: 16,
+    alignItems: 'center',
+    paddingTop: 12,
+  },
   networkTrack: { position: 'absolute', top: 19, left: 0, right: 0, height: 3 },
   networkDot: { backgroundColor: 'white', borderRadius: 12, height: 10, width: 10 },
   networkStationText: {
@@ -241,7 +269,11 @@ const s = StyleSheet.create({
     paddingHorizontal: 3,
   },
   stationListRow: {
-    minHeight: 58,
+    minHeight: 64,
+    marginHorizontal: 16,
+    marginVertical: 4,
+    borderRadius: 20,
+    backgroundColor: mapUi.separator,
     paddingHorizontal: 24,
     flexDirection: 'row',
     alignItems: 'center',
@@ -250,7 +282,7 @@ const s = StyleSheet.create({
     borderBottomColor: '#F0F0F0',
   },
   rail: {
-    height: 29,
+    height: 44,
     borderRadius: 18,
     flexDirection: 'row',
     alignItems: 'center',
@@ -266,7 +298,7 @@ const s = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     gap: 6,
-    height: 43,
+    height: 48,
     minWidth: 136,
     paddingHorizontal: 12,
   },
@@ -283,10 +315,11 @@ const s = StyleSheet.create({
   infoSection: { paddingHorizontal: 18, paddingVertical: 20 },
   sectionTitle: { fontSize: 19, fontWeight: '700', color: INK },
   networkPanel: {
-    backgroundColor: '#F8F8F8',
+    backgroundColor: mapUi.separator,
     borderWidth: 1,
     borderColor: '#E4E4E4',
-    borderRadius: 4,
+    borderRadius: 20,
+    boxShadow: '0px 3px 0px #22222208',
     marginTop: 18,
     minHeight: 150,
     alignItems: 'center',

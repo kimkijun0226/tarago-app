@@ -154,7 +154,7 @@ export function MapBottomSheet({
             width: 44,
             height: 4,
             borderRadius: 2,
-            backgroundColor: colors.tertiaryText,
+            backgroundColor: colors.accentBorder,
           }}
         />
         <View
@@ -167,7 +167,7 @@ export function MapBottomSheet({
         </View>
       </View>
     ),
-    [colors.tertiaryText, toolbar],
+    [colors.accentBorder, toolbar],
   );
 
   // 라이브러리가 시트를 이동하고, 이 영역은 보이는 높이만 잘라 목록 뷰포트를 맞춘다.
@@ -243,14 +243,16 @@ export function MapBottomSheet({
           backgroundStyle={{
             borderRadius: edgeToEdge && snap === 'full' ? 0 : radius.sheet,
             backgroundColor: colors.surface,
-            boxShadow: '0px 0px 18px 2px rgba(0, 0, 0, 0.14)',
+            borderWidth: 1,
+            borderColor: colors.separator,
+            boxShadow: '0px -3px 20px rgba(34, 34, 34, 0.08)',
           }}
           handleStyle={{ paddingVertical: 12 }}
           handleIndicatorStyle={{
             width: 44,
             height: 4,
             borderRadius: 2,
-            backgroundColor: colors.tertiaryText,
+            backgroundColor: colors.accentBorder,
           }}
           enableContentPanningGesture={false}
           enableHandlePanningGesture={true}

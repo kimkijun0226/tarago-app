@@ -28,7 +28,7 @@ export const BusArrivalRow = memo(function BusArrivalRow({
         accessibilityRole="button"
         accessibilityLabel={`${group.busNumber}번 노선 상세 보기`}
         onPress={() => onSelectRoute(group.routeId, group.stationSeq ?? 0, group.first.routeSource)}
-        style={styles.content}
+        style={({ pressed }) => [styles.content, pressed && styles.pressed]}
       >
         <View style={styles.routeInfo}>
           <View style={styles.heading}>
@@ -68,7 +68,7 @@ export const BusArrivalRow = memo(function BusArrivalRow({
           accessibilityRole="button"
           accessibilityLabel={`${group.busNumber}번 버스 알림 설정`}
           onPress={() => onConfigureAlert(group)}
-          style={styles.icon}
+          style={({ pressed }) => [styles.icon, pressed && styles.pressed]}
         >
           <SymbolView
             name={{ ios: 'bell', android: 'notifications_none' }}
@@ -108,8 +108,12 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     flexWrap: 'wrap',
     alignItems: 'center',
-    borderBottomWidth: 1,
-    borderBottomColor: '#F0F0F0',
+    marginHorizontal: 16,
+    marginVertical: 5,
+    borderWidth: 1,
+    borderColor: mapUi.border,
+    borderRadius: 20,
+    boxShadow: '0px 3px 0px #22222208',
     backgroundColor: '#FFFFFF',
   },
   content: { flex: 1, minHeight: 64, justifyContent: 'center', gap: 8 },
@@ -118,18 +122,26 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     paddingHorizontal: 7,
     paddingVertical: 5,
-    borderRadius: 3,
+    borderRadius: 10,
     fontSize: 12,
     fontWeight: '500',
   },
   heading: { flexDirection: 'row', alignItems: 'center', gap: 7 },
-  direction: { color: '#929292', fontSize: 13, flexShrink: 1 },
+  direction: { color: mapUi.secondaryText, fontSize: 13, flexShrink: 1 },
   number: { fontSize: 20, fontWeight: '700', color: mapUi.text },
   times: { flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 5 },
   eta: { fontSize: 14, lineHeight: 28 },
-  red: { color: '#FF4438', fontWeight: '500' },
-  secondary: { color: '#929292', fontSize: 13, fontWeight: '400' },
-  dot: { color: '#929292' },
+  red: { color: mapUi.blue, fontWeight: '500' },
+  secondary: { color: mapUi.secondaryText, fontSize: 13, fontWeight: '400' },
+  dot: { color: mapUi.secondaryText },
   actions: { alignItems: 'center', marginLeft: 4 },
-  icon: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center' },
+  icon: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: mapUi.blueSurface,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  pressed: { opacity: 0.7, transform: [{ scale: 0.98 }] },
 });

@@ -1,4 +1,5 @@
 /** @fileoverview 지도 좌표가 준비되기 전 보여 주는 로딩·재시도 화면. 위치 조회 자체는 상위 훅에 위임한다. */
+import { mapUi } from '@/shared/ui/map-design-tokens';
 import { ActivityIndicator, Alert, Linking, Pressable, Text, View } from 'react-native';
 
 /**
@@ -23,27 +24,43 @@ export function MapLocationGate({
     <View
       style={{
         flex: 1,
-        backgroundColor: '#208AEF',
+        backgroundColor: mapUi.blueSurface,
         justifyContent: 'center',
         alignItems: 'center',
         gap: 20,
         padding: 32,
       }}
     >
-      <Text style={{ color: '#FFFFFF', fontSize: 40, fontWeight: '800' }}>타라고</Text>
+      <Text style={{ color: mapUi.text, fontSize: 40, fontWeight: '800' }}>타라고</Text>
       {preparing ? (
         <>
-          <ActivityIndicator color="#FFFFFF" />
-          <Text style={{ color: '#FFFFFF' }}>현재 위치를 찾고 있어요</Text>
+          <ActivityIndicator color={mapUi.blue} />
+          <Text style={{ color: mapUi.text }}>현재 위치를 찾고 있어요</Text>
         </>
       ) : (
         <>
-          <Text style={{ color: '#FFFFFF' }}>현재 위치를 확인하지 못했어요.</Text>
-          <Pressable onPress={() => void onRetry()}>
-            <Text style={{ color: '#FFFFFF', fontSize: 18, padding: 12 }}>다시 찾기</Text>
+          <Text style={{ color: mapUi.text }}>현재 위치를 확인하지 못했어요.</Text>
+          <Pressable
+            accessibilityRole="button"
+            onPress={() => void onRetry()}
+            style={({ pressed }) => ({
+              minHeight: 48,
+              borderRadius: 20,
+              backgroundColor: mapUi.background,
+              borderWidth: 1,
+              borderBottomWidth: 3,
+              borderColor: mapUi.accentBorder,
+              transform: [{ scale: pressed ? 0.97 : 1 }],
+            })}
+          >
+            <Text style={{ color: mapUi.text, fontSize: 18, padding: 12 }}>다시 찾기</Text>
           </Pressable>
-          <Pressable onPress={openLocationSettings}>
-            <Text style={{ color: '#FFFFFF', padding: 12 }}>위치 설정 열기</Text>
+          <Pressable
+            accessibilityRole="button"
+            onPress={openLocationSettings}
+            style={({ pressed }) => ({ minHeight: 44, opacity: pressed ? 0.65 : 1 })}
+          >
+            <Text style={{ color: mapUi.text, padding: 12 }}>위치 설정 열기</Text>
           </Pressable>
         </>
       )}

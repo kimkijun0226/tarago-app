@@ -8,9 +8,23 @@ import { GestureHandlerRootView } from 'react-native-gesture-handler';
 
 import { AnimatedSplashOverlay } from '@/components/animated-icon';
 import { AlertRuntime } from '@/features/bus-alert/ui/alert-runtime';
+import { appColors } from '@/shared/ui/theme';
 import { queryClient } from '@/shared/lib/query-client';
 
 SplashScreen.preventAutoHideAsync();
+
+const navigationTheme = {
+  ...DefaultTheme,
+  colors: {
+    ...DefaultTheme.colors,
+    primary: appColors.accent,
+    background: appColors.background,
+    card: appColors.surface,
+    text: appColors.text,
+    border: appColors.separator,
+    notification: appColors.brand,
+  },
+};
 
 /** Provider 수명을 화면 전환과 분리하고 앱 활성 상태를 Query에 전달해 백그라운드 폴링을 중지한다. */
 export default function RootLayout() {
@@ -29,7 +43,7 @@ export default function RootLayout() {
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
       <QueryClientProvider client={queryClient}>
-        <ThemeProvider value={DefaultTheme}>
+        <ThemeProvider value={navigationTheme}>
           <AnimatedSplashOverlay />
           <AlertRuntime />
           <Stack screenOptions={{ headerShown: false, animation: 'default', gestureEnabled: true }}>
