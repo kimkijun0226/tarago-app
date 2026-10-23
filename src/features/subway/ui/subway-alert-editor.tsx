@@ -1,4 +1,4 @@
-import { AlertModes } from '@/features/bus-alert/ui/alert-components';
+import { AlertTargetSummary } from '@/features/bus-alert/ui/alert-target-summary';
 import type { Dispatch, SetStateAction } from 'react';
 import { ActivityIndicator, Text, View } from 'react-native';
 import { AlertLocationFields } from '@/features/bus-alert/ui/alert-location-fields';
@@ -37,16 +37,33 @@ export function SubwayAlertEditor({
     ) ?? [];
   return (
     <>
-      <View style={styles.stationCard}>
-        <Text style={styles.stationName}>{draft.stationName}</Text>
-        <Text style={styles.help}>{subwayAlertSubtitle(presentation)}</Text>
-      </View>
-      <AlertModes
-        scheduledEnabled={showSchedule}
-        proximityEnabled={showLocation}
-        disabled={disabled}
-        onChange={(modes) => setDraft((current) => current && { ...current, ...modes })}
-      />
+      <AlertTargetSummary
+        transport="subway"
+        title={draft.stationName}
+        subtitle={subwayAlertSubtitle(presentation)}
+      >
+        {showSchedule && (
+          <View
+            style={{ borderTopWidth: 1, borderTopColor: colors.separator, paddingTop: 10, gap: 6 }}
+          >
+            <Text style={styles.sectionTitle}>도착정보</Text>
+            {live.isError ? (
+              <Text style={styles.warningText}>도착정보를 불러오지 못했어요.</Text>
+            ) : live.isPending ? (
+              <ActivityIndicator color={colors.accent} />
+            ) : !arrivals.length ? (
+              <Text style={styles.help}>도착정보 없음</Text>
+            ) : (
+              arrivals.slice(0, 2).map((a, i) => (
+                <Text key={`${a.trainId}:${i}`} style={styles.help}>
+                  {destinationLabel(a.destination)} · {a.arrivalMessage || '시간 확인 중'}
+                </Text>
+              ))
+            )}
+          </View>
+        )}
+      </AlertTargetSummary>
+
       {showSchedule && (
         <AlertScheduleFields
           value={draft}
@@ -76,24 +93,6 @@ export function SubwayAlertEditor({
           onDaysChange={(days) => setDraft({ ...draft, days })}
           onRadiusChange={(radius) => setDraft({ ...draft, radius })}
         />
-      )}
-      {showSchedule && (
-        <View style={styles.card}>
-          <Text style={styles.sectionTitle}>도착정보</Text>
-          {live.isError ? (
-            <Text style={styles.warningText}>도착정보를 불러오지 못했어요.</Text>
-          ) : live.isPending ? (
-            <ActivityIndicator color={colors.accent} />
-          ) : !arrivals.length ? (
-            <Text style={styles.help}>도착정보 없음</Text>
-          ) : (
-            arrivals.slice(0, 2).map((a, i) => (
-              <Text key={`${a.trainId}:${i}`} style={styles.help}>
-                {destinationLabel(a.destination)} · {a.arrivalMessage || '시간 확인 중'}
-              </Text>
-            ))
-          )}
-        </View>
       )}
     </>
   );

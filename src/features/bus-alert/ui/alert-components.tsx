@@ -1,9 +1,11 @@
+import { AppHeader } from '@/shared/ui/app-header';
+import { AlertSetupPreview } from './alert-setup-preview';
+import { TransportIcon } from '@/shared/ui/transport-icon';
 import type { ComponentProps, ReactNode } from 'react';
 import { SymbolView } from 'expo-symbols';
 import { ActivityIndicator, Pressable, Switch, Text, View } from 'react-native';
 import { router } from 'expo-router';
 import { useAppStore } from '@/shared/model/app-store';
-import { AlertHistoryBell } from './alert-history-bell';
 import { WEEKDAYS, WEEKDAY_ORDER } from '../model/alert-form';
 import { alertColors as colors } from './alert-design';
 import { createStyles } from './alert-screen-styles';
@@ -94,25 +96,13 @@ export function EmptyAlertCard({
           justifyContent: 'center',
           alignItems: 'center',
           gap: 12,
-          minHeight: compact ? 132 : 240,
+          minHeight: compact ? 220 : 260,
           opacity: disabled ? 0.4 : 1,
           transform: [{ translateY: pressed ? 2 : 0 }, { scale: pressed ? 0.99 : 1 }],
         },
       ]}
     >
-      <View
-        style={{
-          width: 64,
-          height: 64,
-          borderRadius: 24,
-          backgroundColor: colors.accentSurface,
-          alignItems: 'center',
-          justifyContent: 'center',
-        }}
-      >
-        <SymbolView name={{ ios: 'plus', android: 'add' }} size={30} tintColor={colors.accent} />
-      </View>
-      <Text style={styles.help}>지도에서 선택해주세요</Text>
+      <AlertSetupPreview transport={transport} kind={kind} />
     </Pressable>
   );
 }
@@ -171,25 +161,16 @@ export function AlertPageHeader({
 }) {
   return (
     <View style={{ gap: 20 }}>
-      <View style={styles.heading}>
-        {editing && (
-          <AlertIconButton
-            plain
-            name={{ ios: 'chevron.left', android: 'arrow_back' }}
-            label="알림 목록으로 돌아가기"
-            onPress={onBack}
-            disabled={busy}
-          />
-        )}
-        <View style={{ flex: 1, gap: 4 }}>
-          <Text accessibilityRole="header" style={styles.title}>
-            {editing
-              ? `${transport === 'bus' ? '버스' : '지하철'} ${kind === 'time' ? '시간' : '위치'} 알림`
-              : '나의 알림'}
-          </Text>
-        </View>
-        {!editing && <AlertHistoryBell disabled={busy} />}
-      </View>
+      <AppHeader
+        title={
+          editing
+            ? `${transport === 'bus' ? '버스' : '지하철'} ${kind === 'time' ? '예약' : '위치'} 알림`
+            : '예약 추가'
+        }
+        onBack={onBack}
+        backLabel="알림 목록으로 돌아가기"
+        disabled={busy}
+      />
       {!editing && (
         <View style={styles.heading}>
           {(['bus', 'subway'] as const).map((value) => (
@@ -215,12 +196,8 @@ export function AlertPageHeader({
                 transform: [{ translateY: pressed ? 2 : 0 }, { scale: pressed ? 0.98 : 1 }],
               })}
             >
-              <SymbolView
-                name={
-                  value === 'bus'
-                    ? { ios: 'bus.fill', android: 'directions_bus' }
-                    : { ios: 'tram.fill', android: 'tram' }
-                }
+              <TransportIcon
+                transport={value}
                 size={30}
                 tintColor={transport === value ? colors.accent : colors.secondaryText}
               />
@@ -335,6 +312,7 @@ export function AlertNotice({
 
 /** 버스·지하철 목록이 공유하는 카드. 실제 저장과 삭제는 각 도메인 훅이 수행한다. */
 export function SavedAlertCard({
+  compact = false,
   title,
   subtitle,
   summary,
@@ -347,6 +325,7 @@ export function SavedAlertCard({
   onEdit,
   onDelete,
 }: {
+  compact?: boolean;
   title: string;
   subtitle: string;
   summary: string;
@@ -360,7 +339,14 @@ export function SavedAlertCard({
   onDelete: () => void;
 }) {
   return (
-    <View style={[styles.card, styles.savedCard, !enabled && styles.dim]}>
+    <View
+      style={[
+        styles.card,
+        styles.savedCard,
+        compact && { minHeight: 120, padding: 12, gap: 6, borderRadius: 16 },
+        !enabled && styles.dim,
+      ]}
+    >
       <View style={styles.heading}>
         <Pressable
           accessibilityRole="button"
@@ -368,8 +354,13 @@ export function SavedAlertCard({
           onPress={onOpen}
           style={{ flex: 1, gap: 4 }}
         >
-          <Text style={styles.stationName}>{title}</Text>
-          <Text style={styles.help}>{subtitle}</Text>
+          <Text style={[styles.stationName, compact && { fontSize: 16 }]}>{title}</Text>
+          <Text
+            numberOfLines={compact ? 1 : undefined}
+            style={[styles.help, compact && { fontSize: 12, lineHeight: 16 }]}
+          >
+            {subtitle}
+          </Text>
         </Pressable>
         <View style={{ alignItems: 'flex-end', gap: 6 }}>
           <Switch
@@ -383,7 +374,7 @@ export function SavedAlertCard({
       </View>
       <Text
         style={{
-          fontSize: 24,
+          fontSize: compact ? 15 : 24,
           fontWeight: '600',
           color: colors.text,
           fontVariant: ['tabular-nums'],
@@ -391,7 +382,12 @@ export function SavedAlertCard({
       >
         {summary}
       </Text>
-      <Text style={styles.detail}>{detail}</Text>
+      <Text
+        numberOfLines={compact ? 1 : undefined}
+        style={[styles.detail, compact && { fontSize: 11 }]}
+      >
+        {detail}
+      </Text>
       {!enabled && (
         <View style={styles.statusPill}>
           <Text style={styles.statusText}>일시정지</Text>
@@ -404,7 +400,7 @@ export function SavedAlertCard({
           gap: 16,
           borderTopWidth: 1,
           borderTopColor: colors.separator,
-          paddingTop: 12,
+          paddingTop: compact ? 6 : 12,
         }}
       >
         <Pressable
@@ -431,38 +427,6 @@ export function SavedAlertCard({
             onPress={onDelete}
           />
         </View>
-      </View>
-    </View>
-  );
-}
-
-/** 두 종류를 독립 선택하되 최소 하나는 유지한다. */
-export function AlertModes({
-  scheduledEnabled,
-  proximityEnabled,
-  onChange,
-  disabled,
-}: {
-  scheduledEnabled: boolean;
-  proximityEnabled: boolean;
-  onChange: (modes: { scheduledEnabled: boolean; proximityEnabled: boolean }) => void;
-  disabled?: boolean;
-}) {
-  return (
-    <View style={styles.card}>
-      <View style={styles.chips}>
-        <AlertChoice
-          label="시간 알림"
-          selected={scheduledEnabled}
-          disabled={disabled || (scheduledEnabled && !proximityEnabled)}
-          onPress={() => onChange({ scheduledEnabled: !scheduledEnabled, proximityEnabled })}
-        />
-        <AlertChoice
-          label="위치 알림"
-          selected={proximityEnabled}
-          disabled={disabled || (proximityEnabled && !scheduledEnabled)}
-          onPress={() => onChange({ scheduledEnabled, proximityEnabled: !proximityEnabled })}
-        />
       </View>
     </View>
   );

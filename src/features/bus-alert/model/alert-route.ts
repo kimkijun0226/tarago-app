@@ -3,6 +3,7 @@ import type { SubwayAlertDraft } from '@/features/subway/model/use-subway-alert-
 
 export type AlertRouteParams = {
   alertTransport?: string;
+  returnTo?: string;
   alertKind?: string;
   stationId?: string;
   stationName?: string;

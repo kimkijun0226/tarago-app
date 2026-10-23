@@ -1,9 +1,10 @@
+import { AlertTargetSummary } from '@/features/bus-alert/ui/alert-target-summary';
 import type { Dispatch, SetStateAction } from 'react';
 import { ActivityIndicator, Switch, Text, View } from 'react-native';
 import { useBusArrivals } from '@/features/bus-stop/model/use-bus-arrivals';
 import { formatEta, groupBusArrivals } from '@/features/bus-stop/model/bus-arrival';
 import type { AlertDraft, AlertKind } from '../model/alert-form';
-import { AlertIconButton, AlertModes } from './alert-components';
+import { AlertIconButton } from './alert-components';
 import { AlertLocationFields } from './alert-location-fields';
 import { AlertScheduleFields } from './alert-schedule-fields';
 import { createStyles } from './alert-screen-styles';
@@ -38,16 +39,48 @@ export function AlertEditorForm({
   const groups = groupBusArrivals(arrivals);
   return (
     <>
-      <View style={styles.stationCard}>
-        <Text style={styles.stationName}>{draft.busNumber}번 버스</Text>
-        <Text style={styles.help}>{draft.stop.name}</Text>
-      </View>
-      <AlertModes
-        scheduledEnabled={showSchedule}
-        proximityEnabled={showLocation}
-        disabled={disabled}
-        onChange={(modes) => setDraft((current) => current && { ...current, ...modes })}
-      />
+      <AlertTargetSummary
+        transport="bus"
+        title={`${draft.busNumber}번 버스`}
+        subtitle={draft.stop.name}
+      >
+        {showSchedule && (
+          <View
+            style={{ borderTopWidth: 1, borderTopColor: colors.separator, paddingTop: 10, gap: 6 }}
+          >
+            <View style={styles.heading}>
+              <Text style={{ ...styles.sectionTitle, flex: 1 }}>도착정보</Text>
+              <AlertIconButton
+                name={{ ios: 'arrow.clockwise', android: 'refresh' }}
+                label="도착정보 새로고침"
+                disabled={disabled || live.isFetching}
+                onPress={() => void live.refetch()}
+              />
+            </View>
+            {live.isError ? (
+              <Text style={styles.warningText}>도착정보를 불러오지 못했어요.</Text>
+            ) : live.isPending ? (
+              <ActivityIndicator color={colors.accent} />
+            ) : !groups.length ? (
+              <Text style={styles.help}>도착정보 없음</Text>
+            ) : (
+              groups.map((group) => (
+                <View key={`${group.routeId}:${group.stationSeq}`} style={styles.liveRow}>
+                  <Text style={styles.liveEta}>
+                    {formatEta(
+                      group.first.etaSeconds,
+                      group.first.serviceStatus,
+                      group.first.etaPrecision,
+                      group.first.etaSource,
+                    )}
+                  </Text>
+                </View>
+              ))
+            )}
+          </View>
+        )}
+      </AlertTargetSummary>
+
       {showSchedule && (
         <>
           <AlertScheduleFields
@@ -84,40 +117,6 @@ export function AlertEditorForm({
           onDaysChange={(days) => setDraft({ ...draft, days })}
           onRadiusChange={(radius) => setDraft({ ...draft, radius })}
         />
-      )}
-      {showSchedule && (
-        <View style={styles.card}>
-          <View style={styles.heading}>
-            <Text style={{ ...styles.sectionTitle, flex: 1 }}>도착정보</Text>
-            <AlertIconButton
-              name={{ ios: 'arrow.clockwise', android: 'refresh' }}
-              label="도착정보 새로고침"
-              disabled={disabled || live.isFetching}
-              onPress={() => void live.refetch()}
-            />
-          </View>
-          {live.isError ? (
-            <Text style={styles.warningText}>도착정보를 불러오지 못했어요.</Text>
-          ) : live.isPending ? (
-            <ActivityIndicator color={colors.accent} />
-          ) : !groups.length ? (
-            <Text style={styles.help}>도착정보 없음</Text>
-          ) : (
-            groups.map((group) => (
-              <View key={`${group.routeId}:${group.stationSeq}`} style={styles.liveRow}>
-                <Text style={styles.liveNumber}>{group.busNumber}번</Text>
-                <Text style={styles.liveEta}>
-                  {formatEta(
-                    group.first.etaSeconds,
-                    group.first.serviceStatus,
-                    group.first.etaPrecision,
-                    group.first.etaSource,
-                  )}
-                </Text>
-              </View>
-            ))
-          )}
-        </View>
       )}
     </>
   );

@@ -1,3 +1,5 @@
+import { AppHeader } from '@/shared/ui/app-header';
+import { TransportIcon } from '@/shared/ui/transport-icon';
 /** @fileoverview 서버가 발송한 알림을 최신순으로 모아 보여준다. */
 import { useCallback } from 'react';
 import { useFocusEffect, router } from 'expo-router';
@@ -44,26 +46,16 @@ export function NotificationHistoryScreen() {
     >
       <View
         style={{
-          flexDirection: 'row',
-          alignItems: 'center',
-          gap: 12,
           paddingHorizontal: 24,
           paddingTop: 20,
           paddingBottom: 18,
         }}
       >
-        <AlertIconButton
-          plain
-          name={{ ios: 'chevron.left', android: 'arrow_back' }}
-          label="알림 내역 닫기"
-          onPress={() => (router.canGoBack() ? router.back() : router.replace('/alerts'))}
+        <AppHeader
+          title="알림 내역"
+          backLabel="알림 내역 닫기"
+          onBack={() => (router.canGoBack() ? router.back() : router.replace('/alerts'))}
         />
-        <Text
-          accessibilityRole="header"
-          style={{ flex: 1, fontSize: 26, fontWeight: '700', color: colors.text }}
-        >
-          알림 내역
-        </Text>
       </View>
       <FlatList
         data={items}
@@ -143,15 +135,7 @@ export function NotificationHistoryScreen() {
                   backgroundColor: colors.accentSurface,
                 }}
               >
-                <SymbolView
-                  name={
-                    item.transport === 'bus'
-                      ? { ios: 'bus.fill', android: 'directions_bus' }
-                      : { ios: 'tram.fill', android: 'subway' }
-                  }
-                  size={21}
-                  tintColor={colors.accent}
-                />
+                <TransportIcon transport={item.transport} size={21} tintColor={colors.accent} />
               </View>
               <View style={{ flex: 1, gap: 4 }}>
                 <Text style={{ color: colors.text, fontSize: 16, fontWeight: '700' }}>
@@ -159,7 +143,7 @@ export function NotificationHistoryScreen() {
                 </Text>
                 <Text style={{ color: colors.secondaryText, fontSize: 12 }}>
                   {time.format(new Date(item.sentAt))} ·{' '}
-                  {item.kind === 'location' ? '위치 알림' : '시간 알림'}
+                  {item.kind === 'location' ? '위치 알림' : '예약 알림'}
                 </Text>
               </View>
             </View>

@@ -20,8 +20,16 @@ import { SubwayAlertEditor } from './subway-alert-editor';
 const styles = createStyles(colors);
 
 /** 공통 알림 페이지 안에서 지하철 목록·편집 내용만 렌더한다. */
-export function SubwayAlertsPanel({ state }: { state: ReturnType<typeof useSubwayAlertScreen> }) {
-  const { draft, busy, list, kind, visibleAlerts } = state;
+export function SubwayAlertsPanel({
+  state,
+  all = false,
+}: {
+  state: ReturnType<typeof useSubwayAlertScreen>;
+  all?: boolean;
+}) {
+  const { draft, busy, list, kind: selectedKind } = state;
+  const kind = selectedKind;
+  const visibleAlerts = all ? (list.data ?? []) : state.visibleAlerts;
   const warning =
     state.warning ??
     (list.data?.some((a) => a.enabled && (a.scheduledEnabled !== false || a.proximityEnabled)) &&
@@ -59,33 +67,44 @@ export function SubwayAlertsPanel({ state }: { state: ReturnType<typeof useSubwa
       ) : (
         <>
           {visibleAlerts.length > 0 &&
-            visibleAlerts.map((alert) => (
-              <SubwaySavedCard
-                key={alert.id}
-                alert={alert}
-                title={alert.stationName}
-                summary={
-                  kind === 'time'
-                    ? `도착 ${alert.thresholdMinutes}분 전`
-                    : `${alert.radius ?? 200}m · ${alert.repeatMinutes ?? 5}분마다`
-                }
-                detail={`${alert.days.map((day) => WEEKDAYS[day]).join(' · ')}${kind === 'time' ? ` · ${alert.startTime}–${alert.endTime}${state.pushStatus?.ready === false ? ' · 알림 연결 필요' : ''}` : ''}`}
-                enabled={alert.enabled}
-                busy={busy}
-                onToggle={(enabled) => void state.persist({ ...alert, enabled })}
-                onOpen={() =>
-                  void openAlertTarget('subway', alert.id, `saved:${alert.id}:${Date.now()}`)
-                }
-                onEdit={() => state.edit(alert)}
-                onDelete={() => state.deleteAlert(alert)}
-              />
-            ))}
-          <EmptyAlertCard
-            transport="subway"
-            kind={kind}
-            compact={visibleAlerts.length > 0}
-            disabled={busy}
-          />
+            visibleAlerts.map((alert) => {
+              const kind = all
+                ? alert.scheduledEnabled !== false
+                  ? 'time'
+                  : 'location'
+                : selectedKind;
+              return (
+                <SubwaySavedCard
+                  key={alert.id}
+                  compact={all}
+                  alert={alert}
+                  kind={kind}
+                  title={alert.stationName}
+                  summary={
+                    kind === 'time'
+                      ? `도착 ${alert.thresholdMinutes}분 전`
+                      : `${alert.radius ?? 200}m · ${alert.repeatMinutes ?? 5}분마다`
+                  }
+                  detail={`${alert.days.map((day) => WEEKDAYS[day]).join(' · ')}${kind === 'time' ? ` · ${alert.startTime}–${alert.endTime}${state.pushStatus?.ready === false ? ' · 알림 연결 필요' : ''}` : ''}`}
+                  enabled={alert.enabled}
+                  busy={busy}
+                  onToggle={(enabled) => void state.persist({ ...alert, enabled })}
+                  onOpen={() =>
+                    void openAlertTarget('subway', alert.id, `saved:${alert.id}:${Date.now()}`)
+                  }
+                  onEdit={() => state.edit(alert)}
+                  onDelete={() => state.deleteAlert(alert)}
+                />
+              );
+            })}
+          {!all && (
+            <EmptyAlertCard
+              transport="subway"
+              kind={kind}
+              compact={visibleAlerts.length > 0}
+              disabled={busy}
+            />
+          )}
         </>
       )}
     </>
@@ -94,14 +113,18 @@ export function SubwayAlertsPanel({ state }: { state: ReturnType<typeof useSubwa
 
 function SubwaySavedCard({
   alert,
+  kind,
   ...props
-}: { alert: SubwayAlert } & Omit<ComponentProps<typeof SavedAlertCard>, 'subtitle' | 'arrivals'>) {
+}: { alert: SubwayAlert; kind: 'time' | 'location' } & Omit<
+  ComponentProps<typeof SavedAlertCard>,
+  'subtitle' | 'arrivals'
+>) {
   const presentation = useSubwayAlertPresentation(alert);
   return (
     <SavedAlertCard
       {...props}
       subtitle={subwayAlertSubtitle(presentation)}
-      arrivals={<AlertArrivalTimes transport="subway" alert={alert} />}
+      arrivals={<AlertArrivalTimes transport="subway" alert={alert} kind={kind} />}
     />
   );
 }
