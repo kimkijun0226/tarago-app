@@ -16,12 +16,14 @@ export function AlertIconButton({
   onPress,
   disabled = false,
   warning = false,
+  compact = false,
 }: {
   name: ComponentProps<typeof SymbolView>['name'];
   label: string;
   onPress: () => void;
   disabled?: boolean;
   warning?: boolean;
+  compact?: boolean;
 }) {
   return (
     <Pressable
@@ -30,10 +32,11 @@ export function AlertIconButton({
       accessibilityState={{ disabled }}
       disabled={disabled}
       onPress={onPress}
+      hitSlop={compact ? 6 : undefined}
       style={({ pressed }) => ({
-        width: 44,
-        height: 44,
-        borderRadius: 16,
+        width: compact ? 32 : 44,
+        height: compact ? 32 : 44,
+        borderRadius: compact ? 12 : 16,
         alignItems: 'center',
         justifyContent: 'center',
         backgroundColor: warning ? colors.warningSurface : colors.accentSurface,
@@ -41,7 +44,11 @@ export function AlertIconButton({
         transform: [{ translateY: pressed ? 2 : 0 }, { scale: pressed ? 0.97 : 1 }],
       })}
     >
-      <SymbolView name={name} size={21} tintColor={warning ? colors.warning : colors.accent} />
+      <SymbolView
+        name={name}
+        size={compact ? 16 : 21}
+        tintColor={warning ? colors.warning : colors.accent}
+      />
     </Pressable>
   );
 }
@@ -338,6 +345,7 @@ export function SavedAlertCard({
   subtitle,
   summary,
   detail,
+  arrivals,
   enabled,
   busy,
   onToggle,
@@ -348,6 +356,7 @@ export function SavedAlertCard({
   subtitle: string;
   summary: string;
   detail: string;
+  arrivals: ReactNode;
   enabled: boolean;
   busy: boolean;
   onToggle: (enabled: boolean) => void;
@@ -361,13 +370,31 @@ export function SavedAlertCard({
           <Text style={styles.stationName}>{title}</Text>
           <Text style={styles.help}>{subtitle}</Text>
         </View>
-        <Switch
-          accessibilityLabel={`${title} ${subtitle} 알림 사용`}
-          disabled={busy}
-          value={enabled}
-          onValueChange={onToggle}
-          trackColor={{ true: colors.accent }}
-        />
+        <View style={{ alignItems: 'flex-end', gap: 6 }}>
+          <Switch
+            accessibilityLabel={`${title} ${subtitle} 알림 사용`}
+            disabled={busy}
+            value={enabled}
+            onValueChange={onToggle}
+            trackColor={{ true: colors.accent }}
+          />
+          <View style={{ flexDirection: 'row', gap: 12 }}>
+            <AlertIconButton
+              compact
+              name={{ ios: 'pencil', android: 'edit' }}
+              label={`${title} 알림 수정`}
+              disabled={busy}
+              onPress={onEdit}
+            />
+            <AlertIconButton
+              compact
+              name={{ ios: 'trash', android: 'delete_outline' }}
+              label={`${title} 알림 삭제`}
+              disabled={busy}
+              onPress={onDelete}
+            />
+          </View>
+        </View>
       </View>
       <Text
         style={{
@@ -385,19 +412,8 @@ export function SavedAlertCard({
           <Text style={styles.statusText}>일시정지</Text>
         </View>
       )}
-      <View style={styles.actions}>
-        <AlertIconButton
-          name={{ ios: 'pencil', android: 'edit' }}
-          label={`${title} 알림 수정`}
-          disabled={busy}
-          onPress={onEdit}
-        />
-        <AlertIconButton
-          name={{ ios: 'trash', android: 'delete_outline' }}
-          label={`${title} 알림 삭제`}
-          disabled={busy}
-          onPress={onDelete}
-        />
+      <View style={{ borderTopWidth: 1, borderTopColor: colors.separator, paddingTop: 12 }}>
+        {arrivals}
       </View>
     </View>
   );

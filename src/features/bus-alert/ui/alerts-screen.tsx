@@ -17,6 +17,7 @@ import {
 } from '@/features/subway/model/use-subway-alert-screen';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { WEEKDAYS, type AlertDraft, type AlertKind } from '../model/alert-form';
+import { AlertArrivalTimes } from './alert-arrival-times';
 import { useAlertScreen } from '../model/use-alert-screen';
 import { AlertEditorForm } from './alert-editor-form';
 import { createStyles } from './alert-screen-styles';
@@ -173,6 +174,7 @@ function BusAlertsPanel({ state }: { state: ReturnType<typeof useAlertScreen> })
                 key={alert.id}
                 title={`${alert.busNumber}번 버스`}
                 subtitle={alert.stop.name}
+                arrivals={<AlertArrivalTimes transport="bus" alert={alert} />}
                 summary={
                   kind === 'time'
                     ? `도착 ${alert.thresholdMinutes}분 전`

@@ -1,3 +1,4 @@
+import { AlertArrivalTimes } from '@/features/bus-alert/ui/alert-arrival-times';
 import { ActivityIndicator } from 'react-native';
 import {
   AlertNotice,
@@ -90,7 +91,13 @@ export function SubwayAlertsPanel({ state }: { state: ReturnType<typeof useSubwa
 function SubwaySavedCard({
   alert,
   ...props
-}: { alert: SubwayAlert } & Omit<ComponentProps<typeof SavedAlertCard>, 'subtitle'>) {
+}: { alert: SubwayAlert } & Omit<ComponentProps<typeof SavedAlertCard>, 'subtitle' | 'arrivals'>) {
   const presentation = useSubwayAlertPresentation(alert);
-  return <SavedAlertCard {...props} subtitle={subwayAlertSubtitle(presentation)} />;
+  return (
+    <SavedAlertCard
+      {...props}
+      subtitle={subwayAlertSubtitle(presentation)}
+      arrivals={<AlertArrivalTimes transport="subway" alert={alert} />}
+    />
+  );
 }
