@@ -1,3 +1,4 @@
+import { TransportIcon } from '@/shared/ui/transport-icon';
 /** @fileoverview 인접역 이동, 가로 노선도와 전체 역 목록을 제공한다. 역 선택 상태와 모달 표시 여부는 부모가 소유한다. */
 
 import { FlatList, Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
@@ -91,11 +92,7 @@ export function SubwayNetworkPanel({
             accessibilityRole="button"
             style={({ pressed }) => [s.networkLabel, pressed && s.pressed]}
           >
-            <SymbolView
-              name={{ ios: 'tram.circle', android: 'train' }}
-              tintColor={color}
-              size={20}
-            />
+            <TransportIcon transport="subway" tintColor={color} size={20} />
             <Text style={s.networkLabelText}>지하철 노선도</Text>
           </Pressable>
         ) : null}
@@ -282,12 +279,12 @@ const s = StyleSheet.create({
     borderBottomColor: '#F0F0F0',
   },
   rail: {
-    height: 44,
+    height: 32,
     borderRadius: 18,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginVertical: 9,
+    marginVertical: 6,
   },
   adjacentUnavailable: { flex: 1, fontSize: 10, color: '#FFF', paddingHorizontal: 8 },
   currentStation: {
@@ -298,11 +295,11 @@ const s = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     gap: 6,
-    height: 48,
-    minWidth: 136,
-    paddingHorizontal: 12,
+    height: 38,
+    minWidth: 104,
+    paddingHorizontal: 10,
   },
-  currentText: { fontSize: 19, color: '#444' },
+  currentText: { fontSize: 16, color: '#444' },
   badge: {
     minWidth: 19,
     height: 20,

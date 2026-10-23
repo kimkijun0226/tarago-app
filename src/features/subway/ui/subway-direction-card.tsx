@@ -6,8 +6,7 @@ import { getArrivalTime, getUpcomingTrains } from '../model/subway-arrival-displ
 import { mapUi } from '@/shared/ui/map-design-tokens';
 
 /** 지하철 링크·강조 표시에 쓰는 지도 공통 코랄이다. 지연·보조 정보와 비활성 선택에 사용하는 회색이다. */
-const BLUE = mapUi.blue,
-  GRAY = mapUi.secondaryText;
+const GRAY = mapUi.secondaryText;
 type Props = {
   arrivals: SubwayArrival[];
   label: string;
@@ -16,7 +15,6 @@ type Props = {
   elapsed: number;
   detailed: boolean;
   onDetail: () => void;
-  onAlert?: () => void;
 };
 
 /**
@@ -32,7 +30,6 @@ export function SubwayDirectionCard({
   elapsed,
   detailed,
   onDetail,
-  onAlert,
 }: Props) {
   /** 공식 운행 종료 상태이고 유효한 최근 열차도 없는 방면인지 판단한다. */
   const ended =
@@ -50,7 +47,7 @@ export function SubwayDirectionCard({
         return (
           <Pressable
             key={arrival.id}
-            style={({ pressed }) => [s.train, pressed && s.pressed]}
+            style={s.train}
             accessibilityRole="button"
             accessibilityLabel={`${label} ${arrival.destination || '열차'}${isExpress ? ' 급행' : ''} 상세 도착정보`}
             onPress={onDetail}
@@ -60,20 +57,15 @@ export function SubwayDirectionCard({
               {isExpress ? '(급)' : ''}
               {arrival.isLastTrain ? ' · 막차' : ''}
             </Text>
-            {time.text ? <Text style={s.trainTime}>{time.text}</Text> : null}
+            {time.text ? (
+              <Text style={s.trainTime} numberOfLines={1} ellipsizeMode="tail">
+                {time.text}
+              </Text>
+            ) : null}
           </Pressable>
         );
       })}
       {!trains.length ? <Text style={s.serviceStatus}>{status}</Text> : null}
-      {detailed && onAlert ? (
-        <Pressable
-          onPress={onAlert}
-          accessibilityRole="button"
-          style={({ pressed }) => [s.alertButton, pressed && s.pressed]}
-        >
-          <Text style={s.link}>도착 알림 설정</Text>
-        </Pressable>
-      ) : null}
     </View>
   );
 }
@@ -102,23 +94,15 @@ const s = StyleSheet.create({
     paddingVertical: 10,
     borderRadius: 12,
   },
-  trainDestination: { flex: 1, fontSize: 14, color: mapUi.text },
+  trainDestination: { flexShrink: 0, fontSize: 14, color: mapUi.text },
   express: { color: '#E44136' },
   trainTime: {
-    flexShrink: 0,
+    flex: 1,
+    minWidth: 0,
+    textAlign: 'right',
     fontSize: 14,
     fontWeight: '600',
-    color: '#E44136',
+    color: mapUi.blue,
     fontVariant: ['tabular-nums'],
   },
-  alertButton: {
-    marginTop: 12,
-    minHeight: 44,
-    borderRadius: 16,
-    paddingHorizontal: 12,
-    backgroundColor: mapUi.blueSurface,
-    justifyContent: 'center',
-  },
-  pressed: { backgroundColor: mapUi.blueSurface, transform: [{ translateY: 1 }] },
-  link: { fontSize: 14, color: BLUE },
 });

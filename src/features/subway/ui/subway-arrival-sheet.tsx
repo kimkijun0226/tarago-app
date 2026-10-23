@@ -1,5 +1,7 @@
+import { TransportIcon } from '@/shared/ui/transport-icon';
 /** @fileoverview 선택 역의 도착정보·시간표·시설·노선도와 지도 및 알림 화면으로의 이동을 연결한다. */
 import type { SharedValue } from 'react-native-reanimated';
+import { TransitAlertAction } from '@/shared/ui/transit-alert-action';
 import { SheetToolbar } from '@/shared/ui/sheet-toolbar';
 
 import { useEffect, useState } from 'react';
@@ -239,11 +241,12 @@ export function SubwayArrivalSheet({
    * 실제 조회 중인 역·노선·방향을 새 예약 초안으로 전달한다.
    * @param direction 알림을 설정할 방면.
    */
-  const openAlert = (direction: string) =>
+  const openAlert = (direction: string, kind: 'time' | 'location') =>
     router.push({
       pathname: '/subway-alerts',
       params: {
-        alertKind: 'time',
+        alertKind: kind,
+        returnTo: 'map',
         alertId: '',
         sourceAlertId: '',
         sourceAlertIds: '',
@@ -285,19 +288,40 @@ export function SubwayArrivalSheet({
 
   const toolbar = (
     <SheetToolbar
-      onClose={onClose}
+      onClose={detailDirection ? undefined : onClose}
       closeLabel="지하철역 닫기"
       header={
+        detailDirection ? (
+          <View style={s.detailHeader}>
+            <Pressable onPress={() => setDetailDirection('')}
+              accessibilityRole="button" accessibilityLabel="전체 방면으로 돌아가기"
+              style={({ pressed }) => [s.directionBack, pressed && s.pressed]}>
+              <SymbolView name={{ ios: 'chevron.left', android: 'arrow_back' }}
+                size={18} tintColor={INK} />
+            </Pressable>
+            <Text numberOfLines={1} style={s.detailTitle}>{directionLabel(detailDirection)}</Text>
+          </View>
+        ) : (
         <View style={[s.header, activeSnap === 'full' && { paddingTop: 0 }]}>
           <View style={s.titleRow}>
             <Text accessibilityRole="header" style={s.title}>
               {title} <Text style={{ color }}>{lineName}</Text>
             </Text>
           </View>
-          <Text style={s.subtitle}>수도권 지하철</Text>
         </View>
+        )
       }
-    />
+    >
+      {detailDirection && selectedLineId ? (
+        <>
+          {(['time', 'location'] as const).map((kind) => (
+            <TransitAlertAction key={kind} kind={kind}
+              label={`${directionLabel(detailDirection)} ${kind === 'time' ? '예약' : '위치'} 알림 설정`}
+              onPress={() => openAlert(detailDirection, kind)} />
+          ))}
+        </>
+      ) : null}
+    </SheetToolbar>
   );
 
   return (
@@ -312,40 +336,8 @@ export function SubwayArrivalSheet({
       >
         <View style={s.sheetContent}>
           <BottomSheetScrollView contentContainerStyle={s.content}>
-            <ScrollView
-              horizontal
-              showsHorizontalScrollIndicator={false}
-              contentContainerStyle={s.actions}
-            >
-              <Pressable
-                onPress={() => {
-                  setTab('timetable');
-                  changeSnap('full');
-                }}
-                accessibilityRole="button"
-                style={({ pressed }) => [s.action, pressed && s.pressed]}
-              >
-                <SymbolView
-                  name={{ ios: 'calendar', android: 'calendar_month' }}
-                  size={18}
-                  tintColor="#333"
-                />
-                <Text style={s.actionText}>전체 시간표</Text>
-              </Pressable>
-              <Pressable
-                onPress={() => {
-                  setTab('firstLast');
-                  changeSnap('full');
-                }}
-                accessibilityRole="button"
-                style={({ pressed }) => [s.action, pressed && s.pressed]}
-              >
-                <SymbolView name={{ ios: 'tram', android: 'train' }} size={18} tintColor="#333" />
-                <Text style={s.actionText}>첫차·막차</Text>
-              </Pressable>
-            </ScrollView>
-            <View style={s.rule} />
             <View style={s.arrivalSection}>
+              {!detailDirection && <>
               <SubwayStationRail
                 stationName={stationName}
                 lineName={lineName}
@@ -358,6 +350,7 @@ export function SubwayArrivalSheet({
                   <Pressable
                     accessibilityRole="button"
                     accessibilityState={{ selected: tab === 'live' }}
+                    hitSlop={{ top: 6, bottom: 6 }}
                     onPress={() => setTab('live')}
                     style={({ pressed }) => [
                       s.segmentButton,
@@ -372,6 +365,7 @@ export function SubwayArrivalSheet({
                   <Pressable
                     accessibilityRole="button"
                     accessibilityState={{ selected: tab !== 'live' }}
+                    hitSlop={{ top: 6, bottom: 6 }}
                     onPress={() => setTab('timetable')}
                     style={({ pressed }) => [
                       s.segmentButton,
@@ -401,14 +395,10 @@ export function SubwayArrivalSheet({
                   </Pressable>
                 </View>
               </View>
+              </>}
               <>
                 {query.isError ? <Text style={s.error}>{errorMessage}</Text> : null}
                 {query.isPending ? <ActivityIndicator color={BLUE} /> : null}
-                {detailDirection ? (
-                  <Pressable onPress={() => setDetailDirection('')} accessibilityRole="button">
-                    <Text style={s.link}>‹ 전체 방면</Text>
-                  </Pressable>
-                ) : null}
                 <View style={s.directionCards}>
                   {displayedDirections.map((direction) => (
                     <SubwayDirectionCard
@@ -424,7 +414,6 @@ export function SubwayArrivalSheet({
                       elapsed={elapsed}
                       detailed={Boolean(detailDirection)}
                       onDetail={() => setDetailDirection(direction)}
-                      onAlert={selectedLineId ? () => openAlert(direction) : undefined}
                     />
                   ))}
                   {!query.isPending && !directions.length ? (
@@ -434,7 +423,7 @@ export function SubwayArrivalSheet({
                   ) : null}
                 </View>
               </>
-              <View style={s.transferRow}>
+              {!detailDirection && <View style={s.transferRow}>
                 <Text style={s.transferTitle}>환승역</Text>
                 {lines.map(([name]) => (
                   <Pressable
@@ -453,8 +442,41 @@ export function SubwayArrivalSheet({
                     <Text style={s.badgeText}>{name.replace('호선', '')}</Text>
                   </Pressable>
                 ))}
-              </View>
+              </View>}
             </View>
+            {!detailDirection && <>
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={s.actions}
+            >
+              <Pressable
+                onPress={() => {
+                  setTab('timetable');
+                  changeSnap('full');
+                }}
+                accessibilityRole="button"
+                style={({ pressed }) => [s.action, pressed && s.pressed]}
+              >
+                <SymbolView
+                  name={{ ios: 'calendar', android: 'calendar_month' }}
+                  size={18}
+                  tintColor="#333"
+                />
+                <Text style={s.actionText}>전체 시간표</Text>
+              </Pressable>
+              <Pressable
+                onPress={() => {
+                  setTab('firstLast');
+                  changeSnap('full');
+                }}
+                accessibilityRole="button"
+                style={({ pressed }) => [s.action, pressed && s.pressed]}
+              >
+                <TransportIcon transport="subway" size={18} tintColor="#333" />
+                <Text style={s.actionText}>첫차·막차</Text>
+              </Pressable>
+            </ScrollView>
             <View style={s.sectionDivider} />
             <SubwayNetworkPanel
               line={line}
@@ -515,6 +537,7 @@ export function SubwayArrivalSheet({
                 <Text style={s.attribution}>{query.data.attribution}</Text>
               ) : null}
             </View>
+            </>}
           </BottomSheetScrollView>
         </View>
       </MapBottomSheet>
@@ -542,14 +565,13 @@ export function SubwayArrivalSheet({
 /** 이 파일의 지하철 표시 요소가 사용하는 고정 스타일을 모듈 범위에서 한 번 만든다. */
 const s = StyleSheet.create({
   content: { paddingBottom: 32, backgroundColor: 'white' },
-  header: { paddingVertical: 8 },
+  header: { paddingVertical: 4 },
   sheetContent: { flex: 1 },
   pressed: { opacity: 0.7, transform: [{ scale: 0.98 }] },
   selectedBadge: { borderWidth: 3, borderColor: mapUi.blueSurface },
   titleRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
-  title: { fontSize: 25, fontWeight: '700', color: INK, flex: 1, letterSpacing: -0.8 },
-  subtitle: { fontSize: 14, color: GRAY, marginTop: 4 },
-  actions: { paddingHorizontal: 16, gap: 5, paddingVertical: 20 },
+  title: { fontSize: 20, fontWeight: '700', color: INK, flex: 1, letterSpacing: -0.8 },
+  actions: { paddingHorizontal: 18, gap: 8, paddingTop: 4, paddingBottom: 16 },
   action: {
     height: 44,
     paddingHorizontal: 13,
@@ -562,9 +584,8 @@ const s = StyleSheet.create({
     flexDirection: 'row',
     gap: 6,
   },
-  actionText: { fontSize: 16, fontWeight: '500', color: INK },
-  rule: { height: 1, backgroundColor: '#F0F0F0' },
-  arrivalSection: { paddingHorizontal: 18, paddingTop: 24 },
+  actionText: { fontSize: 13, fontWeight: '500', color: INK },
+  arrivalSection: { paddingHorizontal: 18, paddingTop: 8 },
   badge: {
     minWidth: 44,
     height: 44,
@@ -578,13 +599,13 @@ const s = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginTop: 16,
-    marginBottom: 10,
+    marginTop: 4,
+    marginBottom: 6,
   },
-  segment: { flexDirection: 'row', padding: 4, backgroundColor: mapUi.separator, borderRadius: 24 },
+  segment: { flexDirection: 'row', padding: 2, backgroundColor: mapUi.separator, borderRadius: 18 },
   segmentButton: {
-    paddingHorizontal: 12,
-    height: 44,
+    paddingHorizontal: 10,
+    height: 32,
     justifyContent: 'center',
     borderWidth: 1,
     borderColor: 'transparent',
@@ -592,20 +613,19 @@ const s = StyleSheet.create({
   },
   liveSelected: { borderColor: mapUi.blueSurface, backgroundColor: mapUi.blueSurface },
   scheduleSelected: { borderColor: mapUi.blueSurface, backgroundColor: mapUi.blueSurface },
-  segmentText: { fontSize: 14, fontWeight: '600' },
+  segmentText: { fontSize: 12, fontWeight: '600' },
+  detailHeader: { flexDirection: 'row', alignItems: 'center', flex: 1, gap: 4 },
+  detailTitle: { flex: 1, fontSize: 16, fontWeight: '700', color: INK },
+  directionBack: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center', marginLeft: -10 },
   refreshRow: { flexDirection: 'row', alignItems: 'center', gap: 7 },
-  clock: { color: GRAY, fontSize: 13 },
+  clock: { color: GRAY, fontSize: 11 },
   refresh: {
     width: 44,
     height: 44,
-    borderRadius: 22,
-    backgroundColor: mapUi.separator,
-    borderWidth: 1,
-    borderColor: '#E8E8E8',
     alignItems: 'center',
     justifyContent: 'center',
   },
-  refreshIcon: { color: GRAY, fontSize: 22, lineHeight: 25 },
+  refreshIcon: { color: GRAY, fontSize: 19, lineHeight: 22 },
   directionCards: { flexDirection: 'row', alignItems: 'stretch', gap: 9 },
   transferRow: {
     flexDirection: 'row',

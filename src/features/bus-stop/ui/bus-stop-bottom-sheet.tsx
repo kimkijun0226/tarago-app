@@ -146,13 +146,14 @@ export const BusStopBottomSheet = memo(function BusStopBottomSheet({
    * busStop 또는 지도 탭 변경 함수가 바뀌면 최신 정류장으로 동작하도록 콜백을 교체한다.
    */
   const configureAlert = useCallback(
-    (group: BusArrivalGroup) => {
+    (group: BusArrivalGroup, kind: 'time' | 'location') => {
       setMapTabHidden(false);
       router.navigate({
         pathname: '/alerts',
         params: {
           alertTransport: 'bus',
-          alertKind: 'time',
+          returnTo: 'map',
+          alertKind: kind,
           sourceAlertId: '',
           sourceAlertIds: '',
           monitoringId: '',

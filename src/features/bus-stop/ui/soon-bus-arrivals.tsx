@@ -15,43 +15,44 @@ export const SoonBusArrivals = memo(function SoonBusArrivals({ groups, onSelectR
   const { colors } = useAppTheme();
   if (!groups.length) return null;
   return (
-    <View style={[styles.container, { borderBottomColor: colors.separator }]}>
-      <Text style={[styles.label, { color: colors.danger }]}>곧도착</Text>
+    <View style={styles.container}>
+      <View style={styles.heading}>
+        <Text style={[styles.label, { color: colors.danger }]}>곧도착</Text>
+      </View>
       <ScrollView
         horizontal
         nestedScrollEnabled
         showsHorizontalScrollIndicator={false}
+        style={styles.list}
         contentContainerStyle={styles.cards}
       >
-        {groups.map((group) => {
+        {groups.map((group, index) => {
           const badge = getBusRouteBadge(group.routeType);
+          const direction = group.first.direction || group.first.nextStopName;
           return (
             <Pressable
               key={`${group.routeId}:${group.stationSeq ?? ''}`}
               accessibilityRole="button"
-              accessibilityLabel={`${group.busNumber}번 곧 도착, 노선 상세 보기`}
+              accessibilityLabel={`${group.busNumber}번 곧 도착${group.first.nextStopName ? `, 다음 ${group.first.nextStopName}` : group.first.direction ? `, ${group.first.direction}` : ''}, 노선 상세 보기`}
               onPress={() =>
                 onSelectRoute(group.routeId, group.stationSeq ?? 0, group.first.routeSource)
               }
-              style={({ pressed }) => [
-                styles.card,
-                { backgroundColor: colors.surface, borderColor: colors.separator },
-                pressed && styles.pressed,
-              ]}
+              style={({ pressed }) => [styles.touch, pressed && styles.pressed]}
             >
-              <View style={styles.heading}>
-                {badge ? (
-                  <Text style={[styles.badge, { backgroundColor: badge.color }]}>
-                    {badge.label}
+              <View style={styles.card}>
+                <Text style={[styles.number, { color: badge?.color ?? colors.text }]}>
+                  {group.busNumber}
+                </Text>
+                {direction ? (
+                  <Text
+                    numberOfLines={1}
+                    style={[styles.direction, { color: colors.secondaryText }]}
+                  >
+                    → {direction.replace(/\s*방면$/, '')}
                   </Text>
                 ) : null}
-                <Text style={[styles.number, { color: colors.text }]}>{group.busNumber}</Text>
               </View>
-              <Text numberOfLines={1} style={[styles.detail, { color: colors.secondaryText }]}>
-                {group.first.nextStopName
-                  ? `다음 ${group.first.nextStopName}`
-                  : group.first.direction || '곧 도착'}
-              </Text>
+              {index < groups.length - 1 ? <View style={styles.itemDivider} /> : null}
             </Pressable>
           );
         })}
@@ -61,26 +62,36 @@ export const SoonBusArrivals = memo(function SoonBusArrivals({ groups, onSelectR
 });
 
 const styles = StyleSheet.create({
-  container: { paddingVertical: 10, borderBottomWidth: StyleSheet.hairlineWidth },
-  label: { paddingHorizontal: 18, marginBottom: 8, fontSize: 13, fontWeight: '700' },
-  cards: { paddingHorizontal: 18, gap: 8 },
-  card: {
-    minWidth: 140,
-    maxWidth: 220,
-    padding: 14,
-    borderWidth: 1,
-    borderRadius: 20,
-    boxShadow: '0px 3px 0px #22222208',
+  container: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginHorizontal: 16,
+    paddingVertical: 4,
+    borderTopWidth: 1,
+    borderBottomWidth: 1,
+    borderColor: '#E4E6E9',
   },
-  heading: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  badge: {
-    color: '#FFFFFF',
-    paddingHorizontal: 5,
-    paddingVertical: 2,
-    borderRadius: 8,
-    fontSize: 11,
+  heading: {
+    height: 30,
+    justifyContent: 'center',
+    paddingRight: 12,
+    borderRightWidth: 1,
+    borderRightColor: '#E4E6E9',
   },
-  number: { fontSize: 20, fontWeight: '700' },
-  detail: { fontSize: 12, marginTop: 4 },
-  pressed: { opacity: 0.7, transform: [{ scale: 0.98 }] },
+  label: { fontSize: 12, lineHeight: 18, fontWeight: '700' },
+  list: { flex: 1 },
+  cards: { alignItems: 'center' },
+  touch: { minHeight: 48, width: 106, justifyContent: 'center' },
+  itemDivider: {
+    position: 'absolute',
+    right: 0,
+    top: 12,
+    bottom: 12,
+    width: 1,
+    backgroundColor: '#ECEDEF',
+  },
+  card: { alignItems: 'flex-start', justifyContent: 'center', gap: 2, paddingHorizontal: 12 },
+  number: { fontSize: 14, lineHeight: 18, fontWeight: '700' },
+  direction: { fontSize: 10, lineHeight: 14, maxWidth: 82 },
+  pressed: { opacity: 0.6 },
 });

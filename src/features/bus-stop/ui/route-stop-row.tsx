@@ -1,3 +1,4 @@
+import { TransportIcon } from '@/shared/ui/transport-icon';
 /** @fileoverview 노선 경유 정류장 한 행의 왕복 레일·선택 도착 시간·차량 위치를 표시한다. */
 
 import { memo, useMemo } from 'react';
@@ -73,14 +74,7 @@ export const RouteStopRow = memo(function RouteStopRow({
         )}
         {vehicleCount ? (
           <View style={styles.busOnRail}>
-            <SymbolView
-              name={{
-                ios: 'bus.fill',
-                android: 'directions_bus',
-              }}
-              size={20}
-              tintColor={colors.onAccent}
-            />
+            <TransportIcon transport="bus" size={20} tintColor={colors.onAccent} />
           </View>
         ) : null}
       </View>
