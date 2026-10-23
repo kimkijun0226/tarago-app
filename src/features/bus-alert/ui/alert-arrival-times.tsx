@@ -1,7 +1,9 @@
 /** @fileoverview 저장된 알림의 노선·방향에 해당하는 첫 두 차량을 기존 도착 Query로 표시한다. */
 import { useCallback, useEffect, useState } from 'react';
+import { useAppStore } from '@/shared/model/app-store';
 import { useFocusEffect } from 'expo-router';
-import { Text, View } from 'react-native';
+import { AppState, Text, View } from 'react-native';
+import { isAlertQueryWindow } from '../model/alert-query-window';
 import { useBusArrivals } from '@/features/bus-stop/model/use-bus-arrivals';
 import { formatEta, groupBusArrivals } from '@/features/bus-stop/model/bus-arrival';
 import { useSubwayArrivals } from '@/features/subway/model/use-subway-arrivals';
@@ -9,9 +11,41 @@ import type { SubwayAlert } from '@/features/subway/model/subway-alert';
 import type { BusAlert } from '../model/bus-alert';
 import { alertColors as colors } from './alert-design';
 
-type Props = { transport: 'bus'; alert: BusAlert } | { transport: 'subway'; alert: SubwayAlert };
+type Props = ({ transport: 'bus'; alert: BusAlert } | { transport: 'subway'; alert: SubwayAlert }) & { kind: 'time' | 'location' };
 
 export function AlertArrivalTimes(props: Props) {
+  const { alert } = props;
+  const [queryNow, setQueryNow] = useState(Date.now);
+  useFocusEffect(useCallback(() => {
+    let timer: ReturnType<typeof setTimeout>;
+    const refresh = () => {
+      clearTimeout(timer);
+      setQueryNow(Date.now());
+      timer = setTimeout(refresh, 60_000 - Date.now() % 60_000);
+    };
+    refresh();
+    const subscription = AppState.addEventListener('change', (state) => {
+      if (state === 'active') refresh();
+      else clearTimeout(timer);
+    });
+    return () => {
+      clearTimeout(timer);
+      subscription.remove();
+    };
+  }, []));
+  const inside = useAppStore((state) =>
+    state.proximityVisits[`${props.transport}:${alert.id}`]?.inside === true,
+  );
+  const scheduledEnabled =
+    props.transport === 'subway' ? alert.scheduledEnabled !== false : alert.scheduledEnabled;
+  if (!alert.enabled) return null;
+  if (props.kind === 'location' ? !alert.proximityEnabled || !inside : !scheduledEnabled || !isAlertQueryWindow(alert, queryNow))
+    return null;
+  return <ActiveAlertArrivalTimes {...props} />;
+}
+
+/** 비활성화 시 구독을 해제해 다른 활성 카드의 공유 Query는 유지한다. */
+function ActiveAlertArrivalTimes(props: Props) {
   const [focused, setFocused] = useState(false);
   const [now, setNow] = useState(Date.now);
   useEffect(() => {

@@ -6,6 +6,8 @@ export type AlertSelection = AlertMenu & { requestId: string };
 
 /** 화면 간 공유하는 UI 상태와 각 상태의 변경 동작. 서버 응답은 TanStack Query가 관리한다. */
 type AppState = {
+  proximityVisits: Record<string, { inside: boolean; observedAt: number }>;
+  setProximityVisit: (key: string, inside: boolean, observedAt: number) => void;
   alertMenu: AlertMenu;
   setAlertMenu: (menu: AlertMenu) => void;
   alertSelection: AlertSelection | null;
@@ -23,6 +25,12 @@ type AppState = {
 
 /** 모듈 단위로 생성되는 앱 UI 스토어. 각 화면은 selector로 필요한 값이나 액션만 구독한다. */
 export const useAppStore = create<AppState>()((set) => ({
+  proximityVisits: {},
+  setProximityVisit: (key, inside, observedAt) => set((state) => {
+    const previous = state.proximityVisits[key];
+    if (previous && observedAt <= previous.observedAt) return state;
+    return { proximityVisits: { ...state.proximityVisits, [key]: { inside, observedAt } } };
+  }),
   alertMenu: { transport: 'bus', kind: 'time' },
   setAlertMenu: (alertMenu) => set({ alertMenu }),
   alertSelection: null,

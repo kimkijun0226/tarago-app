@@ -1,5 +1,6 @@
 /** @fileoverview 기기 영역 변화를 보관하고 실패한 이탈 요청을 다음 실행에서 다시 전달한다. */
 import { isAxiosError } from 'axios';
+import { useAppStore } from '@/shared/model/app-store';
 import { API_STORAGE_SCOPE } from '@/shared/api/config';
 import { setAlertProximity } from '../api/alerts';
 import { alertStorage } from './alert-storage';
@@ -41,6 +42,8 @@ export function reportProximity(
 ) {
   if (!Number.isFinite(observedAt))
     return Promise.reject(new Error('위치 관측 시간을 확인해주세요.'));
+  // 네트워크 전송 대기·실패와 관계없이 이탈 즉시 화면 조회를 중단한다.
+  useAppStore.getState().setProximityVisit(`${transport}:${id}`, inside, observedAt);
   return serialize(async () => {
     const key = `${PREFIX}${transport}:${id}`;
     const previous = JSON.parse((await alertStorage.getItem(key)) ?? 'null') as Visit | null;
