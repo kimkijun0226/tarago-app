@@ -1,6 +1,8 @@
 /** @fileoverview 기기 자격 증명을 보안 저장소에서 얻어 버스·지하철 공용 인증과 버스 알림 HTTP 요청을 제공한다. */
 import * as SecureStore from 'expo-secure-store';
 import { apiClient } from '@/shared/api/client';
+import { API_STORAGE_SCOPE } from '@/shared/api/config';
+import { isAxiosError } from 'axios';
 import type { BusAlert, BusAlertInput } from '../model/bus-alert';
 
 /** 동시 요청이 기기를 중복 등록하지 않도록 진행 중인 자격 증명 획득 Promise만 공유한다. */
@@ -10,13 +12,29 @@ let registration: Promise<string> | undefined;
 async function credential() {
   if (registration) return registration;
   registration = (async () => {
-    /** 보안 저장소에 이미 발급된 기기 자격 증명이 있는지 확인한다. */
-    const existing = await SecureStore.getItemAsync('tarago-alert-credential');
+    const storageKey = `tarago-alert-credential-${API_STORAGE_SCOPE}`;
+    const existing = await SecureStore.getItemAsync(storageKey);
     if (existing) return existing;
+
+    // 기존 자격 증명이 현재 서버에 속할 때만 이전해 저장된 알림의 소유권을 유지한다.
+    const legacy = await SecureStore.getItemAsync('tarago-alert-credential');
+    if (legacy) {
+      try {
+        await apiClient.get('/alerts/devices/status', {
+          headers: { Authorization: `Bearer ${legacy}` },
+        });
+        await SecureStore.setItemAsync(storageKey, legacy, {
+          keychainAccessible: SecureStore.AFTER_FIRST_UNLOCK_THIS_DEVICE_ONLY,
+        });
+        return legacy;
+      } catch (error) {
+        if (!isAxiosError(error) || error.response?.status !== 401) throw error;
+      }
+    }
 
     /** 인증한 기기의 서버 응답 본문이며 호출자에게 필요한 데이터만 반환한다. */
     const { data } = await apiClient.post<{ credential: string }>('/alerts/devices');
-    await SecureStore.setItemAsync('tarago-alert-credential', data.credential, {
+    await SecureStore.setItemAsync(storageKey, data.credential, {
       keychainAccessible: SecureStore.AFTER_FIRST_UNLOCK_THIS_DEVICE_ONLY,
     });
     return data.credential;

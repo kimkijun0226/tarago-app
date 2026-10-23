@@ -1,10 +1,11 @@
 /** @fileoverview 기기 영역 변화를 보관하고 실패한 이탈 요청을 다음 실행에서 다시 전달한다. */
 import { isAxiosError } from 'axios';
+import { API_STORAGE_SCOPE } from '@/shared/api/config';
 import { setAlertProximity } from '../api/alerts';
 import { alertStorage } from './alert-storage';
 
 type Visit = { inside: boolean; observedAt: string; synced: boolean };
-const PREFIX = 'tarago-proximity-visit:';
+const PREFIX = `tarago-proximity-visit:${API_STORAGE_SCOPE}:`;
 let queue: Promise<unknown> = Promise.resolve();
 
 function serialize<T>(run: () => Promise<T>): Promise<T> {

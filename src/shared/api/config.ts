@@ -29,3 +29,8 @@ function getApiBaseUrl() {
 
 /** 모든 API 요청에 사용하는 서버 주소다. */
 export const API_BASE_URL = getApiBaseUrl();
+
+/** 서버별 기기 소유권과 백그라운드 사본을 분리하며 보안 저장소가 허용하는 문자만 사용한다. */
+export const API_STORAGE_SCOPE = Array.from(API_BASE_URL ?? '', (character) =>
+  character.charCodeAt(0).toString(16).padStart(4, '0'),
+).join('');
