@@ -18,7 +18,7 @@
         "ITSAppUsesNonExemptEncryption": false
       },
       "appleTeamId": "V6BDRRK4FQ",
-      "buildNumber": "2"
+      "buildNumber": "5"
     },
     "android": {
       "adaptiveIcon": {
@@ -54,9 +54,7 @@
             "enableSceneSupport": true
           },
           "android": {
-            "extraMavenRepos": [
-              "https://repository.map.naver.com/archive/maven"
-            ]
+            "extraMavenRepos": ["https://repository.map.naver.com/archive/maven"]
           }
         }
       ],
@@ -72,6 +70,14 @@
       "expo-sqlite",
       "expo-secure-store",
       "expo-notifications",
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "의견에 첨부할 사진을 선택합니다.",
+          "cameraPermission": false,
+          "microphonePermission": false
+        }
+      ],
       "./plugins/with-naver-map"
     ],
     "experiments": {
@@ -85,9 +91,6 @@
       }
     },
     "owner": "kimkijun",
-    "platforms": [
-      "ios",
-      "android"
-    ]
+    "platforms": ["ios", "android"]
   }
 }

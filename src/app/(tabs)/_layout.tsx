@@ -50,6 +50,13 @@ export default function TabsLayout() {
           md="notifications"
         />
       </NativeTabs.Trigger>
+      <NativeTabs.Trigger name="feedback">
+        <NativeTabs.Trigger.Label>의견 보내기</NativeTabs.Trigger.Label>
+        <NativeTabs.Trigger.Icon
+          sf={{ default: 'bubble.left', selected: 'bubble.left.fill' }}
+          md="chat_bubble"
+        />
+      </NativeTabs.Trigger>
     </NativeTabs>
   );
 }
