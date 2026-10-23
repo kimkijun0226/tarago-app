@@ -436,3 +436,34 @@ export function SavedAlertCard({
   );
 }
 
+/** 두 종류를 독립 선택하되 최소 하나는 유지한다. */
+export function AlertModes({
+  scheduledEnabled,
+  proximityEnabled,
+  onChange,
+  disabled,
+}: {
+  scheduledEnabled: boolean;
+  proximityEnabled: boolean;
+  onChange: (modes: { scheduledEnabled: boolean; proximityEnabled: boolean }) => void;
+  disabled?: boolean;
+}) {
+  return (
+    <View style={styles.card}>
+      <View style={styles.chips}>
+        <AlertChoice
+          label="시간 알림"
+          selected={scheduledEnabled}
+          disabled={disabled || (scheduledEnabled && !proximityEnabled)}
+          onPress={() => onChange({ scheduledEnabled: !scheduledEnabled, proximityEnabled })}
+        />
+        <AlertChoice
+          label="위치 알림"
+          selected={proximityEnabled}
+          disabled={disabled || (proximityEnabled && !scheduledEnabled)}
+          onPress={() => onChange({ scheduledEnabled, proximityEnabled: !proximityEnabled })}
+        />
+      </View>
+    </View>
+  );
+}

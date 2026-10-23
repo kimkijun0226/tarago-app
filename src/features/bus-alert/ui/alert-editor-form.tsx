@@ -3,7 +3,7 @@ import { ActivityIndicator, Switch, Text, View } from 'react-native';
 import { useBusArrivals } from '@/features/bus-stop/model/use-bus-arrivals';
 import { formatEta, groupBusArrivals } from '@/features/bus-stop/model/bus-arrival';
 import type { AlertDraft, AlertKind } from '../model/alert-form';
-import { AlertIconButton } from './alert-components';
+import { AlertIconButton, AlertModes } from './alert-components';
 import { AlertLocationFields } from './alert-location-fields';
 import { AlertScheduleFields } from './alert-schedule-fields';
 import { createStyles } from './alert-screen-styles';
@@ -27,8 +27,8 @@ export function AlertEditorForm({
   setThreshold: Dispatch<SetStateAction<string>>;
   disabled?: boolean;
 }) {
-  const showSchedule = kind === 'time' || draft.scheduledEnabled;
-  const showLocation = kind === 'location' || draft.proximityEnabled;
+  const showSchedule = draft.scheduledEnabled ?? kind === 'time';
+  const showLocation = draft.proximityEnabled ?? kind === 'location';
   const live = useBusArrivals(showSchedule ? draft.stationId : '');
   const arrivals = (live.data ?? []).filter(
     (bus) =>
@@ -42,6 +42,12 @@ export function AlertEditorForm({
         <Text style={styles.stationName}>{draft.busNumber}번 버스</Text>
         <Text style={styles.help}>{draft.stop.name}</Text>
       </View>
+      <AlertModes
+        scheduledEnabled={showSchedule}
+        proximityEnabled={showLocation}
+        disabled={disabled}
+        onChange={(modes) => setDraft((current) => current && { ...current, ...modes })}
+      />
       {showSchedule && (
         <>
           <AlertScheduleFields

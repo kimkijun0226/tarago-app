@@ -85,8 +85,8 @@ export function buildBusAlertInput(
   kind: AlertKind,
   threshold: string,
 ): BusAlertInput {
-  const scheduledEnabled = draft.id ? draft.scheduledEnabled : kind === 'time';
-  const proximityEnabled = draft.id ? draft.proximityEnabled : kind === 'location';
+  const scheduledEnabled = draft.scheduledEnabled ?? kind === 'time';
+  const proximityEnabled = draft.proximityEnabled ?? kind === 'location';
   if (!scheduledEnabled && !proximityEnabled) throw new Error('알림 방식을 선택해주세요.');
   if (
     !draft.days.length ||

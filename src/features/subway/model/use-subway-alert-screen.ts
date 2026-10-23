@@ -1,3 +1,4 @@
+import { getSubwayMapStations } from '../api/get-subway-station';
 import { useRef, useState } from 'react';
 import { Alert } from 'react-native';
 import { useQueryClient } from '@tanstack/react-query';
@@ -123,13 +124,34 @@ export function useSubwayAlertScreen(
   };
 
   /** 반복 요일·시간·기준 분·알림 단계를 검증한 뒤 저장한다. 자정을 넘는 감시 시간은 허용한다. */
-  const submit = () => {
-    if (!draft) return;
-
+  const submit = async () => {
+    if (!draft || busy || operation.current) return;
+    setBusy(true);
     try {
-      void persist(buildSubwayAlertInput(draft, kind, threshold));
+      let resolved = draft;
+      if (
+        draft.proximityEnabled &&
+        (!Number.isFinite(draft.latitude) || !Number.isFinite(draft.longitude))
+      ) {
+        const stations = await client.fetchQuery({
+          queryKey: ['subway', 'map-stations'],
+          queryFn: ({ signal }) => getSubwayMapStations(signal),
+          staleTime: 86_400_000,
+        });
+        const normalize = (name: string) => name.trim().replace(/역$/, '');
+        const station = stations.find(
+          (s) =>
+            normalize(s.name) === normalize(draft.stationName) &&
+            (!draft.lineName || s.lineName === draft.lineName),
+        );
+        if (!station) throw new Error('지도에서 알림 대상 역을 다시 선택해주세요.');
+        resolved = { ...draft, latitude: station.latitude, longitude: station.longitude };
+      }
+      await persist(buildSubwayAlertInput(resolved, kind, threshold));
     } catch (error) {
       Alert.alert('설정을 확인해주세요', alertErrorMessage(error));
+    } finally {
+      setBusy(false);
     }
   };
 

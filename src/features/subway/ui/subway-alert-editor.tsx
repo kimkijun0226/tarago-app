@@ -1,3 +1,4 @@
+import { AlertModes } from '@/features/bus-alert/ui/alert-components';
 import type { Dispatch, SetStateAction } from 'react';
 import { ActivityIndicator, Text, View } from 'react-native';
 import { AlertLocationFields } from '@/features/bus-alert/ui/alert-location-fields';
@@ -40,6 +41,12 @@ export function SubwayAlertEditor({
         <Text style={styles.stationName}>{draft.stationName}</Text>
         <Text style={styles.help}>{subwayAlertSubtitle(presentation)}</Text>
       </View>
+      <AlertModes
+        scheduledEnabled={showSchedule}
+        proximityEnabled={showLocation}
+        disabled={disabled}
+        onChange={(modes) => setDraft((current) => current && { ...current, ...modes })}
+      />
       {showSchedule && (
         <AlertScheduleFields
           value={draft}
