@@ -26,11 +26,6 @@ export default function AlertsScreen() {
   const saved = transport === 'bus' ? alerts.find((a) => a.id === params.alertId) : undefined;
   const savedSubway =
     transport === 'subway' ? subwayAlerts.find((a) => a.id === params.alertId) : undefined;
-  const sourceIds = (params.sourceAlertIds || params.sourceAlertId || '').split(',');
-  const sources = alerts.filter((a) => sourceIds.includes(a.id) && a.enabled && a.proximityEnabled);
-  const subwaySources = subwayAlerts.filter(
-    (a) => sourceIds.includes(a.id) && a.enabled && a.proximityEnabled,
-  );
   const initial = saved ?? busDraftFromRoute(params, openedAt);
   const initialSubway = savedSubway ?? subwayDraftFromRoute(params, openedAt);
   const savedAlert = saved ?? savedSubway;
@@ -44,8 +39,6 @@ export default function AlertsScreen() {
       initialSubwayDraft={initialSubway}
       initialTransport={transport}
       initialKind={kind}
-      sources={sources}
-      subwaySources={subwaySources}
     />
   );
 }

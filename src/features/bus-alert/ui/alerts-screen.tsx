@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useFocusEffect } from 'expo-router';
 import { useAppStore } from '@/shared/model/app-store';
-import type { SubwayAlert } from '@/features/subway/model/subway-alert';
 import {
   ActivityIndicator,
   BackHandler,
@@ -17,7 +16,6 @@ import {
   type SubwayAlertDraft,
 } from '@/features/subway/model/use-subway-alert-screen';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import type { BusAlert } from '../model/bus-alert';
 import { WEEKDAYS, type AlertDraft, type AlertKind } from '../model/alert-form';
 import { useAlertScreen } from '../model/use-alert-screen';
 import { AlertEditorForm } from './alert-editor-form';
@@ -30,24 +28,19 @@ import {
   SavedAlertCard,
   EmptyAlertCard,
 } from './alert-components';
-import { MonitoringSessionsPanel } from './monitoring-sessions-panel';
 
 const styles = createStyles(colors);
 
 /** 교통수단은 로컬 선택으로 전환하고 헤더·스크롤 컨테이너를 유지한다. */
 export function AlertsScreenContent({
   initialDraft,
-  sources,
   initialTransport,
   initialKind,
-  subwaySources = [],
   initialSubwayDraft = null,
 }: {
   initialDraft: AlertDraft | null;
-  sources: BusAlert[];
   initialTransport?: 'bus' | 'subway';
   initialKind?: AlertKind;
-  subwaySources?: SubwayAlert[];
   initialSubwayDraft?: SubwayAlertDraft | null;
 }) {
   const menu = useAppStore((s) => s.alertMenu);
@@ -126,34 +119,25 @@ export function AlertsScreenContent({
           </AlertNotice>
         )}
         {transport === 'bus' ? (
-          <BusAlertsPanel state={bus} sources={sources} />
+          <BusAlertsPanel state={bus} />
         ) : (
-          <SubwayAlertsPanel state={subway} sources={subwaySources} />
+          <SubwayAlertsPanel state={subway} />
         )}
       </ScrollView>
     </SafeAreaView>
   );
 }
 
-function BusAlertsPanel({
-  state,
-  sources,
-}: {
-  state: ReturnType<typeof useAlertScreen>;
-  sources: BusAlert[];
-}) {
+function BusAlertsPanel({ state }: { state: ReturnType<typeof useAlertScreen> }) {
   const { draft, kind, busy } = state;
   const warning =
     state.pushWarning ??
-    (state.alerts.some((a) => a.enabled && a.scheduledEnabled) && state.pushStatus?.ready === false
-      ? '시간 알림을 받으려면 알림 연결을 확인해주세요.'
+    (state.alerts.some((a) => a.enabled && (a.scheduledEnabled || a.proximityEnabled)) &&
+    state.pushStatus?.ready === false
+      ? '알림을 받으려면 알림 연결을 확인해주세요.'
       : null);
   return (
     <>
-      <MonitoringSessionsPanel
-        sources={state.dismissedSource ? [] : sources}
-        onDismiss={() => state.setDismissedSource(true)}
-      />
       {warning && (
         <AlertNotice
           action="알림 다시 연결"
@@ -192,9 +176,9 @@ function BusAlertsPanel({
                 summary={
                   kind === 'time'
                     ? `도착 ${alert.thresholdMinutes}분 전`
-                    : `정류소 ${alert.radius}m 이내`
+                    : `${alert.radius}m · ${alert.repeatMinutes ?? 5}분마다`
                 }
-                detail={`${alert.days.map((day) => WEEKDAYS[day]).join(' · ')}${kind === 'time' ? ` · ${alert.startTime}–${alert.endTime}${state.pushStatus?.ready === false ? ' · 알림 연결 필요' : ''}` : ' · 접근 시 1시간 감시 시작 확인'}${alert.scheduledEnabled && alert.proximityEnabled ? ' · 시간·위치 함께 사용' : ''}`}
+                detail={`${alert.days.map((day) => WEEKDAYS[day]).join(' · ')}${kind === 'time' ? ` · ${alert.startTime}–${alert.endTime}${state.pushStatus?.ready === false ? ' · 알림 연결 필요' : ''}` : ''}${alert.scheduledEnabled && alert.proximityEnabled ? ' · 시간·위치 함께 사용' : ''}`}
                 enabled={alert.enabled}
                 busy={busy}
                 onToggle={(value) => void state.toggle(alert, value)}

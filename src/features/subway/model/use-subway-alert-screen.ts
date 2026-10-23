@@ -74,7 +74,7 @@ export function useSubwayAlertScreen(
           await ensureNotificationPermission();
           await ensureProximityPermission();
         }
-        if (input.scheduledEnabled !== false) await prepare();
+        if (input.scheduledEnabled !== false || input.proximityEnabled) await prepare();
       }
       const station = client.getQueryData<SubwayStationDetail>([
         'subway',

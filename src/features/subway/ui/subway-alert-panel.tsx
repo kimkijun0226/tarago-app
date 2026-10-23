@@ -12,30 +12,22 @@ import type { ComponentProps } from 'react';
 import { useSubwayAlertPresentation } from '../model/use-subway-alert-presentation';
 import { subwayAlertSubtitle } from '../model/subway-direction';
 import type { SubwayAlert } from '../model/subway-alert';
-import { SubwayMonitoringPanel } from './subway-monitoring-panel';
 import type { useSubwayAlertScreen } from '../model/use-subway-alert-screen';
 import { SubwayAlertEditor } from './subway-alert-editor';
 
 const styles = createStyles(colors);
 
 /** 공통 알림 페이지 안에서 지하철 목록·편집 내용만 렌더한다. */
-export function SubwayAlertsPanel({
-  state,
-  sources = [],
-}: {
-  state: ReturnType<typeof useSubwayAlertScreen>;
-  sources?: SubwayAlert[];
-}) {
+export function SubwayAlertsPanel({ state }: { state: ReturnType<typeof useSubwayAlertScreen> }) {
   const { draft, busy, list, kind, visibleAlerts } = state;
   const warning =
     state.warning ??
-    (list.data?.some((a) => a.enabled && a.scheduledEnabled !== false) &&
+    (list.data?.some((a) => a.enabled && (a.scheduledEnabled !== false || a.proximityEnabled)) &&
     state.pushStatus?.ready === false
-      ? '시간 알림을 받으려면 알림 연결을 확인해주세요.'
+      ? '알림을 받으려면 알림 연결을 확인해주세요.'
       : null);
   return (
     <>
-      <SubwayMonitoringPanel sources={sources} />
       {warning && (
         <AlertNotice
           action="알림 다시 연결"
@@ -73,7 +65,7 @@ export function SubwayAlertsPanel({
                 summary={
                   kind === 'time'
                     ? `도착 ${alert.thresholdMinutes}분 전`
-                    : `역 ${alert.radius ?? 200}m 이내`
+                    : `${alert.radius ?? 200}m · ${alert.repeatMinutes ?? 5}분마다`
                 }
                 detail={`${alert.days.map((day) => WEEKDAYS[day]).join(' · ')}${kind === 'time' ? ` · ${alert.startTime}–${alert.endTime}${state.pushStatus?.ready === false ? ' · 알림 연결 필요' : ''}` : ''}`}
                 enabled={alert.enabled}

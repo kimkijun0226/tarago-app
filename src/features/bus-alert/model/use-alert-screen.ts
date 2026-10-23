@@ -46,9 +46,6 @@ export function useAlertScreen(initialDraft: AlertDraft | null, initialKind: Ale
   /** 현재 목록과 초안에 적용할 시간·위치 알림 방식을 선택하는 로컬 UI 상태다. */
   const [kind, setKind] = useState<AlertKind>(() => resolveAlertKind(initialDraft, initialKind));
 
-  /** 접근 제안을 거절하거나 감시를 시작한 뒤 이번 화면에서 해당 제안을 숨기는 상태다. */
-  const [dismissedSource, setDismissedSource] = useState(false);
-
   // 목록 필터는 현재 방식에 따른 단순 파생 값이다. 별도 캐시 없이 서버 데이터에서 바로 계산한다.
   /** 일회성 감시를 제외하고 현재 선택 방식에 해당하는 반복 설정만 남긴다. */
   const visibleAlerts = alerts.filter(
@@ -86,7 +83,7 @@ export function useAlertScreen(initialDraft: AlertDraft | null, initialKind: Ale
       if (!input.enabled) return;
       await ensureNotificationPermission();
       if (input.proximityEnabled) await ensureProximityPermission();
-      if (input.scheduledEnabled) {
+      if (input.scheduledEnabled || input.proximityEnabled) {
         setPushWarning(await preparePush());
         await client.invalidateQueries({ queryKey: ['alerts', 'push-status'] });
       }
@@ -193,8 +190,6 @@ export function useAlertScreen(initialDraft: AlertDraft | null, initialKind: Ale
     draft,
     kind,
     selectKind,
-    dismissedSource,
-    setDismissedSource,
     visibleAlerts,
     busy: busy || save.isPending || remove.isPending,
     pushWarning,

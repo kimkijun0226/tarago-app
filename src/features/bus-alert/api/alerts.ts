@@ -71,3 +71,13 @@ export async function saveAlert(input: BusAlertInput, id?: string): Promise<BusA
 export async function deleteAlert(id: string) {
   await apiClient.delete(`/alerts/${id}`, await alertAuth());
 }
+
+/** 알림별 실제 영역 진입·이탈을 전달한다. 서버는 진입 중에만 반복 푸시를 발송한다. */
+export async function setAlertProximity(
+  transport: 'bus' | 'subway',
+  id: string,
+  visit: { inside: boolean; observedAt: string },
+) {
+  const path = transport === 'bus' ? '/alerts' : '/subway/alerts';
+  await apiClient.put(`${path}/${id}/proximity`, visit, await alertAuth());
+}

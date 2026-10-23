@@ -14,34 +14,14 @@ import * as TaskManager from 'expo-task-manager';
 import { Platform } from 'react-native';
 import { registerPushToken } from '../api/alerts';
 import { alertStorage, readCachedAlerts } from './alert-storage';
-import { proximityMessage, proximityRegions, shouldNotifyVisit, type BusAlert } from './bus-alert';
-import { getBusArrivals, type BusArrival } from '@/features/bus-stop/api/get-bus-arrivals';
-import { queryClient } from '@/shared/lib/query-client';
+import type { BusAlert } from './bus-alert';
+import { reportProximity, retryProximityReports } from './proximity-visits';
 
 /** TaskManager와 지오펜스 등록이 같은 백그라운드 작업을 가리키게 하는 고정 식별자다. */
 const TASK = 'tarago-stop-proximity';
 
 /** Android 버스 알림이 사용할 중요도·소리 설정 채널 식별자다. */
 const CHANNEL = 'bus-arrivals';
-
-/** 같은 정류소의 전경·백그라운드 접근 처리가 겹칠 때 발송 작업의 중복 실행을 막는다. */
-const pendingStops = new Set<string>();
-
-/** 알림을 펼쳤을 때 사용자 동의로 감시를 시작하거나 설정 화면을 열 수 있다. */
-async function registerProximityActions() {
-  await Notifications.setNotificationCategoryAsync('TARAGO_PROXIMITY', [
-    {
-      identifier: 'START_MONITORING',
-      buttonTitle: '실시간 알림 시작 (1시간)',
-      options: { opensAppToForeground: true },
-    },
-    {
-      identifier: 'OPEN_SETTINGS',
-      buttonTitle: '설정하기',
-      options: { opensAppToForeground: true },
-    },
-  ]);
-}
 
 Notifications.setNotificationHandler({
   handleNotification: async () => ({
@@ -52,117 +32,35 @@ Notifications.setNotificationHandler({
   }),
 });
 
-/** 정류장 접근 시 감시를 자동 시작하지 않고 사용자에게 1시간 감시를 제안한다. */
-export async function handleStopEntry(stationId: string) {
-  if (pendingStops.has(stationId)) return;
-  pendingStops.add(stationId);
-  try {
-    /** 현재 기기에 저장된 서버 알림 목록으로, 필터와 감시 설정의 원본이다. */
-    const alerts = await readCachedAlerts();
-
-    /** 접근 알림의 반복 요일을 한국 시간 기준으로 판정하기 위한 요일 번호다. */
-    const day = new Date(Date.now() + 9 * 60 * 60_000).getUTCDay();
-
-    /** 현재 요일에 활성화되고 진행 중 감시가 없는 노선을 정류소·노선 순번별로 중복 제거한 목록이다. */
-    const matching = [
-      ...new Map(
-        alerts
-          .filter(
-            (a) =>
-              a.stop.id === stationId &&
-              a.enabled &&
-              a.proximityEnabled &&
-              a.days.includes(day) &&
-              !alerts.some(
-                (session) =>
-                  session.monitoringSourceId &&
-                  session.stationId === a.stationId &&
-                  session.routeId === a.routeId &&
-                  session.stationSeq === a.stationSeq &&
-                  session.enabled &&
-                  Date.parse(session.monitoringEndsAt ?? '') > Date.now(),
-              ),
-          )
-          .map((a) => [`${a.routeId}:${a.stationSeq ?? ''}`, a]),
-      ).values(),
-    ];
-
-    /** 정류소 이름과 대표 알림 정보를 가져올 첫 번째 유효 설정이다. */
-    const alert = matching[0];
-    if (!alert) return;
-
-    /** 영역 안팎 여부와 마지막 발송 시각을 복원해 재진입 중복 알림을 막는다. */
-    const state = JSON.parse((await alertStorage.getItem(`visit:${stationId}`)) ?? '{}') as {
-      inside?: boolean;
-      lastSent?: number;
-    };
-    if (!shouldNotifyVisit(state, Date.now())) return;
-    await registerProximityActions();
-
-    /** 접근 안내에 넣을 도착정보이며 조회 실패 시에도 빈 목록으로 감시 제안을 구성한다. */
-    let arrivals: BusArrival[] = [];
-    try {
-      arrivals = await queryClient.fetchQuery({
-        queryKey: ['bus-stops', stationId, 'arrivals'],
-        queryFn: ({ signal }) => getBusArrivals({ stationId, signal }),
-        staleTime: 10_000,
-        retry: false,
-      });
-    } catch (error) {
-      console.warn(
-        '접근 알림 도착정보 조회 실패',
-        error instanceof Error ? error.message : 'unknown',
-      );
-      await alertStorage.setItem(
-        'tarago-proximity-error',
-        '접근 알림의 도착정보를 조회하지 못했어요. 연결 상태를 확인해주세요.',
-      );
-    }
-
-    /** 네트워크 조회 중 사용자가 알림을 끌 수 있어 발송 직전에 다시 읽은 기기 사본이다. */
-    const latest = await readCachedAlerts();
-
-    /** 첫 조회 후에도 활성 상태와 반복 요일 조건을 유지하는 설정만 발송 대상으로 남긴다. */
-    const valid = matching.filter((selected) =>
-      latest.some(
-        (a) => a.id === selected.id && a.enabled && a.proximityEnabled && a.days.includes(day),
-      ),
-    );
-    if (!valid.length) return;
-
-    /** 유효한 노선별 도착 요약을 빈 줄로 구분한 접근 안내 본문이다. */
-    const summary = valid.map((selected) => proximityMessage(arrivals, selected)).join('\n\n');
-    await Notifications.scheduleNotificationAsync({
-      identifier: `proximity:${stationId}`,
-      content: {
-        title: `${alert.stop.name} 정류소 근처입니다`,
-        body: `${summary}\n\n실시간 도착 알림을 1시간 동안 시작할까요?`,
-        categoryIdentifier: 'TARAGO_PROXIMITY',
-        sound: 'default',
-        data: {
-          kind: 'proximity-prompt',
-          promptId: String(Date.now()),
-          alertId: valid[0].id,
-          alertIds: valid.map((a) => a.id),
-          stationId,
-        },
-      },
-      trigger: Platform.OS === 'android' ? { channelId: CHANNEL } : null,
-    });
-    await alertStorage.setItem(
-      `visit:${stationId}`,
-      JSON.stringify({ inside: true, lastSent: Date.now() }),
-    );
-  } finally {
-    pendingStops.delete(stationId);
-  }
+/** 알림별 반경을 분리해야 같은 정류장의 서로 다른 반경에서도 이탈을 감지한다. */
+function busRegions(alerts: BusAlert[]) {
+  return alerts
+    .filter((a) => a.enabled && a.proximityEnabled && !a.monitoringSourceId)
+    .map((a) => ({
+      identifier: `bus:${a.id}`,
+      latitude: a.stop.latitude,
+      longitude: a.stop.longitude,
+      radius: a.radius,
+      notifyOnEnter: true,
+      notifyOnExit: true,
+    }));
 }
 
-/** 영역 이탈만 기록하고 마지막 발송 시각은 유지해 재진입 쿨다운을 적용한다. */
-export async function handleStopExit(stationId: string) {
-  /** 영역 안팎 여부와 마지막 발송 시각을 복원해 재진입 중복 알림을 막는다. */
-  const state = JSON.parse((await alertStorage.getItem(`visit:${stationId}`)) ?? '{}');
-  await alertStorage.setItem(`visit:${stationId}`, JSON.stringify({ ...state, inside: false }));
+export async function handleStopEntry(identifier: string, force = false, observedAt = Date.now()) {
+  const id = identifier.slice('bus:'.length);
+  const alert = (await readCachedAlerts()).find((a) => a.id === id);
+  if (!alert) return;
+  await reportProximity(
+    'bus',
+    id,
+    Boolean(alert.enabled && alert.proximityEnabled),
+    force,
+    observedAt,
+  );
+}
+
+export async function handleStopExit(identifier: string, observedAt = Date.now()) {
+  await reportProximity('bus', identifier.slice('bus:'.length), false, false, observedAt);
 }
 
 if (!TaskManager.isTaskDefined(TASK)) {
@@ -204,7 +102,6 @@ if (!TaskManager.isTaskDefined(TASK)) {
 
 /** 접근 알림 동작과 Android 채널을 준비하고 알림 권한 거절을 오류로 전달한다. */
 export async function ensureNotificationPermission() {
-  await registerProximityActions();
   if (Platform.OS === 'android') {
     await Notifications.setNotificationChannelAsync(CHANNEL, {
       name: '버스 도착 알림',
@@ -285,9 +182,9 @@ export function syncGeofences(alerts: BusAlert[], subwayAlerts?: SubwayAlert[]) 
 
 /** 최신 알림을 네이티브 감시 영역에 적용하며 권한과 최대 영역 수를 검사한다. */
 async function applyGeofences(alerts: BusAlert[], subwayAlerts?: SubwayAlert[]) {
-  /** 같은 정류소의 접근 알림을 합친 네이티브 감시 영역들이다. */
+  /** 알림마다 설정한 반경을 독립적으로 감지하는 네이티브 영역들이다. */
   const regions = [
-    ...proximityRegions(alerts),
+    ...busRegions(alerts),
     ...subwayProximityRegions(subwayAlerts ?? (await readCachedSubwayAlerts())),
   ];
 
@@ -306,20 +203,22 @@ async function applyGeofences(alerts: BusAlert[], subwayAlerts?: SubwayAlert[]) 
     return;
   }
   if (regions.length > 20)
-    throw new Error('접근 알림은 버스 정류소와 지하철역을 합쳐 최대 20곳까지 설정할 수 있어요.');
+    throw new Error('접근 알림은 버스·지하철을 합쳐 최대 20개까지 설정할 수 있어요.');
   await Location.startGeofencingAsync(TASK, regions);
   await alertStorage.removeItem('tarago-proximity-error');
 }
 
-/** foreground에서도 현재 영역을 판정하며 50m 여유를 두어 GPS 흔들림을 줄인다. */
+/** 전경에서도 실제 관측 시각과 알림별 반경으로 진입·이탈을 판정한다. */
 export async function checkNearbyStops(
   position: Location.LocationObject,
   alerts: BusAlert[],
   subwayAlerts?: SubwayAlert[],
+  force = false,
 ) {
   if (position.coords.accuracy !== null && position.coords.accuracy > 100) return;
+  const updates: Promise<unknown>[] = [];
   for (const region of [
-    ...proximityRegions(alerts),
+    ...busRegions(alerts),
     ...subwayProximityRegions(subwayAlerts ?? (await readCachedSubwayAlerts())),
   ]) {
     /** 위도 차이를 미터 단위 남북 거리로 근사한 값이다. */
@@ -331,14 +230,20 @@ export async function checkNearbyStops(
       111_320 *
       Math.cos((region.latitude * Math.PI) / 180);
 
-    /** 정류소 중심과 현재 위치의 근사 거리로 진입 반경·이탈 여유 50m와 비교한다. */
+    /** 정류소 중심과 현재 위치의 근사 거리를 설정 반경과 비교한다. */
     const distance = Math.hypot(north, east);
     if (distance <= region.radius) {
-      if (region.identifier.startsWith('subway:')) await handleSubwayEntry(region.identifier);
-      else await handleStopEntry(region.identifier);
-    } else if (distance > region.radius + 50) {
-      if (region.identifier.startsWith('subway:')) await handleSubwayExit(region.identifier);
-      else await handleStopExit(region.identifier);
+      if (region.identifier.startsWith('subway:'))
+        updates.push(handleSubwayEntry(region.identifier, force, position.timestamp));
+      else updates.push(handleStopEntry(region.identifier, force, position.timestamp));
+    } else if (distance > region.radius) {
+      if (region.identifier.startsWith('subway:'))
+        updates.push(handleSubwayExit(region.identifier, position.timestamp));
+      else updates.push(handleStopExit(region.identifier, position.timestamp));
     }
   }
+  const results = await Promise.allSettled(updates);
+  await retryProximityReports();
+  const failure = results.find((result) => result.status === 'rejected');
+  if (failure?.status === 'rejected') throw failure.reason;
 }
