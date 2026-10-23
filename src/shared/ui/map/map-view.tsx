@@ -6,8 +6,10 @@ import {
   type NaverMapViewRef,
 } from '@mj-studio/react-native-naver-map';
 import { forwardRef, memo, useImperativeHandle, useRef, useState } from 'react';
-import type { ViewProps } from 'react-native';
+import { Image, Keyboard, type ViewProps } from 'react-native';
 import type { MapSymbol, Point } from '@/shared/types/geo';
+
+const DEFAULT_MARKER_IMAGE = Image.resolveAssetSource(require('../../../../assets/images/search-place-marker.png')).uri;
 
 /** 남서쪽 기준 좌표와 위도·경도 폭으로 표현하는 화면 범위. */
 export type MapRegion = Point & { latitudeDelta: number; longitudeDelta: number };
@@ -117,6 +119,7 @@ export const MapView = forwardRef<MapViewRef, Props>(function MapView(
       isTiltGesturesEnabled={false}
       onInitialized={onReady}
       onTapMap={({ latitude, longitude, symbolCaption, symbolPeers }) => {
+        Keyboard.dismiss();
         let peers: Point[] = [];
         try {
           const parsed: unknown = JSON.parse(symbolPeers || '[]');
@@ -202,10 +205,10 @@ const MapMarkerView = memo(function MapMarkerView({
       image={
         marker.imageUri
           ? { httpUri: marker.imageUri, reuseIdentifier: marker.imageUri }
-          : { symbol: 'red' }
+          : { httpUri: DEFAULT_MARKER_IMAGE, reuseIdentifier: DEFAULT_MARKER_IMAGE }
       }
       caption={{ text: marker.caption ?? '', minZoom: marker.captionMinZoom ?? 18, textSize: 12 }}
-      onTap={() => onPress(marker.id)}
+      onTap={() => { Keyboard.dismiss(); onPress(marker.id); }}
     />
   );
 });

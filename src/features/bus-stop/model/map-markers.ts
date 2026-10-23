@@ -4,17 +4,11 @@ import { Image } from 'react-native';
 import type { MapMarker } from '@/shared/ui/map/map-view';
 import type { BusStop } from '../api/get-nearby-bus-stops';
 
-/** 일반 정류장에 사용하는 로컬 이미지 자산이다. */
-const STOP_IMAGE = require('../../../../assets/images/bus-stop-marker.png');
+/** 검색과 선택 상태에서 동일하게 사용하는 버스 핀이다. */
+const STOP_IMAGE = require('../../../../assets/images/search-bus-marker.png');
 
-/** 선택한 일반 정류장의 강조 이미지 자산이다. */
-const SELECTED_STOP_IMAGE = require('../../../../assets/images/bus-stop-selected-marker.png');
-
-/** 노선 위 경유 정류장의 로컬 이미지 자산이다. */
-const ROUTE_STOP_IMAGE = require('../../../../assets/images/bus-stop-route-marker.png');
-
-/** 노선에서 선택한 정류장의 강조 이미지 자산이다. */
-const ROUTE_SELECTED_STOP_IMAGE = require('../../../../assets/images/bus-stop-route-selected-marker.png');
+/** 32×40 이미지의 실제 핀 끝 (16, 38)을 지도 좌표에 맞춘다. */
+export const PIN_MARKER_ANCHOR = { x: 0.5, y: 38 / 40 };
 
 /**
  * 번들 이미지를 네이티브 지도에 전달할 URI로 해석한다.
@@ -38,22 +32,14 @@ export function stopMarker(stop: BusStop, selected: boolean, route = false): Map
     id: `stop:${stop.id}`,
     latitude: stop.latitude,
     longitude: stop.longitude,
-    imageUri: markerImage(
-      route
-        ? selected
-          ? ROUTE_SELECTED_STOP_IMAGE
-          : ROUTE_STOP_IMAGE
-        : selected
-          ? SELECTED_STOP_IMAGE
-          : STOP_IMAGE,
-    ),
-    width: selected ? 40 : route ? 24 : 20,
-    height: selected ? 48 : route ? 24 : 20,
-    anchor: { x: 0.5, y: selected ? 1 : 0.5 },
+    imageUri: markerImage(STOP_IMAGE),
+    width: selected ? 36 : route ? 26.4 : 22,
+    height: selected ? 45 : route ? 33 : 27.5,
+    anchor: PIN_MARKER_ANCHOR,
     caption: selected ? '' : stop.name,
-    minZoom: 15,
+    minZoom: selected ? 0 : 15,
   };
 }
 
 /** 노선 경유 마커에 공통으로 전달할 이미지 URI다. */
-export const routeStopImage = markerImage(ROUTE_STOP_IMAGE);
+export const routeStopImage = markerImage(STOP_IMAGE);

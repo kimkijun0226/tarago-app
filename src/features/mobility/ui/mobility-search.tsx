@@ -1,17 +1,18 @@
 /** @fileoverview 지도 장소 검색과 알림 대상 선택을 연결한다. 서버 결과는 Query, 검색 UI는 로컬 상태가 소유한다. */
-import { useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, BackHandler, Keyboard, Text, TextInput, View } from 'react-native';
-import { isAxiosError } from 'axios';
 import { MapBottomSheet, type MapSheetSnap } from '@/shared/ui/map-bottom-sheet';
 import { mapUi } from '@/shared/ui/map-design-tokens';
+import { isAxiosError } from 'axios';
+import { useEffect, useRef, useState } from 'react';
+import type { SharedValue } from 'react-native-reanimated';
+import { ActivityIndicator, BackHandler, Keyboard, Text, TextInput, View } from 'react-native';
 import type { Place, Point } from '../api/mobility';
+import { matchesSearchFilter, type SearchResultFilter } from '../model/place-kind';
+import { readPlaceHistory, savePlaceHistory } from '../model/search-history';
+import { usePlaceSearch, type SearchMapRequest } from '../model/use-place-search';
+import { MapSearchResults, MapSearchResultsHeader } from './map-search-results';
+import { MobilitySearchBar } from './mobility-search-bar';
 import { PlaceDetail } from './place-detail';
 import { PlaceSearchResults } from './place-search-results';
-import { usePlaceSearch, type SearchMapRequest } from '../model/use-place-search';
-import { matchesSearchFilter, type SearchResultFilter } from '../model/place-kind';
-import { MobilitySearchBar } from './mobility-search-bar';
-import { MapSearchResults } from './map-search-results';
-import { readPlaceHistory, savePlaceHistory } from '../model/search-history';
 
 type Props = {
   position: Point;
@@ -21,11 +22,13 @@ type Props = {
   onPlace: (place: Place | null, showBusStop?: boolean) => void;
   onActivate: () => void;
   onSheetHeight: (height: number) => void;
+  animatedPosition?: SharedValue<number>;
   onSubway: (stationName: string, lineName?: string) => void;
   onSearchActiveChange?: (active: boolean) => void;
   suspended?: boolean;
   onSearchMap: (request: SearchMapRequest | null) => void;
   selectedSearchId: string | null;
+  selectedPlace: Place | null;
   onSearchSelect: (place: Place) => void;
 };
 
@@ -38,11 +41,13 @@ export function MobilitySearch({
   onPlace,
   onActivate,
   onSheetHeight,
+  animatedPosition,
   onSubway,
   onSearchActiveChange,
   suspended = false,
   onSearchMap,
   selectedSearchId,
+  selectedPlace,
   onSearchSelect,
 }: Props) {
   const input = useRef<TextInput>(null);
@@ -52,15 +57,28 @@ export function MobilitySearch({
   const [mapResults, setMapResults] = useState(false);
   const [searchOrigin, setSearchOrigin] = useState<Point>(position);
   const [mapFilter, setMapFilter] = useState<SearchResultFilter>('all');
-  const [searchSnap, setSearchSnap] = useState<MapSheetSnap>('half');
+  const [searchSnap, setSearchSnap] = useState<MapSheetSnap>('compact');
   const [text, setText] = useState('');
   const [query, setQuery] = useState('');
   const [recent, setRecent] = useState<Place[]>([]);
-  const [chosen, setChosen] = useState<Place | null>(null);
+  const placeDetail =
+    selectedPlace &&
+    !selectedPlace.id.startsWith('station:') &&
+    !selectedPlace.id.startsWith('subway:')
+      ? selectedPlace
+      : null;
+  const [previousSuspended, setPreviousSuspended] = useState(suspended);
+  if (suspended !== previousSuspended) {
+    setPreviousSuspended(suspended);
+    if (suspended) {
+      setText('');
+      setQuery('');
+      setOpen(false);
+      setMapResults(false);
+    }
+  }
   const [headerHeight, setHeaderHeight] = useState(50);
-  const fixedFilter =
-    alertTransport === 'bus' ? 'stop' : alertTransport === 'subway' ? 'subway' : undefined;
-  const activeFilter = fixedFilter ?? mapFilter;
+  const activeFilter = mapFilter;
 
   useEffect(() => {
     let alive = true;
@@ -84,6 +102,13 @@ export function MobilitySearch({
     onSearchActiveChange?.(open);
   }, [open, onSearchActiveChange]);
 
+  /** 지도 마커에서 직접 정류소·역을 열어도 검색 목록과 포인터를 남기지 않는다. */
+  useEffect(() => {
+    if (!suspended) return;
+    onSearchMap(null);
+    Keyboard.dismiss();
+  }, [suspended, onSearchMap]);
+
   useEffect(() => {
     const subscription = BackHandler.addEventListener('hardwareBackPress', () => {
       if (open) {
@@ -95,10 +120,8 @@ export function MobilitySearch({
     return () => subscription.remove();
   });
 
-  const { places, stations, results } = usePlaceSearch(query, searchOrigin, open);
-  const searchResults = fixedFilter
-    ? results.filter((place) => matchesSearchFilter(place, fixedFilter))
-    : results;
+  const { places, subways, stations, results } = usePlaceSearch(query, searchOrigin, open, false);
+  const searchResults = results;
   useEffect(() => {
     onSearchMap(
       mapResults && open ? { query, position: searchOrigin, filter: activeFilter } : null,
@@ -109,16 +132,23 @@ export function MobilitySearch({
     matchesSearchFilter(place, activeFilter),
   );
   const showMapFallback = open && mapResults && !suspended && visibleSearchResults.length === 0;
-  const searchBusy = text.trim() !== query || places.isFetching || stations.isFetching;
+  const searchBusy =
+    text.trim() !== query || places.isFetching || subways.isFetching || stations.isFetching;
   const searchError = places.isError
     ? message(places.error)
     : stations.isError
       ? message(stations.error)
-      : '';
+      : subways.isError
+        ? message(subways.error)
+        : '';
 
   function changeText(value: string) {
+    if (!value.trim()) {
+      setQuery('');
+      onSearchMap(null);
+    }
     if (mapResults) {
-      if (suspended) onActivate();
+      onActivate();
       setMapResults(false);
       onPlace(null);
       onSheetHeight(0);
@@ -131,22 +161,30 @@ export function MobilitySearch({
     if (value.length < 2) return;
     Keyboard.dismiss();
     setMapFilter('all');
-    setSearchSnap('half');
+    setSearchSnap('compact');
     setMapResults(true);
   }
   function closeSearch() {
+    setText('');
+    setQuery('');
+    setMapFilter('all');
+    onSearchMap(null);
+    onActivate();
     setOpen(false);
     setMapResults(false);
-    if (mapResults) onPlace(null);
+    onPlace(null);
     onSheetHeight(0);
     Keyboard.dismiss();
   }
   function edit() {
     setMapResults(false);
-    setChosen(null);
-    setSearchOrigin({ latitude: position.latitude, longitude: position.longitude });
-    setText('');
-    setQuery('');
+    onSearchMap(null);
+    onSheetHeight(0);
+    if (!mapResults) {
+      setSearchOrigin({ latitude: position.latitude, longitude: position.longitude });
+      setText('');
+      setQuery('');
+    }
     setOpen(true);
   }
   function remember(place: Place) {
@@ -157,10 +195,12 @@ export function MobilitySearch({
   function selectResult(place: Place) {
     remember(place);
     Keyboard.dismiss();
-    if (alertTransport) {
+    if (alertTransport || place.id.startsWith('station:') || place.id.startsWith('subway:')) {
+      setText('');
+      setQuery('');
       setOpen(false);
       setMapResults(false);
-      setChosen(null);
+      onSearchMap(null);
       onSheetHeight(0);
     }
     onSearchSelect(place);
@@ -177,13 +217,15 @@ export function MobilitySearch({
     setOpen(false);
     setMapResults(false);
     onSheetHeight(0);
-    setChosen(place);
     onPlace(place, true);
   }
   return (
     <>
       {(open && !mapResults) || showMapFallback ? (
-        <View style={{ position: 'absolute', inset: 0, backgroundColor: mapUi.background }} />
+        <View
+          onTouchStart={() => Keyboard.dismiss()}
+          style={{ position: 'absolute', inset: 0, backgroundColor: mapUi.background }}
+        />
       ) : null}
       <View
         onLayout={(event) => setHeaderHeight(event.nativeEvent.layout.height)}
@@ -191,15 +233,10 @@ export function MobilitySearch({
       >
         <MobilitySearchBar
           open={open}
+          resultsVisible={mapResults}
           value={text}
           inputRef={input}
-          placeholder={
-            alertTransport === 'bus'
-              ? '정류장 이름·번호 검색'
-              : alertTransport === 'subway'
-                ? '지하철역 검색'
-                : '정류장 이름·번호, 지하철역 검색'
-          }
+          placeholder="장소·주소·정류장·지하철역 검색"
           onOpen={() => {
             onActivate();
             edit();
@@ -214,7 +251,6 @@ export function MobilitySearch({
           top={top + headerHeight}
           query={query}
           recent={recent}
-          fixedFilter={fixedFilter}
           places={text.trim() === query ? searchResults : undefined}
           fetching={searchBusy}
           error={searchError}
@@ -230,17 +266,6 @@ export function MobilitySearch({
             setMapResults(true);
             selectResult(place);
           }}
-          transitOnly
-          onMap={
-            text.trim() === query && query.length >= 2
-              ? (filter) => {
-                  setMapFilter(filter);
-                  Keyboard.dismiss();
-                  setSearchSnap('half');
-                  setMapResults(true);
-                }
-              : undefined
-          }
           onClearHistory={() => {
             setRecent([]);
             void savePlaceHistory([]).catch(() => console.warn('최근 장소 삭제 실패'));
@@ -249,6 +274,7 @@ export function MobilitySearch({
       ) : null}
       {showMapFallback ? (
         <View
+          onTouchStart={() => Keyboard.dismiss()}
           style={{
             position: 'absolute',
             top: top + headerHeight,
@@ -275,39 +301,44 @@ export function MobilitySearch({
           </Text>
         </View>
       ) : null}
+
       {open && mapResults && !suspended && !showMapFallback ? (
         <MapBottomSheet
+          toolbar={
+            <MapSearchResultsHeader
+              query={query}
+              count={visibleSearchResults.length}
+              onClose={() => {
+                setMapResults(false);
+                onPlace(null);
+                onSheetHeight(0);
+              }}
+            />
+          }
           snap={searchSnap}
           onChangeSnap={setSearchSnap}
           topInset={top + headerHeight}
           onHeightChange={onSheetHeight}
+          animatedPosition={animatedPosition}
         >
           <MapSearchResults
-            query={query}
             places={visibleSearchResults}
             selectedId={selectedSearchId}
             onSelect={selectResult}
             onChoose={selectResult}
-            onClose={() => {
-              setMapResults(false);
-              onPlace(null);
-              onSheetHeight(0);
-            }}
           />
         </MapBottomSheet>
       ) : null}
-      {!alertTransport && !suspended && !open && chosen ? (
+      {!alertTransport && !open && placeDetail ? (
         <PlaceDetail
-          place={chosen}
+          place={placeDetail}
           onSheetHeight={onSheetHeight}
           onClose={() => {
-            setChosen(null);
             onPlace(null);
             onSheetHeight(0);
           }}
           onSubway={() => {
-            onSubway(chosen.name, chosen.subwayLineName);
-            setChosen(null);
+            onSubway(placeDetail.name, placeDetail.subwayLineName);
           }}
         />
       ) : null}

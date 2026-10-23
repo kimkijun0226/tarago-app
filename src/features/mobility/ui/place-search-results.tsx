@@ -1,11 +1,10 @@
 /** @fileoverview 정류장·지하철역 검색 결과와 최근 검색을 표시한다. */
+import { SearchPlaceKind } from './search-place-kind';
 import { useState } from 'react';
-import { ActivityIndicator, FlatList, Pressable, StyleSheet, Text, View } from 'react-native';
-import { SymbolView } from 'expo-symbols';
+import { Keyboard, ActivityIndicator, FlatList, Pressable, StyleSheet, Text, View } from 'react-native';
 import type { Place } from '../api/mobility';
 import {
   isBusStopPlace,
-  isSubwayPlace,
   matchesSearchFilter,
   type SearchResultFilter,
 } from '../model/place-kind';
@@ -22,7 +21,6 @@ type Props = {
   onClearHistory: () => void;
   onChoose: (place: Place) => void;
   transitOnly?: boolean;
-  onMap?: (filter: SearchResultFilter) => void;
 };
 
 /** 결과 분류는 이미 받은 목록에서 수행한다. 탭을 바꿀 때 동일 검색 API를 다시 호출하지 않는다. */
@@ -36,7 +34,6 @@ export function PlaceSearchResults({
   error,
   onClearHistory,
   onChoose,
-  onMap,
   transitOnly = false,
 }: Props) {
   /** 동일 검색 결과에 적용할 화면 분류다. 서버 응답을 상태에 복사하지 않는다. */
@@ -57,7 +54,7 @@ export function PlaceSearchResults({
       : (places ?? []).filter((place) => matchesSearchFilter(place, activeFilter));
 
   return (
-    <View style={[styles.container, { top }]}>
+    <View onTouchStart={() => Keyboard.dismiss()} style={[styles.container, { top }]}>
       {query.length >= 2 && !fixedFilter ? (
         <View style={styles.tabs}>
           {(transitOnly
@@ -102,20 +99,6 @@ export function PlaceSearchResults({
           ) : null}
         </View>
       )}
-      {onMap ? (
-        <Pressable
-          accessibilityRole="button"
-          onPress={() => onMap(activeFilter)}
-          style={{
-            alignSelf: 'flex-end',
-            paddingHorizontal: 20,
-            paddingVertical: 12,
-            minHeight: 44,
-          }}
-        >
-          <Text style={styles.mapActionText}>지도에서 보기</Text>
-        </Pressable>
-      ) : null}
       {fetching ? <ActivityIndicator style={styles.loading} color={mapUi.blue} /> : null}
       {error ? (
         <Text accessibilityRole="alert" style={styles.error}>
@@ -128,7 +111,7 @@ export function PlaceSearchResults({
         keyboardShouldPersistTaps="handled"
         keyboardDismissMode="on-drag"
         renderItem={({ item }) => (
-          <PlaceSearchRow place={item} recent={query.length < 2} onChoose={onChoose} />
+          <PlaceSearchRow place={item} onChoose={onChoose} />
         )}
         ListEmptyComponent={
           !fetching && query.length >= 2 ? (
@@ -140,14 +123,12 @@ export function PlaceSearchResults({
   );
 }
 
-/** 최근 기록에는 시계, 검색 결과에는 장소 분류 아이콘을 사용하고 이름·주소·거리를 표시한다. */
+/** 최근 기록과 검색 결과에 같은 장소 분류 아이콘을 표시한다. */
 function PlaceSearchRow({
   place,
-  recent,
   onChoose,
 }: {
   place: Place;
-  recent: boolean;
   onChoose: (place: Place) => void;
 }) {
   return (
@@ -156,22 +137,12 @@ function PlaceSearchRow({
       onPress={() => onChoose(place)}
       style={({ pressed }) => [styles.row, pressed && styles.pressed]}
     >
-      <SymbolView
-        name={
-          recent
-            ? { ios: 'clock', android: 'history' }
-            : isBusStopPlace(place)
-              ? { ios: 'bus', android: 'directions_bus' }
-              : isSubwayPlace(place)
-                ? { ios: 'tram', android: 'subway' }
-                : { ios: 'mappin.circle', android: 'location_on' }
-        }
-        size={21}
-        tintColor={mapUi.secondaryText}
-      />
+      <SearchPlaceKind place={place} />
       <View style={styles.place}>
-        <Text style={styles.placeName}>{place.name.replace(/\[.*?\]/g, '')}</Text>
-        <Text style={styles.address}>{place.address || place.category}</Text>
+        <View style={styles.nameRow}>
+          <Text numberOfLines={1} style={styles.placeName}>{place.name.replace(/\[.*?\]/g, '')}</Text>
+        </View>
+        <Text style={styles.address}>{place.address}</Text>
       </View>
       {place.distanceMeters !== null ? (
         <Text style={styles.distance}>
@@ -186,7 +157,6 @@ function PlaceSearchRow({
 
 /** 검색 화면의 고정 시각 규격이다. 배열·스타일 캐시용 훅이 필요 없다. */
 const styles = StyleSheet.create({
-  mapActionText: { color: mapUi.blue, fontSize: 15, fontWeight: '600' },
   container: {
     position: 'absolute',
     left: 0,
@@ -197,51 +167,49 @@ const styles = StyleSheet.create({
   tabs: {
     flexDirection: 'row',
     paddingHorizontal: 16,
-    gap: 6,
+    gap: 16,
     borderBottomWidth: 1,
     borderBottomColor: mapUi.border,
   },
   tab: {
-    flex: 1,
-    minHeight: 46,
+    minHeight: 44,
+    paddingHorizontal: 4,
     alignItems: 'center',
     justifyContent: 'center',
-    borderWidth: 1,
-    borderRadius: 18,
-    marginVertical: 8,
-    borderColor: 'transparent',
+    borderBottomWidth: 2,
+    borderBottomColor: 'transparent',
   },
-  activeTab: { backgroundColor: mapUi.blueSurface, borderColor: mapUi.accentBorder },
-  tabText: { color: mapUi.secondaryText, fontSize: 15 },
-  activeText: { color: mapUi.blue, fontWeight: '700' },
+  activeTab: { borderBottomColor: mapUi.text },
+  tabText: { color: mapUi.secondaryText, fontSize: 13 },
+  activeText: { color: mapUi.text, fontWeight: '700' },
   historyHeading: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: 20,
+    paddingHorizontal: 16,
     minHeight: 50,
-    borderBottomWidth: 1,
-    borderBottomColor: mapUi.separator,
   },
   historyTitle: { color: mapUi.text, fontSize: 16, fontWeight: '600' },
   clear: { minHeight: 44, justifyContent: 'center' },
   muted: { color: mapUi.secondaryText, fontSize: 13 },
   row: {
-    paddingHorizontal: 20,
-    paddingVertical: 15,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: '#E4E5E8',
+    paddingHorizontal: 16,
+    paddingVertical: 16,
     minHeight: 72,
+    backgroundColor: mapUi.background,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 14,
-    borderBottomWidth: 1,
-    borderBottomColor: mapUi.separator,
+    gap: 10,
   },
   place: { flex: 1, gap: 4 },
-  placeName: { fontSize: 16, color: mapUi.text },
-  address: { fontSize: 12, color: mapUi.secondaryText },
-  distance: { fontSize: 12, color: mapUi.secondaryText },
+  nameRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  placeName: { flexShrink: 1, fontSize: 16, fontWeight: '700', color: mapUi.text },
+  address: { fontSize: 11, lineHeight: 16, color: mapUi.secondaryText },
+  distance: { fontSize: 11, fontWeight: '500', color: mapUi.secondaryText },
   error: { padding: 16, color: mapUi.blue },
   loading: { padding: 12 },
-  pressed: { backgroundColor: mapUi.blueSurface, transform: [{ scale: 0.99 }] },
+  pressed: { backgroundColor: mapUi.separator, transform: [{ translateY: 1 }, { scale: 0.99 }] },
   empty: { padding: 24, textAlign: 'center', color: mapUi.secondaryText },
 });

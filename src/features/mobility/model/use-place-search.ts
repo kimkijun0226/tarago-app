@@ -1,5 +1,6 @@
-/** @fileoverview 목록과 지도는 같은 Query 캐시를 공유하며 일반 검색은 정류장·지하철역만 제공한다. */
+/** @fileoverview 목록과 지도는 같은 Query 캐시를 공유하며 일반 검색은 장소·주소·정류장·지하철역을 함께 제공한다. */
 import { useMemo } from 'react';
+import { compareSearchRelevance } from './search-relevance';
 import type { SearchResultFilter } from './place-kind';
 import { useQuery } from '@tanstack/react-query';
 import { searchPlaces, type Place, type Point } from '../api/mobility';
@@ -30,7 +31,7 @@ export function usePlaceSearch(
   const subways = useQuery({
     queryKey: ['subway', 'map-stations'],
     queryFn: ({ signal }) => getSubwayMapStations(signal),
-    enabled: enabled && transitOnly && query.length >= 2,
+    enabled: enabled && query.length >= 2,
     staleTime: 86_400_000,
     gcTime: 86_400_000,
     ...searchPolicy,
@@ -84,7 +85,15 @@ export function usePlaceSearch(
         category: '버스정류장',
         distanceMeters: stop.distanceMeters,
       })),
-      ...(transitOnly ? subwayPlaces : (genericPlaces.data ?? [])),
+      ...subwayPlaces,
+      ...(!transitOnly ? (genericPlaces.data ?? []).map((place) => {
+        const name = place.name.replace(/\[[^\]]*\]|\([^)]*\)/g, '').trim();
+        const line = `${place.name} ${place.category}`.match(/(?:수도권)?(\d+호선)/)?.[1];
+        const matches = subwayPlaces.filter((station) =>
+          station.name === name && (!line || station.subwayLineName === line),
+        );
+        return matches.length === 1 ? matches[0] : place;
+      }) : []),
     ];
     return [
       ...new Map(
@@ -92,7 +101,7 @@ export function usePlaceSearch(
           .filter((place) => Number.isFinite(place.latitude) && Number.isFinite(place.longitude))
           .map((place) => [place.id, place]),
       ).values(),
-    ].sort((a, b) => (a.distanceMeters ?? Infinity) - (b.distanceMeters ?? Infinity));
+    ].sort((a, b) => compareSearchRelevance(query, a, b));
   }, [
     enabled,
     query,
@@ -103,5 +112,5 @@ export function usePlaceSearch(
     position.latitude,
     position.longitude,
   ]);
-  return { places: transitOnly ? subways : genericPlaces, stations, results };
+  return { places: transitOnly ? subways : genericPlaces, subways, stations, results };
 }

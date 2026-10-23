@@ -6,7 +6,7 @@ export function busSymbolKey(point: Point) {
 }
 
 /** 화면의 심벌과 정류장을 최소 총 거리로 일대일 배정해 반대 방향 승강장을 재사용하지 않는다. */
-export function matchBusStopSymbols<T extends Pick<BusStop, 'id' | 'name' | 'latitude' | 'longitude' | 'sourcePositions'>>(symbols: MapSymbol[], stops: T[], eligible?: (symbol: MapSymbol, station: T) => boolean) {
+export function matchBusStopSymbols<T extends Pick<BusStop, 'id' | 'name' | 'latitude' | 'longitude' | 'sourcePositions'>>(symbols: MapSymbol[], stops: T[], eligible?: (symbol: MapSymbol, station: T) => boolean, maxDistanceMeters = 75) {
   const normalize = (name: string) => name.replace(/버스정류장|[\s()[\]·.,]/g, '');
   const stations = [...new Map(stops.map((stop) => [stop.id, stop])).values()].sort((a, b) =>
     a.id.localeCompare(b.id),
@@ -21,7 +21,7 @@ export function matchBusStopSymbols<T extends Pick<BusStop, 'id' | 'name' | 'lat
   ].sort((a, b) => busSymbolKey(a).localeCompare(busSymbolKey(b)));
   const result = new Map<string, T>();
   if (!points.length || !stations.length) return result;
-  const limit = 75 ** 2;
+  const limit = maxDistanceMeters ** 2;
   const costs = points.map((point) =>
     stations
       .map((stop) => {

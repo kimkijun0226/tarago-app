@@ -1,11 +1,12 @@
-/** @fileoverview 기본 지도 검색창과 닫기 버튼이 있는 검색 입력창. */
+/** 지도 검색 진입 버튼과 검색어 지우기·검색 종료 동작을 분리한다. */
+import { mapUi } from '@/shared/ui/map-design-tokens';
+import { SymbolView } from 'expo-symbols';
 import type { RefObject } from 'react';
 import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
-import { SymbolView } from 'expo-symbols';
-import { mapUi } from '@/shared/ui/map-design-tokens';
 
 type Props = {
   open: boolean;
+  resultsVisible: boolean;
   value: string;
   placeholder: string;
   inputRef: RefObject<TextInput | null>;
@@ -17,6 +18,7 @@ type Props = {
 
 export function MobilitySearchBar({
   open,
+  resultsVisible,
   value,
   placeholder,
   inputRef,
@@ -25,70 +27,90 @@ export function MobilitySearchBar({
   onText,
   onSubmit,
 }: Props) {
-  const logo = (
-    <View style={styles.logo}>
-      <SymbolView
-        name={{ ios: 'magnifyingglass', android: 'search' }}
-        size={21}
-        tintColor="#FFFFFF"
-      />
-    </View>
-  );
   return (
     <View style={styles.row}>
-      {open ? (
+      {open && !resultsVisible ? (
         <Pressable
           accessibilityRole="button"
           accessibilityLabel="검색 닫기"
           onPress={onClose}
-          style={({ pressed }) => [styles.close, pressed && styles.pressed]}
+          hitSlop={7}
+          style={({ pressed }) => [styles.back, pressed && styles.pressed]}
         >
-          <SymbolView name={{ ios: 'xmark', android: 'close' }} size={22} tintColor={mapUi.text} />
+          <SymbolView
+            name={{ ios: 'chevron.left', android: 'arrow_back' }}
+            size={18}
+            tintColor={mapUi.text}
+          />
         </Pressable>
       ) : null}
-      <View style={[styles.pill, open && styles.searchPill]}>
-        {open ? (
-          <>
-            <TextInput
-              ref={inputRef}
-              value={value}
-              onChangeText={onText}
-              maxLength={100}
-              placeholder={placeholder}
-              placeholderTextColor={mapUi.secondaryText}
-              style={styles.input}
-              returnKeyType="search"
-              onSubmitEditing={onSubmit}
-            />
-            {value ? (
-              <Pressable
-                accessibilityRole="button"
-                accessibilityLabel="검색어 지우기"
-                onPress={() => onText('')}
-                style={styles.clear}
-              >
-                <SymbolView
-                  name={{ ios: 'xmark.circle.fill', android: 'cancel' }}
-                  size={18}
-                  tintColor={mapUi.secondaryText}
-                />
-              </Pressable>
-            ) : null}
-          </>
+      <View style={[styles.pill, open && !resultsVisible && styles.editingPill]}>
+        {open && !resultsVisible ? (
+          <TextInput
+            autoFocus
+            ref={inputRef}
+            value={value}
+            onChangeText={onText}
+            maxLength={100}
+            accessibilityLabel="검색어"
+            placeholder={placeholder}
+            placeholderTextColor={mapUi.secondaryText}
+            style={styles.input}
+            returnKeyType="search"
+            onSubmitEditing={onSubmit}
+          />
         ) : (
           <Pressable
             accessibilityRole="button"
-            accessibilityLabel="장소 검색"
+            accessibilityLabel="검색 목록 열기"
             onPress={onOpen}
-            style={({ pressed }) => [styles.search, pressed && styles.pressed]}
+            style={styles.entry}
           >
-            {logo}
             <Text numberOfLines={1} style={styles.placeholder}>
-              타라고 검색
+              {value || placeholder}
             </Text>
           </Pressable>
         )}
+        {open && (value || resultsVisible) ? (
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={resultsVisible ? '검색어 지우기' : '검색 닫고 지도로 돌아가기'}
+            onPress={resultsVisible ? () => onText('') : onClose}
+            hitSlop={resultsVisible ? 10 : 0}
+            style={[styles.clear, resultsVisible && styles.clearCircle]}
+          >
+            <SymbolView
+              name={{ ios: 'xmark', android: 'close' }}
+              size={resultsVisible ? 11 : 18}
+              tintColor={resultsVisible ? '#FFFFFF' : mapUi.secondaryText}
+            />
+          </Pressable>
+        ) : null}
       </View>
+      {!open ? (
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="검색"
+          onPress={onOpen}
+          style={({ pressed }) => [styles.submit, pressed && styles.submitPressed]}
+        >
+          <SymbolView
+            name={{ ios: 'magnifyingglass', android: 'search' }}
+            size={22}
+            weight="semibold"
+            tintColor="#FFFFFF"
+          />
+        </Pressable>
+      ) : resultsVisible ? (
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="검색 종료"
+          onPress={onClose}
+          style={({ pressed }) => [styles.endSearch, pressed && styles.pressed]}
+        >
+          <SymbolView name={{ ios: 'xmark', android: 'close' }} size={18} tintColor={mapUi.text} />
+        </Pressable>
+      ) : null}
     </View>
   );
 }
@@ -97,40 +119,58 @@ const styles = StyleSheet.create({
   row: { flexDirection: 'row', gap: 8, alignItems: 'center' },
   pill: {
     flex: 1,
+    minWidth: 0,
     height: 56,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 10,
     borderRadius: 28,
-    backgroundColor: mapUi.background,
-    paddingLeft: 16,
-    paddingRight: 12,
-    borderWidth: 1,
+    backgroundColor: '#FFFFFF',
+    paddingLeft: 12,
+    paddingRight: 10,
+    borderWidth: 1.25,
+    borderBottomWidth: 2,
     borderColor: mapUi.border,
-    boxShadow: '0 4px 0 #2222220C, 0 5px 12px #2222220A',
+    boxShadow: '0px 2px 8px #2222220A',
   },
-  search: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 12, height: 56 },
-  searchPill: {
-    borderRadius: 28,
-    paddingHorizontal: 16,
-    borderColor: mapUi.accentBorder,
+  editingPill: { height: 44, borderRadius: 22, borderBottomWidth: 1.25, boxShadow: 'none' },
+  entry: {
+    flex: 1,
+    minWidth: 0,
+    height: 50,
+    paddingLeft: 8,
+    justifyContent: 'center',
+    paddingRight: 8,
   },
-  close: {
+  placeholder: { fontSize: 15, color: mapUi.secondaryText, fontWeight: '500' },
+  input: { flex: 1, minWidth: 0, height: 40, color: mapUi.text, fontSize: 15, paddingVertical: 0 },
+  back: { width: 30, height: 44, alignItems: 'center', justifyContent: 'center' },
+  endSearch: {
     width: 44,
-    height: 56,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1.25,
+    borderColor: mapUi.border,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  logo: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
+  clearCircle: {
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    backgroundColor: '#A4A6AC',
+    marginHorizontal: 8,
+  },
+  clear: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center' },
+  submit: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
     backgroundColor: mapUi.brand,
-    justifyContent: 'center',
     alignItems: 'center',
+    justifyContent: 'center',
+    boxShadow: '0px 1px 0px #D92850',
   },
-  placeholder: { fontSize: 17, color: mapUi.text, flex: 1 },
-  input: { flex: 1, minWidth: 0, height: 56, color: mapUi.text, fontSize: 17, paddingVertical: 0 },
-  clear: { minWidth: 44, minHeight: 44, alignItems: 'center', justifyContent: 'center' },
-  pressed: { transform: [{ scale: 0.97 }, { translateY: 1 }] },
+  submitPressed: { backgroundColor: '#D92850', transform: [{ translateY: 1 }, { scale: 0.96 }] },
+  pressed: { opacity: 0.7 },
 });

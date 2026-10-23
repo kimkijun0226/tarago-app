@@ -3,6 +3,7 @@
  * 입력을 표시용 데이터로 변환할 뿐 서버 요청·카메라 이동·선택 상태 변경은 하지 않는다.
  */
 import { useMemo, useState } from 'react';
+import { Platform } from 'react-native';
 import type { BusStop } from '@/features/bus-stop/api/get-nearby-bus-stops';
 import type { BusRouteDetail } from '@/features/bus-stop/api/get-bus-route-detail';
 import {
@@ -10,7 +11,7 @@ import {
   getRouteDirectionMarkers,
 } from '@/features/bus-stop/model/route-direction-markers';
 
-import { markerImage, routeStopImage, stopMarker } from '@/features/bus-stop/model/map-markers';
+import { markerImage, routeStopImage, stopMarker, PIN_MARKER_ANCHOR } from '@/features/bus-stop/model/map-markers';
 import type { MapSymbol } from '@/shared/types/geo';
 import { isBoardingRouteStop } from '@/features/bus-stop/model/bus-route-presentation';
 import {
@@ -18,6 +19,7 @@ import {
   matchBusStopSymbols,
 } from '@/features/bus-stop/model/match-bus-stop-symbols';
 import { matchRouteSymbolPositions } from '@/features/bus-stop/model/route-symbol-positions';
+import { searchTransport } from '@/features/mobility/model/search-transport';
 import { matchSearchSymbols } from '@/features/mobility/model/match-search-symbols';
 import type { SubwayMapStation } from '@/features/subway/api/get-subway-station';
 import type { Place, Point } from '@/features/mobility/api/mobility';
@@ -26,8 +28,12 @@ import type { MapMarker, MapLine, MapRegion } from '@/shared/ui/map/map-view';
 /** 노선 진행 방향 화살표에 사용할 로컬 이미지 자산이다. */
 const ROUTE_DIRECTION_PATTERN = require('@/assets/images/route-direction-triangle.png');
 
-/** 선택 지하철역에 표시할 로컬 핀 이미지다. */
-const SUBWAY_STATION_MARKER = require('@/assets/images/subway-station-marker.png');
+const SEARCH_BUS_MARKER = require('@/assets/images/search-bus-marker.png');
+const SEARCH_SUBWAY_MARKER = Platform.OS === 'ios'
+  ? require('@/assets/images/subway-alert-pin-ios.png')
+  : require('@/assets/images/subway-alert-pin-android.png');
+const SEARCH_PLACE_MARKER = require('@/assets/images/search-place-marker.png');
+const SEARCH_EXIT_MARKER = require('@/assets/images/search-exit-marker.png');
 
 type OverlayInput = {
   subwaySelection?: boolean;
@@ -69,7 +75,7 @@ export function useMapOverlays({
   subwayStation,
   subwayLineName,
 }: OverlayInput) {
-  const searchKey = `named-subway-v2:${searchResults
+  const searchKey = `subway-first-symbols-v6:${searchResults
     .map((place) => place.id)
     .sort()
     .join('|')}`;
@@ -78,16 +84,17 @@ export function useMapOverlays({
     positions: new Map<string, Point>(),
   });
   const searchSymbolPositions = useMemo(() => {
+    const previous =
+      confirmedSearchSymbols.key === searchKey
+        ? confirmedSearchSymbols.positions
+        : new Map([...confirmedSearchSymbols.positions].filter(([id]) => searchResults.some((place) => place.id === id)));
     const fresh = matchSearchSymbols(
       searchResults,
       visibleMapSymbols,
       [...busStops, ...searchBusStops],
       subwayStops,
+      previous,
     );
-    const previous =
-      confirmedSearchSymbols.key === searchKey
-        ? confirmedSearchSymbols.positions
-        : new Map<string, Point>();
     const changed = [...fresh].some(([id, point]) => {
       const known = previous.get(id);
       return !known || known.latitude !== point.latitude || known.longitude !== point.longitude;
@@ -95,8 +102,6 @@ export function useMapOverlays({
     if (!changed) return previous;
     const next = new Map(previous);
     for (const [id, point] of fresh) {
-      for (const [other, known] of next)
-        if (other !== id && busSymbolKey(known) === busSymbolKey(point)) next.delete(other);
       next.set(id, point);
     }
     return next;
@@ -188,38 +193,43 @@ export function useMapOverlays({
   /** 네이티브로 보내는 마커 배열은 선택·좌표가 바뀔 때만 새로 만든다. 위치 로딩 같은 다른 렌더에서 이미지 처리를 반복하지 않기 위한 useMemo다. */
   const markers = useMemo<MapMarker[]>(() => {
     /** 최종 네이티브 마커 배열을 누적하는 지역 변수다. 이 계산 밖에 별도 상태로 보관하지 않는다. */
-    // 네이버 심벌이 확인되지 않은 위치에 노선 정류장 마커를 만들지 않는다.
+    // 노선 정류장은 지도 심벌이 숨겨지는 축척에서도 공식 좌표로 표시한다.
     const items: MapMarker[] = [];
-    if (subwaySelection) return items;
     searchResults.forEach((place, index) => {
-      const point = searchSymbolPositions.get(place.id);
-      if (!point) return;
+      const point = searchSymbolPositions.get(place.id) ?? place;
+      const kind = searchTransport(place).kind;
+      const transit = kind === 'bus' || kind === 'subway';
+      // 축소 시에도 마지막으로 확인한 네이버 심벌 좌표를 유지한다.
+      const selected = place.id === selectedSearchId;
+      const width = transit ? (selected ? 36 : 32) : (selected ? 26 : 22);
       items.push({
         ...point,
         id: `search-result:${place.id}`,
         kind: 'place',
+        imageUri: markerImage(kind === 'bus' ? SEARCH_BUS_MARKER : kind === 'exit' ? SEARCH_EXIT_MARKER : kind === 'subway' ? SEARCH_SUBWAY_MARKER : SEARCH_PLACE_MARKER),
         caption: place.id === selectedSearchId ? `${index + 1}. ${place.name}` : String(index + 1),
         captionMinZoom: 0,
-        width: place.id === selectedSearchId ? 40 : 28,
-        height: place.id === selectedSearchId ? 48 : 36,
-        anchor: { x: 0.5, y: 1 },
-        globalZIndex: place.id === selectedSearchId ? 400 : 300,
+        minZoom: 0,
+        width,
+        height: width * 1.25,
+        anchor: PIN_MARKER_ANCHOR,
+        globalZIndex: place.id === selectedSearchId ? 400 : (kind === 'subway' ? 350 : 300) - Math.min(index, 49),
       });
     });
+    if (subwaySelection) return items;
     if (selectedRoute)
       for (const stop of routeStops) {
-        const point = routeSymbolPositions.get(stop.stationId);
-        if (!point) continue;
+        const point = routeSymbolPositions.get(stop.stationId) ?? stop;
         if (selectedBusStop && stop.stationId === routeDetail?.selectedStationId) continue;
         items.push({
           ...point,
           id: `route-stop:${stop.stationId}`,
           imageUri: routeStopImage,
-          width: 24,
-          height: 24,
-          anchor: { x: 0.5, y: 0.5 },
+          width: 26.4,
+          height: 33,
+          anchor: PIN_MARKER_ANCHOR,
           caption: stop.name,
-          minZoom: 14,
+          minZoom: 0,
           globalZIndex: 250,
         });
       }
@@ -227,20 +237,8 @@ export function useMapOverlays({
       selectedBusStopPoint ??
       selectedSymbolPoint ??
       routeSymbolPositions.get(routeDetail?.selectedStationId ?? '') ??
-      null;
-    if (selectedBusStop && selectedPoint) {
-      // 핀 끝의 정류소 아이콘도 별도 오버레이로 확대해 기본 심벌의 표시 여부에 영향받지 않게 한다.
-      items.push({
-        ...stopMarker(selectedBusStop, false, Boolean(selectedRoute)),
-        latitude: selectedPoint.latitude,
-        longitude: selectedPoint.longitude,
-        id: `selected-stop-base:${selectedBusStop.id}`,
-        width: 32,
-        height: 32,
-        caption: '',
-        minZoom: 0,
-        globalZIndex: 290,
-      });
+      selectedBusStop;
+    if (selectedBusStop && selectedPoint && !searchResults.some((place) => place.id === `station:${selectedBusStop.id}`)) {
       items.push({
         ...stopMarker(selectedBusStop, true, Boolean(selectedRoute)),
         ...selectedPoint,
@@ -252,22 +250,23 @@ export function useMapOverlays({
       selectedPlace &&
       !searchResults.some((place) => place.id === selectedPlace.id) &&
       (!selectedPlace.id.startsWith('subway:') || subwayStation)
-    )
+    ) {
+      const kind = subwayStation ? 'subway' : searchTransport(selectedPlace).kind;
+      const width = kind === 'bus' || kind === 'subway' ? 36 : 26;
       items.push({
         ...selectedPlace,
         id: `place:${selectedPlace.id}`,
         caption: subwayStation
           ? `${subwayStation}역 ${subwayLineName?.replace(/^수도권/, '') ?? ''}`.trim()
           : selectedPlace.name,
-        ...(subwayStation
-          ? {
-              imageUri: markerImage(SUBWAY_STATION_MARKER),
-              anchor: { x: 0.5, y: 1 },
-              width: 32,
-              height: 44,
-            }
-          : { kind: 'place' as const, width: 32, height: 40 }),
+        imageUri: markerImage(kind === 'subway' ? SEARCH_SUBWAY_MARKER
+          : kind === 'bus' ? SEARCH_BUS_MARKER
+          : kind === 'exit' ? SEARCH_EXIT_MARKER : SEARCH_PLACE_MARKER),
+        anchor: PIN_MARKER_ANCHOR,
+        width,
+        height: width * 1.25,
       });
+    }
     if (selectedRoute)
       items.push(
         ...directionMarkers.map((marker) => ({

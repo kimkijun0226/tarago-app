@@ -1,3 +1,4 @@
+import Animated, { SlideInDown } from 'react-native-reanimated';
 /** @fileoverview 알림 설정으로 전달할 실제 정류장 노선 또는 역·호선·방면을 고르는 작은 지도 패널. */
 import { useCallback, useState } from 'react';
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
@@ -101,20 +102,45 @@ export function AlertMapPicker({
   );
   if (!selection) return null;
   const groups = groupBusArrivals(bus.data ?? []);
+  const isBus = selection.transport === 'bus';
+  const selected = isBus ? Boolean(busStop) : Boolean(stationName);
+  const steps = isBus ? ['정류소', '버스', '알림 설정'] : ['지하철역', '호선·방면', '알림 설정'];
   return (
-    <View
+    <Animated.View
+      entering={SlideInDown.duration(500).delay(120)}
       onLayout={(event) => onHeightChange(event.nativeEvent.layout.height)}
       style={[s.panel, { paddingBottom: bottom + 18 }]}
     >
+      <View style={s.handle} />
+      <View style={s.steps}>
+        {steps.map((step, index) => (
+          <View key={step} style={s.step}>
+            {index > 0 ? (
+              <SymbolView
+                name={{ ios: 'chevron.right', android: 'chevron_right' }}
+                size={9}
+                tintColor={mapUi.secondaryText}
+              />
+            ) : null}
+            <Text style={[s.stepText, index === (selected ? 1 : 0) && s.currentStep]}>
+              {index + 1} {step}
+            </Text>
+          </View>
+        ))}
+      </View>
       <Text style={s.title}>
-        {selection.transport === 'bus'
-          ? '알림을 시작할 버스를 선택해주세요'
-          : '알림을 시작할 지하철을 선택해주세요'}
+        {isBus
+          ? selected
+            ? '알림 받고 싶은 버스를 선택해주세요'
+            : '정류소를 선택해주세요'
+          : selected
+            ? '알림 받고 싶은 호선과 방면을 선택해주세요'
+            : '지하철역을 선택해주세요'}
       </Text>
       {selection.transport === 'bus' ? (
         busStop ? (
           <>
-            <Text style={s.subtitle}>{busStop.name}</Text>
+            <Text style={s.subtitle}>선택한 정류소 · {busStop.name}</Text>
             <ScrollView style={s.list}>
               {groups.map((group) => (
                 <Pressable
@@ -156,13 +182,11 @@ export function AlertMapPicker({
             </ScrollView>
           </>
         ) : (
-          <Text style={s.subtitle}>지도에서 버스 정류장을 눌러주세요</Text>
+          <Text style={s.subtitle}>지도에서 정류소를 선택한 뒤, 알림 받을 버스를 골라주세요.</Text>
         )
       ) : stationName ? (
         <>
-          <Text style={s.subtitle}>
-            {stationName.replace(/역$/, '')}역 · 호선과 방면을 선택해주세요
-          </Text>
+          <Text style={s.subtitle}>선택한 역 · {stationName.replace(/역$/, '')}역</Text>
           <ScrollView horizontal contentContainerStyle={s.chips}>
             {lines.map((item) => (
               <Pressable
@@ -253,9 +277,9 @@ export function AlertMapPicker({
           </ScrollView>
         </>
       ) : (
-        <Text style={s.subtitle}>지도에서 지하철역을 눌러주세요</Text>
+        <Text style={s.subtitle}>지도에서 역을 선택한 뒤, 알림 받을 호선과 방면을 골라주세요.</Text>
       )}
-    </View>
+    </Animated.View>
   );
 }
 const s = StyleSheet.create({
@@ -268,11 +292,26 @@ const s = StyleSheet.create({
     borderTopLeftRadius: 28,
     borderTopRightRadius: 28,
     padding: 24,
-    gap: 4,
+    minHeight: 156,
+    boxShadow: '0px -4px 18px #22222212',
+    paddingTop: 10,
+    gap: 8,
     zIndex: 30,
   },
-  title: { fontSize: 19, fontWeight: '700', color: mapUi.text },
-  subtitle: { fontSize: 14, color: mapUi.secondaryText, marginBottom: 8 },
+  handle: {
+    width: 36,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: '#DADDE1',
+    alignSelf: 'center',
+    marginBottom: 10,
+  },
+  steps: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 4 },
+  step: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  stepText: { fontSize: 11, lineHeight: 16, color: mapUi.secondaryText },
+  currentStep: { color: mapUi.text, fontWeight: '700' },
+  title: { fontSize: 18, fontWeight: '700', color: mapUi.text },
+  subtitle: { fontSize: 13, lineHeight: 20, color: mapUi.secondaryText, marginBottom: 4 },
   list: { maxHeight: 225 },
   row: {
     minHeight: 52,
@@ -280,12 +319,9 @@ const s = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     gap: 14,
-    borderWidth: 1,
-    borderColor: mapUi.border,
-    borderBottomWidth: 3,
-    borderRadius: 20,
-    padding: 14,
-    marginBottom: 8,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: '#E4E6E9',
+    paddingVertical: 14,
     backgroundColor: mapUi.background,
   },
   route: { fontSize: 16, fontWeight: '600', color: mapUi.text },
@@ -298,12 +334,11 @@ const s = StyleSheet.create({
     justifyContent: 'center',
     paddingHorizontal: 16,
     paddingVertical: 10,
-    borderRadius: 18,
-    backgroundColor: mapUi.separator,
+    borderRadius: 14,
+    backgroundColor: mapUi.background,
     borderWidth: 1,
-    borderBottomWidth: 3,
     borderColor: mapUi.border,
   },
   active: { backgroundColor: mapUi.blueSurface, borderColor: mapUi.accentBorder },
-  pressed: { backgroundColor: mapUi.blueSurface, transform: [{ scale: 0.98 }, { translateY: 1 }] },
+  pressed: { backgroundColor: mapUi.blueSurface },
 });

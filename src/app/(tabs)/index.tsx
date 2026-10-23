@@ -96,7 +96,9 @@ export default function MapScreen() {
   );
   /** 정착 높이 상태 대신 시트의 UI 스레드 위치를 사용해 드래그 중에도 버튼을 동기화한다. */
   const sheetPosition = useSharedValue(screenHeight);
-  const hasSheet = Boolean((alertSelection && !searchActive) || selectedBusStop || subwayStation);
+  const hasSheet = Boolean(
+    (alertSelection && !searchActive) || selectedBusStop || subwayStation || searchMapActive,
+  );
   useEffect(() => {
     if (!hasSheet) sheetPosition.value = withTiming(screenHeight, { duration: 180 });
   }, [hasSheet, screenHeight, sheetPosition]);
@@ -146,7 +148,7 @@ export default function MapScreen() {
         style={styles.container}
         initialCamera={{
           ...initialPosition,
-          zoom: alertSelection ? (alertSelection.transport === 'subway' ? 14 : 16) : 17,
+          zoom: alertSelection ? (alertSelection.transport === 'subway' ? 17 : 15) : 17,
         }}
         subwaySelection={alertSelection?.transport === 'subway'}
         markers={markers}
@@ -164,7 +166,7 @@ export default function MapScreen() {
           top: insets.top + 76,
           // 선택 시 가림 영역은 고정해 시트 드래그가 지도 카메라를 바꾸지 않도록 한다.
           bottom:
-            (alertSelection ? sheetHeight + insets.bottom + 8 : locationBottomPadding) ??
+            (alertSelection ? sheetHeight + 8 : locationBottomPadding) ??
             (selectedBusStop || subwayStation || searchMapActive
               ? screenHeight * 0.47 + insets.bottom + 8
               : 0),
@@ -196,14 +198,18 @@ export default function MapScreen() {
       ) : null}
 
       <Animated.View
+        pointerEvents={searchActive && !searchMapActive ? 'none' : 'auto'}
         style={[
           {
+            opacity: searchActive && !searchMapActive ? 0 : 1,
             position: 'absolute',
             right: 16,
             bottom: insets.bottom + 16,
             zIndex: 25,
           },
-          alertSelection ? { transform: [{ translateY: -sheetHeight }] } : locationStyle,
+          (alertSelection && !searchActive) || selectedPlace
+            ? { transform: [{ translateY: -sheetHeight }] }
+            : locationStyle,
         ]}
       >
         <Pressable
@@ -281,11 +287,13 @@ export default function MapScreen() {
           onActivate={activateSearch}
           onSearchMap={setSearchMapRequest}
           selectedSearchId={selectedSearchId}
+          selectedPlace={selectedPlace}
           onSearchSelect={selectSearchResult}
           onSheetHeight={setSheetHeight}
+          animatedPosition={sheetPosition}
           onSubway={openSubway}
           onSearchActiveChange={onSearchActiveChange}
-          suspended={Boolean(subwayStation || selectedBusStop)}
+          suspended={Boolean(subwayStation || selectedBusStop || selectedPlace)}
         />
       </Animated.View>
 

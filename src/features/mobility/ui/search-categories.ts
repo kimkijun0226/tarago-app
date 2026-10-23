@@ -1,3 +1,4 @@
+import { TRANSPORT_SYMBOLS } from '@/shared/ui/transport-icon';
 /** @fileoverview 홈 검색과 결과 화면에서 공통으로 제공하는 추천 장소 카테고리. */
 
 export const HOME_CATEGORIES = [
@@ -19,6 +20,6 @@ export const HOME_CATEGORIES = [
   {
     label: '지하철역',
     color: '#2c73dd',
-    symbol: { ios: 'tram.fill', android: 'subway' },
+    symbol: TRANSPORT_SYMBOLS.subway,
   },
 ] as const;

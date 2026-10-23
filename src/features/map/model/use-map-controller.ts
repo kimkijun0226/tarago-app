@@ -63,7 +63,7 @@ export function useMapController() {
   /** 지도와 버튼에 적용할 공통 라이트 테마 색상이다. */
   const { colors } = useAppTheme();
   const alertSelection = useAppStore((state) => state.alertSelection);
-  const selectionZoom = alertSelection?.transport === 'subway' ? 15 : 16;
+  const selectionZoom = 16;
 
   /** 선택한 지하철 역 이름과 변경 함수다. null이면 지하철 시트를 닫는다. */
   const [subwayStation, setSubwayStation] = useState<string | null>(null);
@@ -107,6 +107,7 @@ export function useMapController() {
     searchMapRequest?.query ?? '',
     searchMapRequest?.position ?? { latitude: 0, longitude: 0 },
     Boolean(searchMapRequest),
+    false,
   );
   const mapSearchResults = useMemo(
     () =>
@@ -185,17 +186,22 @@ export function useMapController() {
     if (centeredAlertRequest.current === alertSelection.requestId) return;
     centeredAlertRequest.current = alertSelection.requestId;
     let cancelled = false;
+    let transition: ReturnType<typeof setTimeout> | undefined;
     const request = selectionRequest.current;
+    const subway = alertSelection.transport === 'subway';
+    // 먼저 전환 시작 축척을 맞춰, 재진입해도 확대·축소 방향이 분명하게 보이도록 한다.
+    mapRef.current?.animateCameraTo({ ...initialPosition, zoom: subway ? 17 : 15, duration: 0 });
     void getCurrentLocation().then((coordinate) => {
-      if (cancelled || !coordinate || request !== selectionRequest.current) return;
-      mapRef.current?.animateCameraTo({
-        ...coordinate,
-        zoom: alertSelection.transport === 'subway' ? 14 : 16,
-        duration: 500,
-      });
+      if (cancelled || request !== selectionRequest.current) return;
+      const target = coordinate ?? initialPosition;
+      transition = setTimeout(() => {
+        if (cancelled || request !== selectionRequest.current) return;
+        mapRef.current?.animateCameraTo({ ...target, zoom: subway ? 14 : 17, duration: 700 });
+      }, 120);
     });
     return () => {
       cancelled = true;
+      clearTimeout(transition);
       centeredAlertRequest.current = null;
     };
   }, [mapReady, initialPosition, alertSelection, getCurrentLocation]);
@@ -248,39 +254,28 @@ export function useMapController() {
     subwayLineName,
   });
 
-  /** 검색 상위 10곳의 범위를 한 번 맞추며 시트 드래그·심벌 갱신에는 카메라를 다시 움직이지 않는다. */
+  /** 전체 후보를 표시하되 검색어와 가장 잘 맞는 결과로 한 번 이동한다. */
   useEffect(() => {
     if (!searchMapRequest) {
       fittedSearch.current = '';
       return;
     }
-    const results = mapSearchResults.slice(0, 10);
-    if (!results.length || search.places.isPending || search.stations.isPending) return;
-    const key = `${searchMapRequest.query}:${searchMapRequest.filter}:${searchMapRequest.position.latitude}:${searchMapRequest.position.longitude}:${results.map((place) => place.id).join('|')}`;
+    const target = mapSearchResults[0];
+    if (!target || search.subways.isPending || search.stations.isPending) return;
+    const key = `${searchMapRequest.query}:${searchMapRequest.filter}:${searchMapRequest.position.latitude}:${searchMapRequest.position.longitude}:${target.id}`;
     if (fittedSearch.current === key) return;
     fittedSearch.current = key;
-    const points = results.map((place) => searchSymbolPositions.get(place.id) ?? place);
-    if (points.length === 1) {
-      mapRef.current?.animateCameraTo({ ...points[0], zoom: selectionZoom, duration: 350 });
-      return;
-    }
-    const south = Math.min(...points.map((point) => point.latitude));
-    const north = Math.max(...points.map((point) => point.latitude));
-    const west = Math.min(...points.map((point) => point.longitude));
-    const east = Math.max(...points.map((point) => point.longitude));
-    const latitudeMargin = Math.max((north - south) * 0.1, 0.0007);
-    const longitudeMargin = Math.max((east - west) * 0.1, 0.0007);
-    mapRef.current?.animateCameraWithTwoCoords({
-      coord1: { latitude: south - latitudeMargin, longitude: west - longitudeMargin },
-      coord2: { latitude: north + latitudeMargin, longitude: east + longitudeMargin },
+    mapRef.current?.animateCameraTo({
+      latitude: target.latitude,
+      longitude: target.longitude,
+      zoom: selectionZoom,
       duration: 350,
     });
   }, [
     searchMapRequest,
     mapSearchResults,
-    search.places.isPending,
+    search.subways.isPending,
     search.stations.isPending,
-    searchSymbolPositions,
     selectionZoom,
   ]);
 
@@ -290,9 +285,19 @@ export function useMapController() {
   /** 검색 활성·정류장·지하철 선택이 바뀔 때 탭 숨김 여부를 맞춘다. 파생 UI를 공용 레이아웃과 동기화한다. */
   useEffect(() => {
     setMapTabHidden(
-      Boolean(alertSelection) || searchActive || Boolean(subwayStation || selectedBusStop),
+      Boolean(alertSelection) ||
+        searchActive ||
+        Boolean(searchMapRequest || subwayStation || selectedBusStop || selectedPlace),
     );
-  }, [alertSelection, searchActive, subwayStation, selectedBusStop, setMapTabHidden]);
+  }, [
+    alertSelection,
+    searchActive,
+    searchMapRequest,
+    subwayStation,
+    selectedBusStop,
+    selectedPlace,
+    setMapTabHidden,
+  ]);
 
   /** 정류장·역 선택이 바뀔 때만 중앙으로 옮기며 시트 높이 변경에는 반응하지 않는다. */
   useEffect(() => {
@@ -304,7 +309,7 @@ export function useMapController() {
       mapRef.current?.animateCameraTo({
         latitude: target.latitude,
         longitude: target.longitude,
-        ...(subwayStation || alertSelection ? { zoom: selectionZoom } : {}),
+        ...(selectedBusStop || subwayStation || alertSelection ? { zoom: selectionZoom } : {}),
         duration: 320,
       });
     });
@@ -411,6 +416,8 @@ export function useMapController() {
   /** 검색 시작 시 기존 정류장·노선·지하철 시트를 정리한다. 하위 검색 화면에 동일한 콜백을 전달한다. */
   const activateSearch = useCallback(() => {
     setSubwayStation(null);
+    setSelectedPlace(null);
+    setSelectedSearchResultId(null);
     selectionRequest.current++;
     setShowRouteSheet(false);
     setSelectedRoute(null);
@@ -752,8 +759,22 @@ export function useMapController() {
   /** 검색 캐시가 없는 최근 기록도 공식 대상 ID를 다시 확인해 알림 선택으로 연결한다. */
   const selectSearchResult = useCallback(
     async (place: Place) => {
-      if (alertSelection?.transport === 'bus' && !place.id.startsWith('station:')) return;
-      if (alertSelection?.transport === 'subway' && !place.id.startsWith('subway:')) return;
+      const otherTransport =
+        alertSelection &&
+        ((alertSelection.transport === 'bus' && place.id.startsWith('subway:')) ||
+          (alertSelection.transport === 'subway' && place.id.startsWith('station:')));
+      // 다른 교통수단도 위치 탐색에 쓸 수 있지만 현재 알림의 대상 종류는 유지한다.
+      if (otherTransport) {
+        selectionRequest.current++;
+        setSelectedBusStop(null);
+        setSelectedRoute(null);
+        setShowRouteSheet(false);
+        setSubwayStation(null);
+        setSelectedSearchResultId(place.id);
+        setSelectedPlace(place);
+        mapRef.current?.animateCameraTo({ ...place, zoom: selectionZoom, duration: 350 });
+        return;
+      }
       const request = ++selectionRequest.current;
       try {
         const point = searchSymbolPositions.get(place.id);
@@ -797,7 +818,14 @@ export function useMapController() {
           setSubwayStation(station.name.replace(/역$/, ''));
           setSubwayLineName(station.lineName);
           setSubwaySheetSnap('half');
-        } else return;
+        } else {
+          setSelectedSearchResultId(place.id);
+          setSelectedBusStop(null);
+          setSelectedRoute(null);
+          setShowRouteSheet(false);
+          setSubwayStation(null);
+          setSelectedPlace(place);
+        }
         mapRef.current?.animateCameraTo({
           ...(point ?? place),
           zoom: selectionZoom,
@@ -817,7 +845,7 @@ export function useMapController() {
       selectBusStop,
       subwayStops,
       queryClient,
-      alertSelection?.transport,
+      alertSelection,
       selectionZoom,
     ],
   );
