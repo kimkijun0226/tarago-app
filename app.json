@@ -17,7 +17,8 @@
         },
         "ITSAppUsesNonExemptEncryption": false
       },
-      "appleTeamId": "V6BDRRK4FQ"
+      "appleTeamId": "V6BDRRK4FQ",
+      "buildNumber": "2"
     },
     "android": {
       "adaptiveIcon": {
@@ -53,7 +54,9 @@
             "enableSceneSupport": true
           },
           "android": {
-            "extraMavenRepos": ["https://repository.map.naver.com/archive/maven"]
+            "extraMavenRepos": [
+              "https://repository.map.naver.com/archive/maven"
+            ]
           }
         }
       ],
@@ -82,6 +85,9 @@
       }
     },
     "owner": "kimkijun",
-    "platforms": ["ios", "android"]
+    "platforms": [
+      "ios",
+      "android"
+    ]
   }
 }
