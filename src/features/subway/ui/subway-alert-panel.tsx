@@ -1,3 +1,4 @@
+import { openAlertTarget } from '@/features/bus-alert/model/open-alert-target';
 import { AlertArrivalTimes } from '@/features/bus-alert/ui/alert-arrival-times';
 import { ActivityIndicator } from 'react-native';
 import {
@@ -72,6 +73,9 @@ export function SubwayAlertsPanel({ state }: { state: ReturnType<typeof useSubwa
                 enabled={alert.enabled}
                 busy={busy}
                 onToggle={(enabled) => void state.persist({ ...alert, enabled })}
+                onOpen={() =>
+                  void openAlertTarget('subway', alert.id, `saved:${alert.id}:${Date.now()}`)
+                }
                 onEdit={() => state.edit(alert)}
                 onDelete={() => state.deleteAlert(alert)}
               />

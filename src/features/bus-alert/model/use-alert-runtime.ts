@@ -9,14 +9,14 @@ import type { SubwayAlert } from '@/features/subway/model/subway-alert';
 import { AppState } from 'react-native';
 import * as Location from 'expo-location';
 import * as Notifications from 'expo-notifications';
-import { router, useRootNavigationState } from 'expo-router';
+import { useRootNavigationState } from 'expo-router';
 import { useQueryClient } from '@tanstack/react-query';
 import { checkNearbyStops, preparePush, syncGeofences } from './alert-runtime';
 import { alertStorage, cacheAlerts, readCachedAlerts } from './alert-storage';
 import { useAppStore } from '@/shared/model/app-store';
 import { useAlerts } from './use-alerts';
 import type { BusAlert } from './bus-alert';
-import { getAlerts } from '../api/alerts';
+import { openAlertTarget } from './open-alert-target';
 import { retryProximityReports } from './proximity-visits';
 
 /** 루트 런타임 컴포넌트에서 위치·알림 구독을 연결하고 효과 정리 시 각 네이티브 구독을 해제한다. */
@@ -160,82 +160,10 @@ export function useAlertRuntime() {
       handledResponse.current = responseKey;
       setMapTabHidden(false);
       try {
-        if (
-          data.kind === 'bus-proximity' ||
-          data.kind === 'subway-proximity' ||
-          data.kind === 'subway-arrival' ||
-          data.kind === 'proximity-prompt' ||
-          data.kind === 'subway-proximity-prompt'
-        ) {
-          const subway = String(data.kind).startsWith('subway-');
-          router.navigate({
-            pathname: '/alerts',
-            params: {
-              alertTransport: subway ? 'subway' : 'bus',
-              alertKind: data.kind === 'subway-arrival' ? 'time' : 'location',
-              alertId: data.alertId,
-              sourceAlertId: '',
-              sourceAlertIds: '',
-              requestId: responseKey,
-            },
-          });
+        const transport = String(data.kind).startsWith('subway-') ? 'subway' : 'bus';
+        if (await openAlertTarget(transport, data.alertId, responseKey, data)) {
           await Notifications.clearLastNotificationResponseAsync();
-          return;
-        }
-        // 이전 버전의 1시간 감시 알림은 새 감시를 시작하지 않고 위치 알림 목록으로 연다.
-        if (data.kind === 'monitoring-extension' || data.kind === 'subway-monitoring-extension') {
-          router.navigate({
-            pathname: '/alerts',
-            params: {
-              alertTransport: String(data.kind).startsWith('subway-') ? 'subway' : 'bus',
-              alertKind: 'location',
-              requestId: responseKey,
-            },
-          });
-          await Notifications.clearLastNotificationResponseAsync();
-          return;
-        }
-
-        /** 페이로드에 정류소 ID와 숫자 좌표가 있어 서버 조회 없이 지도 위치를 복원할 수 있는지 판정한다. */
-        const hasStop =
-          typeof data.stationId === 'string' &&
-          typeof data.latitude === 'number' &&
-          typeof data.longitude === 'number';
-
-        /** 페이로드에 좌표가 없을 때 서버의 기존 알림으로 정류소 정보를 보충한다. */
-        const saved = hasStop
-          ? undefined
-          : (
-              await queryClient.fetchQuery({
-                queryKey: ['alerts', 'list'],
-                queryFn: () => getAlerts(),
-              })
-            ).find((a) => a.id === data.alertId);
-
-        /** 저장된 정류소 좌표를 우선하고 없으면 페이로드에서 복원한 위도다. */
-        const latitude = saved?.stop.latitude ?? Number(data.latitude);
-
-        /** 저장된 정류소 좌표를 우선하고 없으면 페이로드에서 복원한 경도다. */
-        const longitude = saved?.stop.longitude ?? Number(data.longitude);
-
-        /** 검증 후 지도 화면에 전달할 정류소 식별자다. */
-        const stationId = saved?.stationId ?? data.stationId;
-        if (
-          typeof stationId !== 'string' ||
-          !Number.isFinite(latitude) ||
-          !Number.isFinite(longitude)
-        )
-          throw new Error('알림의 정류장 정보를 찾을 수 없습니다.');
-        router.navigate({
-          pathname: '/',
-          params: {
-            stationId,
-            latitude: String(latitude),
-            longitude: String(longitude),
-            notificationId: id,
-          },
-        });
-        await Notifications.clearLastNotificationResponseAsync();
+        } else handledResponse.current = undefined;
       } catch (e) {
         handledResponse.current = undefined;
         if (!disposed) setError(e instanceof Error ? e.message : '알림 정류장을 열지 못했어요.');

@@ -63,6 +63,7 @@ export default function MapScreen() {
     setSheetHeight,
     closeBusStop,
     selectBusRoute,
+    selectRouteStop,
     selectPlace,
     activateSearch,
     setSearchMapRequest,
@@ -246,6 +247,7 @@ export default function MapScreen() {
           snap={routeSheetSnap}
           onChangeSnap={setRouteSheetSnap}
           onClose={closeRoute}
+          onSelectStop={(stop) => void selectRouteStop(stop)}
           onHeightChange={setSheetHeight}
           animatedPosition={sheetPosition}
         />

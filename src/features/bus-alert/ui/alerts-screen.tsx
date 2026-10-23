@@ -1,3 +1,4 @@
+import { openAlertTarget } from '@/features/bus-alert/model/open-alert-target';
 import { useCallback, useEffect, useState } from 'react';
 import { useFocusEffect } from 'expo-router';
 import { useAppStore } from '@/shared/model/app-store';
@@ -77,12 +78,6 @@ export function AlertsScreenContent({
           transport={transport}
           kind={kind}
           onTransportChange={setTransport}
-          onRefresh={() => {
-            if (transport === 'bus') void bus.refetch({ cancelRefetch: false });
-            else void subway.list.refetch({ cancelRefetch: false });
-          }}
-          refreshing={transport === 'bus' ? bus.isFetching : subway.list.isFetching}
-          refreshFailed={transport === 'bus' ? bus.isError : subway.list.isError}
           editing={editing}
           busy={busy}
           onBack={closeEditor}
@@ -184,6 +179,9 @@ function BusAlertsPanel({ state }: { state: ReturnType<typeof useAlertScreen> })
                 enabled={alert.enabled}
                 busy={busy}
                 onToggle={(value) => void state.toggle(alert, value)}
+                onOpen={() =>
+                  void openAlertTarget('bus', alert.id, `saved:${alert.id}:${Date.now()}`)
+                }
                 onEdit={() => state.edit(alert)}
                 onDelete={() => state.removeAlert(alert)}
               />

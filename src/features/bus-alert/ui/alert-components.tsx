@@ -3,6 +3,7 @@ import { SymbolView } from 'expo-symbols';
 import { ActivityIndicator, Pressable, Switch, Text, View } from 'react-native';
 import { router } from 'expo-router';
 import { useAppStore } from '@/shared/model/app-store';
+import { AlertHistoryBell } from './alert-history-bell';
 import { WEEKDAYS, WEEKDAY_ORDER } from '../model/alert-form';
 import { alertColors as colors } from './alert-design';
 import { createStyles } from './alert-screen-styles';
@@ -17,6 +18,7 @@ export function AlertIconButton({
   disabled = false,
   warning = false,
   compact = false,
+  plain = false,
 }: {
   name: ComponentProps<typeof SymbolView>['name'];
   label: string;
@@ -24,6 +26,7 @@ export function AlertIconButton({
   disabled?: boolean;
   warning?: boolean;
   compact?: boolean;
+  plain?: boolean;
 }) {
   return (
     <Pressable
@@ -39,7 +42,11 @@ export function AlertIconButton({
         borderRadius: compact ? 12 : 16,
         alignItems: 'center',
         justifyContent: 'center',
-        backgroundColor: warning ? colors.warningSurface : colors.accentSurface,
+        backgroundColor: plain
+          ? 'transparent'
+          : warning
+            ? colors.warningSurface
+            : colors.accentSurface,
         opacity: disabled ? 0.4 : 1,
         transform: [{ translateY: pressed ? 2 : 0 }, { scale: pressed ? 0.97 : 1 }],
       })}
@@ -153,16 +160,10 @@ export function AlertPageHeader({
   busy,
   onBack,
   onTransportChange,
-  onRefresh,
-  refreshing = false,
-  refreshFailed = false,
   kind,
 }: {
   transport: 'bus' | 'subway';
   kind: 'time' | 'location';
-  onRefresh: () => void;
-  refreshing?: boolean;
-  refreshFailed?: boolean;
   onTransportChange: (transport: 'bus' | 'subway') => void;
   editing: boolean;
   busy: boolean;
@@ -173,6 +174,7 @@ export function AlertPageHeader({
       <View style={styles.heading}>
         {editing && (
           <AlertIconButton
+            plain
             name={{ ios: 'chevron.left', android: 'arrow_back' }}
             label="알림 목록으로 돌아가기"
             onPress={onBack}
@@ -186,23 +188,7 @@ export function AlertPageHeader({
               : '나의 알림'}
           </Text>
         </View>
-        {!editing && (
-          <AlertIconButton
-            name={{ ios: 'clock.arrow.circlepath', android: 'history' }}
-            label="알림 내역 보기"
-            disabled={busy}
-            onPress={() => router.push('/notification-history')}
-          />
-        )}
-        {!editing && (
-          <AlertIconButton
-            name={{ ios: 'arrow.clockwise', android: 'refresh' }}
-            label={refreshFailed ? '알림 연결 오류, 목록 새로고침' : '알림 목록 새로고침'}
-            disabled={busy || refreshing}
-            warning={refreshFailed}
-            onPress={onRefresh}
-          />
-        )}
+        {!editing && <AlertHistoryBell disabled={busy} />}
       </View>
       {!editing && (
         <View style={styles.heading}>
@@ -357,6 +343,7 @@ export function SavedAlertCard({
   enabled,
   busy,
   onToggle,
+  onOpen,
   onEdit,
   onDelete,
 }: {
@@ -368,16 +355,22 @@ export function SavedAlertCard({
   enabled: boolean;
   busy: boolean;
   onToggle: (enabled: boolean) => void;
+  onOpen: () => void;
   onEdit: () => void;
   onDelete: () => void;
 }) {
   return (
     <View style={[styles.card, styles.savedCard, !enabled && styles.dim]}>
       <View style={styles.heading}>
-        <View style={{ flex: 1, gap: 4 }}>
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={`${title} 대상으로 이동`}
+          onPress={onOpen}
+          style={{ flex: 1, gap: 4 }}
+        >
           <Text style={styles.stationName}>{title}</Text>
           <Text style={styles.help}>{subtitle}</Text>
-        </View>
+        </Pressable>
         <View style={{ alignItems: 'flex-end', gap: 6 }}>
           <Switch
             accessibilityLabel={`${title} ${subtitle} 알림 사용`}
@@ -386,22 +379,6 @@ export function SavedAlertCard({
             onValueChange={onToggle}
             trackColor={{ true: colors.accent }}
           />
-          <View style={{ flexDirection: 'row', gap: 12 }}>
-            <AlertIconButton
-              compact
-              name={{ ios: 'pencil', android: 'edit' }}
-              label={`${title} 알림 수정`}
-              disabled={busy}
-              onPress={onEdit}
-            />
-            <AlertIconButton
-              compact
-              name={{ ios: 'trash', android: 'delete_outline' }}
-              label={`${title} 알림 삭제`}
-              disabled={busy}
-              onPress={onDelete}
-            />
-          </View>
         </View>
       </View>
       <Text
@@ -420,9 +397,42 @@ export function SavedAlertCard({
           <Text style={styles.statusText}>일시정지</Text>
         </View>
       )}
-      <View style={{ borderTopWidth: 1, borderTopColor: colors.separator, paddingTop: 12 }}>
-        {arrivals}
+      <View
+        style={{
+          flexDirection: 'row',
+          alignItems: 'center',
+          gap: 16,
+          borderTopWidth: 1,
+          borderTopColor: colors.separator,
+          paddingTop: 12,
+        }}
+      >
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={`${title} 도착정보 열기`}
+          onPress={onOpen}
+          style={{ flex: 1, minWidth: 0 }}
+        >
+          {arrivals}
+        </Pressable>
+        <View style={{ flexDirection: 'row', gap: 12 }}>
+          <AlertIconButton
+            compact
+            name={{ ios: 'pencil', android: 'edit' }}
+            label={`${title} 알림 수정`}
+            disabled={busy}
+            onPress={onEdit}
+          />
+          <AlertIconButton
+            compact
+            name={{ ios: 'trash', android: 'delete_outline' }}
+            label={`${title} 알림 삭제`}
+            disabled={busy}
+            onPress={onDelete}
+          />
+        </View>
       </View>
     </View>
   );
 }
+

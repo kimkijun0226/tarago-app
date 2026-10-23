@@ -1,11 +1,13 @@
 /** @fileoverview 서버가 발송한 알림을 최신순으로 모아 보여준다. */
 import { useCallback } from 'react';
 import { useFocusEffect, router } from 'expo-router';
-import { ActivityIndicator, FlatList, RefreshControl, Text, View } from 'react-native';
+import { ActivityIndicator, AppState, FlatList, Pressable, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { SymbolView } from 'expo-symbols';
-import { AlertIconButton, AlertNotice } from './alert-components';
+import { AlertIconButton } from './alert-components';
 import { alertColors as colors } from './alert-design';
+import { useMarkHistoryRead } from '../model/notification-read-state';
+import { openAlertTarget } from '../model/open-alert-target';
 import { useNotificationHistory } from '../model/use-notification-history';
 const time = new Intl.DateTimeFormat('ko-KR', {
   timeZone: 'Asia/Seoul',
@@ -17,6 +19,18 @@ const time = new Intl.DateTimeFormat('ko-KR', {
 export function NotificationHistoryScreen() {
   const history = useNotificationHistory();
   const { refetch } = history;
+  const { mutate: markRead } = useMarkHistoryRead();
+  const newest = history.data?.pages[0]?.items[0]?.id;
+  useFocusEffect(
+    useCallback(() => {
+      const mark = () => {
+        if (newest && AppState.currentState === 'active') markRead(newest);
+      };
+      mark();
+      const listener = AppState.addEventListener('change', mark);
+      return () => listener.remove();
+    }, [newest, markRead]),
+  );
   useFocusEffect(
     useCallback(() => {
       void refetch();
@@ -39,6 +53,7 @@ export function NotificationHistoryScreen() {
         }}
       >
         <AlertIconButton
+          plain
           name={{ ios: 'chevron.left', android: 'arrow_back' }}
           label="알림 내역 닫기"
           onPress={() => (router.canGoBack() ? router.back() : router.replace('/alerts'))}
@@ -49,69 +64,64 @@ export function NotificationHistoryScreen() {
         >
           알림 내역
         </Text>
-        <AlertIconButton
-          name={{ ios: 'arrow.clockwise', android: 'refresh' }}
-          label="알림 내역 새로고침"
-          disabled={history.isFetching}
-          onPress={() => void refetch()}
-        />
       </View>
       <FlatList
         data={items}
         keyExtractor={(item) => item.id}
         contentContainerStyle={{ paddingHorizontal: 24, paddingBottom: 24, gap: 12, flexGrow: 1 }}
-        refreshControl={
-          <RefreshControl
-            refreshing={history.isRefetching && !history.isFetchingNextPage}
-            onRefresh={() => void refetch()}
-            tintColor={colors.accent}
-          />
-        }
         onEndReachedThreshold={0.4}
         onEndReached={() => {
           if (history.hasNextPage && !history.isFetching) void history.fetchNextPage();
         }}
-        ListHeaderComponent={
-          history.isError ? (
-            <AlertNotice action="다시 시도" onAction={() => void refetch()}>
-              알림 내역을 불러오지 못했어요.
-            </AlertNotice>
-          ) : null
-        }
         ListEmptyComponent={
           history.isPending ? (
             <ActivityIndicator color={colors.accent} style={{ marginTop: 40 }} />
-          ) : !history.isError ? (
-            <View
-              style={{
-                minHeight: 220,
-                borderWidth: 1.5,
-                borderStyle: 'dashed',
-                borderColor: colors.accentBorder,
-                borderRadius: 24,
-                alignItems: 'center',
-                justifyContent: 'center',
-                gap: 16,
-              }}
-            >
-              <SymbolView
-                name={{ ios: 'bell', android: 'notifications_none' }}
-                size={32}
-                tintColor={colors.accent}
-              />
-              <Text style={{ color: colors.secondaryText, fontSize: 14 }}>
-                아직 알림 내역이 없어요
-              </Text>
+          ) : (
+            <View style={{ minHeight: 220, alignItems: 'center', justifyContent: 'center' }}>
+              {history.isError ? (
+                <AlertIconButton
+                  plain
+                  name={{ ios: 'wifi.exclamationmark', android: 'wifi_off' }}
+                  label="연결 오류, 다시 시도"
+                  onPress={() => void refetch()}
+                />
+              ) : (
+                <SymbolView
+                  name={{ ios: 'bell.slash', android: 'notifications_none' }}
+                  size={32}
+                  tintColor={colors.tertiaryText}
+                  accessibilityLabel="알림 내역 없음"
+                />
+              )}
             </View>
-          ) : null
+          )
         }
+
         ListFooterComponent={
           history.isFetchingNextPage ? (
             <ActivityIndicator color={colors.accent} style={{ padding: 16 }} />
+          ) : history.isFetchNextPageError ? (
+            <AlertIconButton
+              plain
+              name={{ ios: 'wifi.exclamationmark', android: 'wifi_off' }}
+              label="이전 내역 다시 불러오기"
+              onPress={() => void history.fetchNextPage()}
+            />
           ) : null
         }
         renderItem={({ item }) => (
-          <View
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={`${item.title} 대상으로 이동`}
+            disabled={!item.alertId}
+            onPress={() => {
+              if (item.alertId)
+                void openAlertTarget(
+                  item.transport,
+                  item.alertId,
+                  `history:${item.id}:${Date.now()}`,
+                );
+            }}
             style={{
               backgroundColor: colors.surface,
               borderWidth: 1,
@@ -156,7 +166,7 @@ export function NotificationHistoryScreen() {
             <Text style={{ color: colors.bodyText, fontSize: 14, lineHeight: 22 }}>
               {item.body}
             </Text>
-          </View>
+          </Pressable>
         )}
       />
     </SafeAreaView>

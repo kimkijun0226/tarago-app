@@ -89,6 +89,11 @@ export function useMapController() {
     latitude?: string;
     longitude?: string;
     notificationId?: string;
+    subwayStationName?: string;
+    subwayLineName?: string;
+    subwayLineId?: string;
+    routeId?: string;
+    stationSeq?: string;
   }>();
 
   /** 네이티브 지도 준비 완료 여부다. 준비되기 전에 알림 정류장으로 이동하지 않게 한다. */
@@ -485,6 +490,12 @@ export function useMapController() {
         if (!stop) throw new Error('알림의 정류장을 찾을 수 없습니다.');
         setSelectedRoute(null);
         selectBusStop(stop);
+        const stationSeq = Number(params.stationSeq);
+        if (params.routeId && Number.isInteger(stationSeq) && stationSeq > 0) {
+          setSelectedRoute({ stationId: params.stationId!, routeId: params.routeId, stationSeq });
+          setShowRouteSheet(true);
+          setRouteSheetSnap('half');
+        }
         mapRef.current?.animateCameraTo({
           latitude,
           longitude,
@@ -506,11 +517,13 @@ export function useMapController() {
     params.stationId,
     params.latitude,
     params.longitude,
+    params.routeId,
+    params.stationSeq,
     selectBusStop,
     queryClient,
   ]);
 
-  /** 활성화 정류소의 전체 버스 목록을 열면서 지도에는 현재 노선을 유지한다. */
+  /** 다른 정류소의 전체 버스 목록을 열고 기존 노선 선과 상세 선택을 해제한다. */
   const selectRouteStop = useCallback(
     async (stop: BusRouteDetail['stops'][number], point?: Point) => {
       if (!selectedRoute || !routeDetail) return;
@@ -519,15 +532,12 @@ export function useMapController() {
       const request = ++selectionRequest.current;
 
       /** 선택 정류장이 현재 노선에서 나타나는 경유 항목이다. 왕복·순환 중 어떤 순번인지 확인한다. */
-      const occurrence = getRouteStopOccurrence(
-        routeDetail.stops,
-        stop.stationId,
-        selectedRoute.stationSeq,
-      );
+      const occurrence = getRouteStopOccurrence(routeDetail.stops, stop.stationId, stop.stationSeq);
       if (!occurrence) return;
       mapRef.current?.animateCameraTo({
         latitude: point?.latitude ?? stop.latitude,
         longitude: point?.longitude ?? stop.longitude,
+        zoom: 16,
         duration: 250,
       });
       try {
@@ -553,14 +563,7 @@ export function useMapController() {
         setSelectedBusStop(station);
         if (point) busStopSymbolPositions.current.set(station.id, point);
         setSelectedBusStopPoint(point ?? busStopSymbolPositions.current.get(station.id) ?? null);
-        setSelectedRoute({
-          stationId: station.id,
-          routeId: selectedRoute.routeId,
-          stationSeq: occurrence.stationSeq,
-          source: selectedRoute.source
-            ? { ...selectedRoute.source, stationId: station.id }
-            : undefined,
-        });
+        setSelectedRoute(null);
         setShowRouteSheet(false);
         setRouteSheetSnap('half');
       } catch (error) {
@@ -847,6 +850,26 @@ export function useMapController() {
     [activateSearch, selectedPlace, selectSubwayStation],
   );
 
+  const lastNotification = useRef<string | undefined>(undefined);
+  useEffect(() => {
+    if (
+      !mapReady ||
+      !params.notificationId ||
+      !params.subwayStationName ||
+      lastNotification.current === params.notificationId
+    )
+      return;
+    lastNotification.current = params.notificationId;
+    openSubway(params.subwayStationName, params.subwayLineName || undefined);
+  }, [
+    mapReady,
+    params.notificationId,
+    params.subwayStationName,
+    params.subwayLineName,
+    params.subwayLineId,
+    openSubway,
+  ]);
+
   /** 심벌 이름과 실제 거리를 함께 대조해 누른 정류장을 바로 연다. */
   const selectBusStopSymbol = useCallback(
     async (symbol: Point & { caption: string; peers?: Point[] }) => {
@@ -1107,6 +1130,7 @@ export function useMapController() {
     setSheetHeight,
     closeBusStop,
     selectBusRoute,
+    selectRouteStop,
     selectPlace,
     activateSearch,
     setSearchMapRequest,

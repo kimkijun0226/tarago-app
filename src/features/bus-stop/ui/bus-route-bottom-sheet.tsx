@@ -32,6 +32,7 @@ type Props = {
   snap: RouteSheetSnap;
   onChangeSnap: (snap: RouteSheetSnap) => void;
   onClose: () => void;
+  onSelectStop: (stop: BusRouteDetail['stops'][number]) => void;
   onHeightChange: (height: number) => void;
   animatedPosition?: SharedValue<number>;
 };
@@ -50,6 +51,7 @@ export const BusRouteBottomSheet = memo(function BusRouteBottomSheet({
   snap,
   onChangeSnap,
   onClose,
+  onSelectStop,
   onHeightChange,
   animatedPosition,
 }: Props) {
@@ -235,18 +237,25 @@ export const BusRouteBottomSheet = memo(function BusRouteBottomSheet({
           showsVerticalScrollIndicator={false}
           renderItem={({ item: stop, index }) =>
             data ? (
-              <RouteStopRow
-                stop={stop}
-                selected={
-                  stop.stationSeq === data.selectedStationSeq &&
-                  stop.stationId === data.selectedStationId
-                }
-                first={index === 0}
-                last={index === visibleStops.length - 1}
-                turnStationSeq={data.turnStationSeq}
-                vehicleCount={vehiclesByStop.get(stop.stationSeq)?.length ?? 0}
-                arriving={arriving}
-              />
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel={`${stop.name} 정류소 버스 보기`}
+                onPress={() => onSelectStop(stop)}
+                style={({ pressed }) => ({ opacity: pressed ? 0.6 : 1 })}
+              >
+                <RouteStopRow
+                  stop={stop}
+                  selected={
+                    stop.stationSeq === data.selectedStationSeq &&
+                    stop.stationId === data.selectedStationId
+                  }
+                  first={index === 0}
+                  last={index === visibleStops.length - 1}
+                  turnStationSeq={data.turnStationSeq}
+                  vehicleCount={vehiclesByStop.get(stop.stationSeq)?.length ?? 0}
+                  arriving={arriving}
+                />
+              </Pressable>
             ) : null
           }
         />

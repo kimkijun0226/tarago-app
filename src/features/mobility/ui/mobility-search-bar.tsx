@@ -118,13 +118,8 @@ const styles = StyleSheet.create({
   close: {
     width: 44,
     height: 56,
-    borderRadius: 16,
-    backgroundColor: mapUi.background,
     alignItems: 'center',
     justifyContent: 'center',
-    borderWidth: 1,
-    borderColor: mapUi.border,
-    boxShadow: '0 4px 0 #2222220C, 0 5px 12px #2222220A',
   },
   logo: {
     width: 36,
