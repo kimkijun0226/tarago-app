@@ -81,3 +81,25 @@ export async function setAlertProximity(
   const path = transport === 'bus' ? '/alerts' : '/subway/alerts';
   await apiClient.put(`${path}/${id}/proximity`, visit, await alertAuth());
 }
+
+export type NotificationHistoryItem = {
+  id: string;
+  transport: 'bus' | 'subway';
+  alertId: string | null;
+  title: string;
+  body: string;
+  sentAt: string;
+  kind: 'time' | 'location';
+};
+/** 기기 소유권 인증으로 발송 당시의 제목·본문과 시각을 조회한다. */
+export async function getNotificationHistory(cursor?: string, signal?: AbortSignal) {
+  const { data } = await apiClient.get<{
+    items: NotificationHistoryItem[];
+    nextCursor: string | null;
+  }>('/alerts/history', {
+    ...(await alertAuth()),
+    params: cursor ? { cursor } : undefined,
+    signal,
+  });
+  return data;
+}

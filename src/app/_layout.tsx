@@ -49,6 +49,7 @@ export default function RootLayout() {
           <Stack screenOptions={{ headerShown: false, animation: 'default', gestureEnabled: true }}>
             <Stack.Screen name="(tabs)" />
             <Stack.Screen name="subway-alerts" />
+            <Stack.Screen name="notification-history" />
           </Stack>
         </ThemeProvider>
       </QueryClientProvider>

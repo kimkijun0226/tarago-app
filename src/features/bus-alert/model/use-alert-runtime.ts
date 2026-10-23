@@ -252,6 +252,9 @@ export function useAlertRuntime() {
     });
 
     /** 네이티브 푸시 토큰이 변경되면 서버 등록을 갱신하는 구독이며 정리 때 제거한다. */
+    const receivedListener = Notifications.addNotificationReceivedListener(() => {
+      void queryClient.invalidateQueries({ queryKey: ['alerts', 'history'] });
+    });
     const tokenListener = Notifications.addPushTokenListener((token) => {
       void preparePush(token).then(() =>
         queryClient.invalidateQueries({ queryKey: ['alerts', 'push-status'] }),
@@ -275,6 +278,7 @@ export function useAlertRuntime() {
       disposed = true;
       listener.remove();
       tokenListener.remove();
+      receivedListener.remove();
       appListener.remove();
     };
   }, [queryClient, setMapTabHidden, setError, navigation?.key]);

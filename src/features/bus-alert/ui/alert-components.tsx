@@ -188,6 +188,14 @@ export function AlertPageHeader({
         </View>
         {!editing && (
           <AlertIconButton
+            name={{ ios: 'clock.arrow.circlepath', android: 'history' }}
+            label="알림 내역 보기"
+            disabled={busy}
+            onPress={() => router.push('/notification-history')}
+          />
+        )}
+        {!editing && (
+          <AlertIconButton
             name={{ ios: 'arrow.clockwise', android: 'refresh' }}
             label={refreshFailed ? '알림 연결 오류, 목록 새로고침' : '알림 목록 새로고침'}
             disabled={busy || refreshing}
