@@ -23,6 +23,7 @@ export type BusAlertInput = {
   enabled: boolean;
   notificationStages?: number[];
   showVehicleNumber?: boolean;
+  repeatMinutes?: number;
   monitoringStartedAt?: string;
   monitoringEndsAt?: string;
   monitoringSourceId?: string;

@@ -6,15 +6,19 @@ const styles = createStyles(colors);
 export function AlertLocationFields({
   days,
   radius,
+  repeatMinutes,
   onDaysChange,
   onRadiusChange,
+  onRepeatMinutesChange,
   disabled,
   showDays = true,
 }: {
   days: number[];
   radius: number;
+  repeatMinutes: number;
   onDaysChange: (days: number[]) => void;
   onRadiusChange: (radius: 100 | 200 | 300 | 500) => void;
+  onRepeatMinutesChange: (minutes: number) => void;
   disabled?: boolean;
   showDays?: boolean;
 }) {
@@ -35,6 +39,18 @@ export function AlertLocationFields({
             selected={radius === value}
             disabled={disabled}
             onPress={() => onRadiusChange(value)}
+          />
+        ))}
+      </View>
+      <Text style={styles.sectionTitle}>재알림 간격</Text>
+      <View style={styles.chips}>
+        {[1, 3, 5, 10].map((minutes) => (
+          <AlertChoice
+            key={minutes}
+            label={`${minutes}분`}
+            selected={repeatMinutes === minutes}
+            disabled={disabled}
+            onPress={() => onRepeatMinutesChange(minutes)}
           />
         ))}
       </View>

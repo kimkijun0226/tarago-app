@@ -64,6 +64,8 @@ export function SubwayAlertEditor({
           radius={draft.radius ?? 200}
           disabled={disabled}
           showDays={!showSchedule}
+          repeatMinutes={draft.repeatMinutes ?? 5}
+          onRepeatMinutesChange={(repeatMinutes) => setDraft({ ...draft, repeatMinutes })}
           onDaysChange={(days) => setDraft({ ...draft, days })}
           onRadiusChange={(radius) => setDraft({ ...draft, radius })}
         />

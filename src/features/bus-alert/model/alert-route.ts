@@ -88,6 +88,7 @@ export function busDraftFromRoute(params: AlertRouteParams, openedAt: number): A
     scheduledEnabled: kind === 'time',
     proximityEnabled: kind === 'location',
     radius: 200,
+    ...(kind === 'location' ? { repeatMinutes: 5 } : {}),
     showVehicleNumber: true,
   };
 }
@@ -122,5 +123,6 @@ export function subwayDraftFromRoute(
     scheduledEnabled: kind === 'time',
     proximityEnabled: kind === 'location',
     radius: 200,
+    ...(kind === 'location' ? { repeatMinutes: 5 } : {}),
   };
 }

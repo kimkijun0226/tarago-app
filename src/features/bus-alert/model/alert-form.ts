@@ -48,7 +48,7 @@ export function validateSchedule(
   return { thresholdMinutes: minutes, notificationStages: stages };
 }
 
-/** 위치 전용 폼의 숨겨진 시간 필드는 서버 계약과 기존 감시 기준을 보존한다. */
+/** 위치 전용 폼의 숨겨진 시간 필드는 기존 서버 계약을 보존한다. */
 export function locationSchedule(draft: {
   startTime: string;
   endTime: string;
@@ -96,10 +96,19 @@ export function buildBusAlertInput(
     throw new Error('반복 요일을 선택해주세요.');
   if (proximityEnabled && ![100, 200, 300, 500].includes(draft.radius))
     throw new Error('접근 반경을 선택해주세요.');
+  const repeatMinutes = draft.repeatMinutes ?? 5;
+  if (proximityEnabled && ![1, 3, 5, 10].includes(repeatMinutes))
+    throw new Error('재알림 간격을 선택해주세요.');
   const schedule = scheduledEnabled
     ? validateSchedule(draft, threshold, draft.notificationStages)
     : locationSchedule(draft);
-  return { ...draft, ...schedule, scheduledEnabled, proximityEnabled };
+  return {
+    ...draft,
+    ...schedule,
+    scheduledEnabled,
+    proximityEnabled,
+    ...(proximityEnabled ? { repeatMinutes } : {}),
+  };
 }
 
 /** 서버의 사용자용 오류를 우선해 권한·저장 실패의 원인을 유지한다. */

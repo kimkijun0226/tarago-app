@@ -73,6 +73,8 @@ export function AlertEditorForm({
           radius={draft.radius}
           disabled={disabled}
           showDays={!showSchedule}
+          repeatMinutes={draft.repeatMinutes ?? 5}
+          onRepeatMinutesChange={(repeatMinutes) => setDraft({ ...draft, repeatMinutes })}
           onDaysChange={(days) => setDraft({ ...draft, days })}
           onRadiusChange={(radius) => setDraft({ ...draft, radius })}
         />

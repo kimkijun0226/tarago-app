@@ -21,6 +21,7 @@ export interface SubwayAlertInput {
   radius?: 100 | 200 | 300 | 500;
   latitude?: number;
   longitude?: number;
+  repeatMinutes?: number;
   monitoringStartedAt?: string;
   monitoringEndsAt?: string;
   monitoringSourceId?: string;
