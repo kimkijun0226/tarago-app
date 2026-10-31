@@ -26,7 +26,7 @@ export function defaultStages(minutes: number) {
 
 /** 입력 중 문자열과 저장값을 구분하고 버스·지하철의 예약 조건을 함께 검증한다. */
 export function validateSchedule(
-  input: { days: number[]; startTime: string; endTime: string },
+  input: { days: number[]; startTime: string; endTime: string; advanceRepeatMinutes?: 5 | 10 },
   threshold: string,
   selected?: number[],
 ) {
@@ -39,8 +39,13 @@ export function validateSchedule(
     throw new Error('반복 요일을 선택해주세요.');
   if (!TIME.test(input.startTime) || !TIME.test(input.endTime) || input.startTime === input.endTime)
     throw new Error('시작·종료 시간을 서로 다르게 설정해주세요.');
-  if (!Number.isInteger(minutes) || minutes < 1 || minutes > 30)
-    throw new Error('도착 기준은 1~30분으로 입력해주세요.');
+  if (!Number.isInteger(minutes) || minutes < 1 || minutes > 60)
+    throw new Error('도착 기준은 1~60분으로 입력해주세요.');
+  if (
+    input.advanceRepeatMinutes !== undefined &&
+    (![5, 10].includes(input.advanceRepeatMinutes) || minutes <= 10)
+  )
+    throw new Error('미리 알림 간격을 확인해주세요.');
   const stages = [...new Set(selected ?? defaultStages(minutes))]
     .filter((s) => Number.isInteger(s) && s >= 0 && s <= minutes)
     .sort((a, b) => b - a);
@@ -58,7 +63,7 @@ export function locationSchedule(draft: {
   const fallbackMinutes =
     Number.isInteger(draft.thresholdMinutes) &&
     draft.thresholdMinutes >= 1 &&
-    draft.thresholdMinutes <= 30
+    draft.thresholdMinutes <= 60
       ? draft.thresholdMinutes
       : 5;
   const locationStages = [

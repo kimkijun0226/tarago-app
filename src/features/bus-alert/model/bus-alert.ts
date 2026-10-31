@@ -17,6 +17,7 @@ export type BusAlertInput = {
   startTime: string;
   endTime: string;
   thresholdMinutes: number;
+  advanceRepeatMinutes?: 5 | 10;
   scheduledEnabled: boolean;
   proximityEnabled: boolean;
   radius: number;

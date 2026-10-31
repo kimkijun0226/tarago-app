@@ -84,7 +84,7 @@ export function SubwayAlertsPanel({
                   title={alert.stationName}
                   summary={
                     kind === 'time'
-                      ? `도착 ${alert.thresholdMinutes}분 전`
+                      ? `도착 ${alert.thresholdMinutes === 60 ? '1시간' : `${alert.thresholdMinutes}분`} 전${alert.advanceRepeatMinutes ? `부터 · ${alert.advanceRepeatMinutes}분마다` : ''}`
                       : `${alert.radius ?? 200}m · ${alert.repeatMinutes ?? 5}분마다`
                   }
                   detail={`${alert.days.map((day) => WEEKDAYS[day]).join(' · ')}${kind === 'time' ? ` · ${alert.startTime}–${alert.endTime}${state.pushStatus?.ready === false ? ' · 알림 연결 필요' : ''}` : ''}`}

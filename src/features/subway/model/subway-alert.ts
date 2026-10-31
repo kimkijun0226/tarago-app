@@ -15,6 +15,7 @@ export interface SubwayAlertInput {
   startTime: string;
   endTime: string;
   thresholdMinutes: number;
+  advanceRepeatMinutes?: 5 | 10;
   /** thresholdMinutes 이하의 알림 단계. 0은 곧 도착 알림이다. */
   notificationStages: number[];
   enabled: boolean;
