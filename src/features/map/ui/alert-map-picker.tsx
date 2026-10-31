@@ -129,7 +129,7 @@ export function AlertMapPicker({
   const steps = isBus ? ['정류소', '버스', '알림 설정'] : ['지하철역', '호선·방면', '알림 설정'];
   return (
     <MapBottomSheet
-      compactHeight={240}
+      compactHeight={selected ? 240 : undefined}
       snap={snap}
       onChangeSnap={setSnap}
       onHeightChange={onHeightChange}
