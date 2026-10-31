@@ -263,7 +263,12 @@ export function AlertsScreenContent({
           onBack={closeEditor}
         />
       </View>
-      <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
+      <ScrollView
+        contentContainerStyle={styles.content}
+        automaticallyAdjustKeyboardInsets
+        keyboardShouldPersistTaps="handled"
+        keyboardDismissMode="on-drag"
+      >
         {!editing && (
           <AlertKindSelector
             value={kind}
