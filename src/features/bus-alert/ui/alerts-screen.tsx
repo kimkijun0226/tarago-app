@@ -1,3 +1,5 @@
+import { AlertKindSelector } from './alert-kind-selector';
+import { BrandLogo } from '@/shared/ui/brand-logo';
 import { AppHeader } from '@/shared/ui/app-header';
 import { SymbolView } from 'expo-symbols';
 import { openAlertTarget } from '@/features/bus-alert/model/open-alert-target';
@@ -7,6 +9,7 @@ import { useAppStore } from '@/shared/model/app-store';
 import {
   ActivityIndicator,
   BackHandler,
+  Image,
   Linking,
   Pressable,
   ScrollView,
@@ -42,9 +45,13 @@ export function AlertsScreenContent({
   initialKind,
   initialSubwayDraft = null,
   returnToMap = false,
+  returnToSubwaySelection = false,
+  stackEditor = false,
 }: {
   initialDraft: AlertDraft | null;
   returnToMap?: boolean;
+  returnToSubwaySelection?: boolean;
+  stackEditor?: boolean;
   initialTransport?: 'bus' | 'subway';
   initialKind?: AlertKind;
   initialSubwayDraft?: SubwayAlertDraft | null;
@@ -53,16 +60,56 @@ export function AlertsScreenContent({
   const menu = useAppStore((s) => s.alertMenu);
   const setMenu = useAppStore((s) => s.setAlertMenu);
   const [transport, setTransport] = useState(initialTransport ?? menu.transport);
-  const bus = useAlertScreen(initialDraft, initialKind ?? menu.kind);
-  const subway = useSubwayAlertScreen(initialSubwayDraft, initialKind ?? menu.kind);
+  const finishSetup = useCallback(() => {
+    useAppStore.getState().finishAlertSelection();
+    useAppStore.getState().setAlertReturnSelection(null);
+    router.dismissTo({
+      pathname: '/alerts',
+      params: {
+        requestId: String(Date.now()),
+        returnTo: '',
+        alertId: '',
+        stationId: '',
+        routeId: '',
+        stationName: '',
+        lineId: '',
+      },
+    });
+  }, []);
+  const bus = useAlertScreen(
+    initialDraft,
+    initialKind ?? menu.kind,
+    stackEditor ? finishSetup : undefined,
+  );
+  const subway = useSubwayAlertScreen(
+    initialSubwayDraft,
+    initialKind ?? menu.kind,
+    stackEditor ? finishSetup : undefined,
+  );
   const kind = transport === 'bus' ? bus.kind : subway.kind;
   useEffect(() => setMenu({ transport, kind }), [transport, kind, setMenu]);
   const setBusDraft = bus.setDraft,
     setSubwayDraft = subway.setDraft;
   const closeEditor = useCallback(() => {
+    if (stackEditor) {
+      if (router.canGoBack()) router.back();
+      else router.replace('/');
+      return;
+    }
     setAdding(false);
     if (transport === 'bus') setBusDraft(null);
     else setSubwayDraft(null);
+    if (returnToSubwaySelection && transport === 'subway' && !subway.draft?.id) {
+      const { alertReturnSelection, startAlertSelection, setAlertReturnSelection } =
+        useAppStore.getState();
+      if (alertReturnSelection?.resume) {
+        setAlertReturnSelection(null);
+        startAlertSelection({ ...alertReturnSelection, requestId: String(Date.now()) });
+        router.setParams({ returnTo: '', requestId: '', stationName: '', lineId: '' });
+        router.navigate('/');
+        return;
+      }
+    }
     if (returnToMap) {
       router.setParams({
         returnTo: '',
@@ -74,7 +121,15 @@ export function AlertsScreenContent({
       });
       router.navigate('/');
     }
-  }, [transport, setBusDraft, setSubwayDraft, returnToMap]);
+  }, [
+    transport,
+    setBusDraft,
+    setSubwayDraft,
+    returnToMap,
+    returnToSubwaySelection,
+    stackEditor,
+    subway.draft?.id,
+  ]);
   useFocusEffect(
     useCallback(() => {
       const listener = BackHandler.addEventListener('hardwareBackPress', () => {
@@ -101,13 +156,13 @@ export function AlertsScreenContent({
       <SafeAreaView style={styles.page} edges={['top', 'left', 'right']}>
         <View
           style={{
-            paddingHorizontal: 24,
+            paddingHorizontal: 20,
             paddingTop: 20,
           }}
         >
           <AppHeader
             title="TaraGo"
-            large
+            titleVisual={<BrandLogo />}
             right={
               hasAlerts ? (
                 <Pressable
@@ -134,64 +189,43 @@ export function AlertsScreenContent({
               accessibilityLabel="버스 및 지하철 알림 추가"
               onPress={() => setAdding(true)}
               style={({ pressed }) => ({
-                minHeight: 160,
-                borderRadius: 24,
-                borderWidth: 1.5,
-                borderBottomWidth: pressed ? 2 : 4,
-                borderColor: '#F5BCC9',
-                backgroundColor: pressed ? '#FFE7ED' : '#FFF5F7',
+                minHeight: 112,
+                borderRadius: 16,
+                borderWidth: 1,
+                borderBottomWidth: 1,
+                borderColor: colors.accentBorder,
+                backgroundColor: pressed ? colors.strongSurface : colors.surface,
+                flexDirection: 'row',
                 alignItems: 'center',
-                justifyContent: 'center',
-                gap: 14,
+                justifyContent: 'space-between',
+                gap: 16,
                 paddingHorizontal: 20,
                 paddingVertical: 16,
-                transform: [{ translateY: pressed ? 2 : 0 }],
               })}
             >
-              <View
+              <Image
+                source={require('@/assets/brand/tarago-mark.png')}
                 accessible={false}
-                style={{
-                  width: 72,
-                  height: 72,
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                }}
-              >
-                <SymbolView
-                  name={{ ios: 'bell.fill', android: 'notifications' }}
-                  size={58}
-                  tintColor={colors.accent}
-                />
-                <View
-                  style={{
-                    position: 'absolute',
-                    top: 25,
-                    left: 25,
-                    width: 22,
-                    height: 22,
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                  }}
-                >
-                  <SymbolView
-                    name={{ ios: 'plus', android: 'add' }}
-                    size={20}
-                    weight="bold"
-                    tintColor="#FFFFFF"
-                  />
-                </View>
-              </View>
+                style={{ width: 72, height: 72 }}
+                resizeMode="contain"
+              />
               <Text
                 style={{
-                  fontSize: 15,
-                  lineHeight: 22,
+                  flex: 1,
+                  fontSize: 16,
+                  lineHeight: 25,
                   fontWeight: '600',
                   color: colors.text,
-                  textAlign: 'center',
+                  textAlign: 'left',
                 }}
               >
-                버스 및 지하철 알림을 추가해주세요
+                {'버스 및 지하철 알림을\n추가해주세요'}
               </Text>
+              <SymbolView
+                name={{ ios: 'plus', android: 'add' }}
+                size={24}
+                tintColor={colors.accent}
+              />
             </Pressable>
           )}
           <BusAlertsPanel
@@ -219,7 +253,7 @@ export function AlertsScreenContent({
     );
   return (
     <SafeAreaView style={styles.page} edges={['top', 'left', 'right']}>
-      <View style={{ paddingHorizontal: 24, paddingTop: 20 }}>
+      <View style={{ paddingHorizontal: 20, paddingTop: 20 }}>
         <AlertPageHeader
           transport={transport}
           kind={kind}
@@ -231,29 +265,14 @@ export function AlertsScreenContent({
       </View>
       <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
         {!editing && (
-          <View style={styles.segmented}>
-            {(['time', 'location'] as const).map((value) => (
-              <Pressable
-                key={value}
-                accessibilityRole="button"
-                accessibilityState={{ selected: kind === value }}
-                disabled={busy}
-                onPress={() => {
-                  if (transport === 'bus') bus.selectKind(value);
-                  else subway.selectKind(value);
-                }}
-                style={({ pressed }) => [
-                  styles.segment,
-                  kind === value && styles.selectedSegment,
-                  { transform: [{ translateY: pressed ? 2 : 0 }, { scale: pressed ? 0.98 : 1 }] },
-                ]}
-              >
-                <Text style={[styles.segmentText, kind === value && styles.selectedSegmentText]}>
-                  {value === 'time' ? '예약 알림' : '위치 알림'}
-                </Text>
-              </Pressable>
-            ))}
-          </View>
+          <AlertKindSelector
+            value={kind}
+            disabled={busy}
+            onChange={(value) => {
+              if (transport === 'bus') bus.selectKind(value);
+              else subway.selectKind(value);
+            }}
+          />
         )}
         {bus.runtimeError && (
           <AlertNotice action="기기 설정 열기" onAction={() => void Linking.openSettings()}>
@@ -290,7 +309,7 @@ function BusAlertsPanel({
       : null);
   return (
     <>
-      {warning && (
+      {warning && (all || draft) && (
         <AlertNotice
           action="알림 다시 연결"
           disabled={busy}
@@ -315,6 +334,8 @@ function BusAlertsPanel({
             onPress={() => void state.submit()}
           />
         </>
+      ) : !all ? (
+        <EmptyAlertCard transport="bus" kind={kind} disabled={busy} />
       ) : state.isPending ? (
         <ActivityIndicator style={styles.loading} color={colors.accent} />
       ) : (
@@ -346,14 +367,6 @@ function BusAlertsPanel({
                 />
               );
             })}
-          {!all && (
-            <EmptyAlertCard
-              transport="bus"
-              kind={kind}
-              compact={visibleAlerts.length > 0}
-              disabled={busy}
-            />
-          )}
         </>
       )}
     </>

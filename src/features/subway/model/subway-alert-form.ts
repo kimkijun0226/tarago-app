@@ -7,6 +7,8 @@ import type { SubwayAlertDraft } from './use-subway-alert-screen';
 
 /** 위치 알림은 지도에서 확인한 역 좌표와 반경을 요구한다. 기존 시간 알림은 이전 계약을 유지한다. */
 export function buildSubwayAlertInput(draft: SubwayAlertDraft, kind: AlertKind, threshold: string) {
+  if (draft.destinations && !draft.destinations.length)
+    throw new Error('행선지를 하나 이상 선택해주세요.');
   const scheduledEnabled = draft.scheduledEnabled ?? kind === 'time';
   const proximityEnabled = draft.proximityEnabled ?? kind === 'location';
   if (!scheduledEnabled && !proximityEnabled) throw new Error('알림 방식을 선택해주세요.');

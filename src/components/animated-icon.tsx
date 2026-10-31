@@ -8,7 +8,7 @@ import Animated, { Easing, Keyframe } from 'react-native-reanimated';
 import { scheduleOnRN } from 'react-native-worklets';
 
 /** 스플래시 전환 애니메이션을 재생할 밀리초 길이다. */
-const DURATION = 600;
+const DURATION = 240;
 
 /**
  * 네이티브 스플래시가 숨겨진 직후 잠깐 보이는 전환 오버레이.
@@ -36,17 +36,17 @@ export function AnimatedSplashOverlay() {
     },
     70: {
       opacity: 0,
-      easing: Easing.elastic(0.7),
+      easing: Easing.out(Easing.quad),
     },
     100: {
       opacity: 0,
       transform: [{ scale: 1 }],
-      easing: Easing.elastic(0.7),
+      easing: Easing.out(Easing.quad),
     },
   });
 
   /** 전환 전후 레이어에서 공통으로 표시할 스플래시 로고다. */
-  const image = <Image style={styles.image} source={require('@/assets/images/splash-icon.png')} />;
+  const image = <Image style={styles.image} source={require('@/assets/brand/tarago-mark.png')} />;
 
   return animate ? (
     <Animated.View
@@ -77,12 +77,12 @@ export function AnimatedSplashOverlay() {
 /** 로고 크기와 전체 화면 오버레이 배치를 정의한 고정 스타일이다. */
 const styles = StyleSheet.create({
   image: {
-    width: 76,
-    height: 71,
+    width: 112,
+    height: 112,
   },
   splashOverlay: {
     ...StyleSheet.absoluteFill,
-    backgroundColor: appColors.brand,
+    backgroundColor: appColors.surface,
     alignItems: 'center',
     justifyContent: 'center',
     zIndex: 1000,

@@ -194,7 +194,6 @@ export const BusStopBottomSheet = memo(function BusStopBottomSheet({
   return (
     <>
       <MapBottomSheet
-        edgeToEdge={false}
         snap={snap}
         onChangeSnap={changeSnap}
         onHeightChange={onHeightChange}
@@ -273,7 +272,7 @@ const createStyles = (colors: ReturnType<typeof useAppTheme>['colors']) =>
     list: { flex: 1 },
     stateContainer: {
       margin: 16,
-      borderRadius: 20,
+      borderRadius: 12,
       backgroundColor: colors.background,
       padding: 20,
       minHeight: 140,

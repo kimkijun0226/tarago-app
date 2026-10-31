@@ -1,13 +1,17 @@
 /** @fileoverview 정류장·지하철역 검색 결과와 최근 검색을 표시한다. */
 import { SearchPlaceKind } from './search-place-kind';
 import { useState } from 'react';
-import { Keyboard, ActivityIndicator, FlatList, Pressable, StyleSheet, Text, View } from 'react-native';
-import type { Place } from '../api/mobility';
 import {
-  isBusStopPlace,
-  matchesSearchFilter,
-  type SearchResultFilter,
-} from '../model/place-kind';
+  Keyboard,
+  ActivityIndicator,
+  FlatList,
+  Pressable,
+  StyleSheet,
+  Text,
+  View,
+} from 'react-native';
+import type { Place } from '../api/mobility';
+import { isBusStopPlace, matchesSearchFilter, type SearchResultFilter } from '../model/place-kind';
 import { mapUi } from '@/shared/ui/map-design-tokens';
 
 type Props = {
@@ -110,9 +114,7 @@ export function PlaceSearchResults({
         keyExtractor={(place) => place.id}
         keyboardShouldPersistTaps="handled"
         keyboardDismissMode="on-drag"
-        renderItem={({ item }) => (
-          <PlaceSearchRow place={item} onChoose={onChoose} />
-        )}
+        renderItem={({ item }) => <PlaceSearchRow place={item} onChoose={onChoose} />}
         ListEmptyComponent={
           !fetching && query.length >= 2 ? (
             <Text style={styles.empty}>검색 결과가 없습니다.</Text>
@@ -124,13 +126,7 @@ export function PlaceSearchResults({
 }
 
 /** 최근 기록과 검색 결과에 같은 장소 분류 아이콘을 표시한다. */
-function PlaceSearchRow({
-  place,
-  onChoose,
-}: {
-  place: Place;
-  onChoose: (place: Place) => void;
-}) {
+function PlaceSearchRow({ place, onChoose }: { place: Place; onChoose: (place: Place) => void }) {
   return (
     <Pressable
       accessibilityRole="button"
@@ -140,7 +136,9 @@ function PlaceSearchRow({
       <SearchPlaceKind place={place} />
       <View style={styles.place}>
         <View style={styles.nameRow}>
-          <Text numberOfLines={1} style={styles.placeName}>{place.name.replace(/\[.*?\]/g, '')}</Text>
+          <Text numberOfLines={1} style={styles.placeName}>
+            {place.name.replace(/\[.*?\]/g, '')}
+          </Text>
         </View>
         <Text style={styles.address}>{place.address}</Text>
       </View>
@@ -176,12 +174,12 @@ const styles = StyleSheet.create({
     paddingHorizontal: 4,
     alignItems: 'center',
     justifyContent: 'center',
-    borderBottomWidth: 2,
+    borderBottomWidth: 1,
     borderBottomColor: 'transparent',
   },
-  activeTab: { borderBottomColor: mapUi.text },
-  tabText: { color: mapUi.secondaryText, fontSize: 13 },
-  activeText: { color: mapUi.text, fontWeight: '700' },
+  activeTab: { borderBottomColor: mapUi.blue },
+  tabText: { color: mapUi.secondaryText, fontSize: 13, fontWeight: '500' },
+  activeText: { color: mapUi.blue },
   historyHeading: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -194,7 +192,7 @@ const styles = StyleSheet.create({
   muted: { color: mapUi.secondaryText, fontSize: 13 },
   row: {
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: '#E4E5E8',
+    borderBottomColor: mapUi.separator,
     paddingHorizontal: 16,
     paddingVertical: 16,
     minHeight: 72,
@@ -205,11 +203,11 @@ const styles = StyleSheet.create({
   },
   place: { flex: 1, gap: 4 },
   nameRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  placeName: { flexShrink: 1, fontSize: 16, fontWeight: '700', color: mapUi.text },
+  placeName: { flexShrink: 1, fontSize: 16, fontWeight: '600', color: mapUi.text },
   address: { fontSize: 11, lineHeight: 16, color: mapUi.secondaryText },
   distance: { fontSize: 11, fontWeight: '500', color: mapUi.secondaryText },
   error: { padding: 16, color: mapUi.blue },
   loading: { padding: 12 },
-  pressed: { backgroundColor: mapUi.separator, transform: [{ translateY: 1 }, { scale: 0.99 }] },
+  pressed: { backgroundColor: mapUi.separator, transform: [] },
   empty: { padding: 24, textAlign: 'center', color: mapUi.secondaryText },
 });

@@ -46,6 +46,7 @@ export interface SubwayTimetable {
   attribution: string;
   directions: {
     direction: string;
+    nextStationName?: string;
     firstTrain: SubwayScheduledTrain | null;
     lastTrain: SubwayScheduledTrain | null;
     trains: SubwayScheduledTrain[];

@@ -18,7 +18,7 @@ export interface SubwayArrival {
   arrivalCode: string;
   receivedAt: string | null;
   etaSeconds: number | null;
-  etaSource?: 'official' | 'estimated';
+  etaSource?: 'official' | 'estimated' | 'schedule';
   etaMethod?: 'live_position' | 'schedule_position' | 'observed_travel';
   etaSampleCount?: number;
   etaPositionReceivedAt?: string;
@@ -45,11 +45,21 @@ export interface SubwayArrivals {
 export async function getSubwayArrivals(
   stationName: string,
   signal?: AbortSignal,
+  target?: { lineId: string; direction: string; destination?: string; destinations?: string[] },
 ): Promise<SubwayArrivals> {
   /** HTTP 응답 래퍼에서 화면에 전달할 서버 본문만 꺼낸다. */
-  const { data } = await apiClient.get<SubwayArrivals>('/subway/arrivals', {
-    params: { stationName },
-    signal,
-  });
+  const { data } = await apiClient.get<SubwayArrivals>(
+    target ? '/subway/alert-arrivals' : '/subway/arrivals',
+    {
+      params: {
+        stationName,
+        lineId: target?.lineId,
+        direction: target?.direction,
+        destination: target?.destination,
+        destinations: target?.destinations ? JSON.stringify(target.destinations) : undefined,
+      },
+      signal,
+    },
+  );
   return data;
 }

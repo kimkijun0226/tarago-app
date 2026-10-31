@@ -14,7 +14,7 @@ import {
 } from '@/features/subway/api/get-subway-station';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Alert } from 'react-native';
-import { useLocalSearchParams } from 'expo-router';
+import { useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { useQueryClient } from '@tanstack/react-query';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { getNearbyBusStops, type BusStop } from '@/features/bus-stop/api/get-nearby-bus-stops';
@@ -181,13 +181,33 @@ export function useMapController() {
   );
 
   const centeredAlertRequest = useRef<string | null>(null);
+  const alertSelectionRequestId = alertSelection?.requestId;
   useEffect(() => {
+    const alertSelection = useAppStore.getState().alertSelection;
     if (!mapReady || !initialPosition || !alertSelection) return;
     if (centeredAlertRequest.current === alertSelection.requestId) return;
     centeredAlertRequest.current = alertSelection.requestId;
     let cancelled = false;
     let transition: ReturnType<typeof setTimeout> | undefined;
     const request = selectionRequest.current;
+    if (alertSelection.resume) {
+      const target = alertSelection.resume;
+      const frame = requestAnimationFrame(() => {
+        setSelectedPlace({
+          id: `subway:${target.stationName}:${target.lineName}`,
+          name: `${target.stationName}역`,
+          address: '',
+          category: '지하철역',
+          distanceMeters: null,
+          latitude: target.latitude,
+          longitude: target.longitude,
+        });
+        setSubwayStation(target.stationName);
+        setSubwayLineName(target.lineName);
+        setSubwaySheetSnap('half');
+      });
+      return () => cancelAnimationFrame(frame);
+    }
     const subway = alertSelection.transport === 'subway';
     // 먼저 전환 시작 축척을 맞춰, 재진입해도 확대·축소 방향이 분명하게 보이도록 한다.
     mapRef.current?.animateCameraTo({ ...initialPosition, zoom: subway ? 17 : 15, duration: 0 });
@@ -204,7 +224,31 @@ export function useMapController() {
       clearTimeout(transition);
       centeredAlertRequest.current = null;
     };
-  }, [mapReady, initialPosition, alertSelection, getCurrentLocation]);
+  }, [mapReady, initialPosition, alertSelectionRequestId, getCurrentLocation]);
+
+  /** 복귀한 역을 검색창과 펼친 시트 사이의 지도 중앙에 다시 맞춘다. */
+  const centeredResume = useRef<string | null>(null);
+  useEffect(() => {
+    const target = alertSelection?.resume;
+    if (
+      !mapReady ||
+      !target ||
+      subwayStation !== target.stationName ||
+      sheetHeight <= 0 ||
+      centeredResume.current === alertSelection.requestId
+    )
+      return;
+    const frame = requestAnimationFrame(() => {
+      centeredResume.current = alertSelection.requestId;
+      mapRef.current?.animateCameraTo({
+        latitude: target.latitude,
+        longitude: target.longitude,
+        zoom: selectionZoom,
+        duration: 350,
+      });
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [mapReady, alertSelection, subwayStation, sheetHeight, selectionZoom]);
 
   /** 화면 범위가 오기 전에는 초기 위치 주변 타일을 Query 입력으로 사용한다. */
   const initialBusStopTiles = useMemo(
@@ -279,25 +323,25 @@ export function useMapController() {
     selectionZoom,
   ]);
 
-  /** 지도 화면을 떠날 때 탭 숨김을 해제한다. 변경 함수가 바뀌면 정리 함수를 다시 등록한다. */
-  useEffect(() => () => setMapTabHidden(false), [setMapTabHidden]);
-
-  /** 검색 활성·정류장·지하철 선택이 바뀔 때 탭 숨김 여부를 맞춘다. 파생 UI를 공용 레이아웃과 동기화한다. */
-  useEffect(() => {
-    setMapTabHidden(
-      Boolean(alertSelection) ||
-        searchActive ||
-        Boolean(searchMapRequest || subwayStation || selectedBusStop || selectedPlace),
-    );
-  }, [
-    alertSelection,
-    searchActive,
-    searchMapRequest,
-    subwayStation,
-    selectedBusStop,
-    selectedPlace,
-    setMapTabHidden,
-  ]);
+  /** 지도 탭에 있을 때만 공통 탭의 숨김 상태를 제어한다. 지도는 다른 탭 뒤에서도 마운트돼 있다. */
+  useFocusEffect(
+    useCallback(() => {
+      setMapTabHidden(
+        Boolean(alertSelection) ||
+          searchActive ||
+          Boolean(searchMapRequest || subwayStation || selectedBusStop || selectedPlace),
+      );
+      return () => setMapTabHidden(false);
+    }, [
+      alertSelection,
+      searchActive,
+      searchMapRequest,
+      subwayStation,
+      selectedBusStop,
+      selectedPlace,
+      setMapTabHidden,
+    ]),
+  );
 
   /** 정류장·역 선택이 바뀔 때만 중앙으로 옮기며 시트 높이 변경에는 반응하지 않는다. */
   useEffect(() => {
@@ -332,10 +376,39 @@ export function useMapController() {
     setSheetHeight(0);
   }, []);
 
+  /** 교통수단만 바꾸며 선택 요청 ID를 유지해 현재 지도에서 이어간다. */
+  const confirmAlertTransport = useCallback(async (transport: 'bus' | 'subway') => {
+    const current = useAppStore.getState().alertSelection;
+    if (!current || current.transport === transport) return true;
+    const currentLabel = current.transport === 'bus' ? '버스' : '지하철';
+    const nextLabel = transport === 'bus' ? '버스' : '지하철';
+    const generation = selectionRequest.current;
+    const accepted = await new Promise<boolean>((resolve) =>
+      Alert.alert(
+        `${currentLabel} 알림 설정 중`,
+        `${nextLabel} 알림으로 변경할까요?`,
+        [
+          { text: '취소', style: 'cancel', onPress: () => resolve(false) },
+          { text: '변경', onPress: () => resolve(true) },
+        ],
+        { cancelable: true, onDismiss: () => resolve(false) },
+      ),
+    );
+    if (
+      !accepted ||
+      generation !== selectionRequest.current ||
+      useAppStore.getState().alertSelection?.requestId !== current.requestId
+    )
+      return false;
+    selectionRequest.current++;
+    useAppStore.getState().switchAlertTransport(transport);
+    return true;
+  }, []);
+
   /** 지하철·장소 선택을 해제하고 선택한 정류장의 버스 목록을 연다. 여러 지도 이벤트에서 공유하는 선택 동작이다. */
   const selectBusStop = useCallback(
-    (busStop: BusStop, point?: Point) => {
-      if (alertSelection?.transport === 'subway') return;
+    async (busStop: BusStop, point?: Point) => {
+      if (!(await confirmAlertTransport('bus'))) return;
       setSubwayStation(null);
       setSelectedPlace(null);
       selectionRequest.current++;
@@ -345,7 +418,7 @@ export function useMapController() {
       if (point) busStopSymbolPositions.current.set(busStop.id, point);
       setSelectedBusStopPoint(point ?? busStopSymbolPositions.current.get(busStop.id) ?? null);
     },
-    [alertSelection?.transport],
+    [confirmAlertTransport],
   );
 
   /** 검색 장소로 카메라를 옮기고 정류장 장소라면 가까운 서버 정류장과 이름을 대조한다. Query 캐시를 재사용하며 최신 요청만 선택에 반영한다. */
@@ -709,7 +782,7 @@ export function useMapController() {
   /** 역·호선에 맞는 실제 장소 좌표를 Query로 조회해 선택하고 카메라를 이동한다. 먼저 시작한 검색이 나중 선택을 덮어쓰지 않게 세대를 확인한다. */
   const selectSubwayStation = useCallback(
     async (name: string, lineName: string, point?: Point) => {
-      if (alertSelection?.transport === 'bus') return;
+      if (!(await confirmAlertTransport('subway'))) return;
       /** 이 비동기 선택을 시작한 시점의 세대 번호다. 응답 시 현재 번호와 다르면 결과를 버린다. */
       const request = ++selectionRequest.current;
       try {
@@ -744,6 +817,7 @@ export function useMapController() {
               (item) => item.name.startsWith(`${name}역`) && /지하철|전철/.test(item.category),
             ));
         if (!place) throw new Error('역 위치 없음');
+        activateSearch();
         setSelectedPlace(place);
         setSubwaySheetSnap('half');
         setSubwayStation(name);
@@ -753,28 +827,18 @@ export function useMapController() {
           Alert.alert('역 위치를 확인하지 못했어요', '다시 선택해주세요.');
       }
     },
-    [alertSelection?.transport, selectedPlace, initialPosition, queryClient],
+    [confirmAlertTransport, selectedPlace, initialPosition, queryClient, activateSearch],
   );
 
   /** 검색 캐시가 없는 최근 기록도 공식 대상 ID를 다시 확인해 알림 선택으로 연결한다. */
   const selectSearchResult = useCallback(
     async (place: Place) => {
-      const otherTransport =
-        alertSelection &&
-        ((alertSelection.transport === 'bus' && place.id.startsWith('subway:')) ||
-          (alertSelection.transport === 'subway' && place.id.startsWith('station:')));
-      // 다른 교통수단도 위치 탐색에 쓸 수 있지만 현재 알림의 대상 종류는 유지한다.
-      if (otherTransport) {
-        selectionRequest.current++;
-        setSelectedBusStop(null);
-        setSelectedRoute(null);
-        setShowRouteSheet(false);
-        setSubwayStation(null);
-        setSelectedSearchResultId(place.id);
-        setSelectedPlace(place);
-        mapRef.current?.animateCameraTo({ ...place, zoom: selectionZoom, duration: 350 });
-        return;
-      }
+      const transport = place.id.startsWith('subway:')
+        ? 'subway'
+        : place.id.startsWith('station:')
+          ? 'bus'
+          : null;
+      if (transport && !(await confirmAlertTransport(transport))) return;
       const request = ++selectionRequest.current;
       try {
         const point = searchSymbolPositions.get(place.id);
@@ -845,7 +909,7 @@ export function useMapController() {
       selectBusStop,
       subwayStops,
       queryClient,
-      alertSelection,
+      confirmAlertTransport,
       selectionZoom,
     ],
   );
@@ -901,7 +965,6 @@ export function useMapController() {
   /** 심벌 이름과 실제 거리를 함께 대조해 누른 정류장을 바로 연다. */
   const selectBusStopSymbol = useCallback(
     async (symbol: Point & { caption: string; peers?: Point[] }) => {
-      if (alertSelection?.transport === 'subway') return;
       const request = ++selectionRequest.current;
       const point = { latitude: symbol.latitude, longitude: symbol.longitude };
       const name = stationSearchName(symbol.caption);
@@ -985,14 +1048,7 @@ export function useMapController() {
           Alert.alert('정류장 정보를 불러오지 못했어요', '잠시 후 정류장을 다시 선택해주세요.');
       }
     },
-    [
-      alertSelection?.transport,
-      queryClient,
-      selectedRoute,
-      routeStops,
-      selectRouteStop,
-      selectBusStop,
-    ],
+    [queryClient, selectedRoute, routeStops, selectRouteStop, selectBusStop],
   );
 
   /** 지하철은 호선과 연결하고 버스는 네이버 심벌의 실제 위치에서 도착정보를 연다. */
@@ -1068,9 +1124,6 @@ export function useMapController() {
         if (match) subwaySymbolMatches.current.set(symbolKey(peer), match.id);
       }
       const choose = (station: SubwayMapStation) => {
-        if (alertSelection?.transport === 'bus') return;
-        activateSearch();
-        setSubwaySheetSnap('half');
         void selectSubwayStation(station.name, station.lineName, {
           latitude: symbol.latitude,
           longitude: symbol.longitude,
@@ -1084,10 +1137,8 @@ export function useMapController() {
       else if (!explicitLine) void selectBusStopSymbol(symbol);
     },
     [
-      alertSelection?.transport,
       subwayStops,
       queryClient,
-      activateSearch,
       selectSubwayStation,
       selectBusStopSymbol,
       mapSearchResults,

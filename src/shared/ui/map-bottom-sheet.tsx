@@ -6,9 +6,16 @@ import BottomSheet, {
   useBottomSheetSpringConfigs,
 } from '@gorhom/bottom-sheet';
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
-import { View, StyleSheet, useWindowDimensions } from 'react-native';
+import {
+  View,
+  StyleSheet,
+  useWindowDimensions,
+  type StyleProp,
+  type ViewStyle,
+} from 'react-native';
 import Animated, {
   useSharedValue,
+  useAnimatedReaction,
   type SharedValue,
   useAnimatedStyle,
   interpolate,
@@ -17,7 +24,7 @@ import Animated, {
   withTiming,
 } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useAppTheme } from './theme';
+import { appShadows, useAppTheme } from './theme';
 import { useSingleStepSheetGesture } from './use-single-step-sheet-gesture';
 
 /** 순서가 SNAPS의 네이티브 인덱스와 대응하는 세 가지 정착 높이. */
@@ -37,10 +44,11 @@ type MapBottomSheetProps = {
   animatedPosition?: SharedValue<number>;
   /** 네이티브 시트가 정착한 뒤 목록의 최초 위치를 확정한다. */
   onSettled?: (contentHeight: number) => void;
-  /** 시트를 외부 여백 없이 화면 좌우·하단에 붙여 표시할지 여부다. */
-  edgeToEdge?: boolean;
+  /** 선택 안내처럼 최소 높이가 필요한 툴바의 접힌 높이. */
+  compactHeight?: number;
   /** 길찾기처럼 고정 헤더가 있을 때 시트가 확장될 수 있는 위쪽 경계다. */
   topInset?: number;
+  surfaceStyle?: StyleProp<ViewStyle>;
 };
 
 /** 기본 배경의 화면 밖 연장 영역을 제외하고 실제 시트 외곽에만 그림자를 그린다. */
@@ -68,8 +76,9 @@ export function MapBottomSheet({
   onHeightChange,
   animatedPosition,
   onSettled,
-  edgeToEdge = false,
+  compactHeight,
   topInset,
+  surfaceStyle,
 }: MapBottomSheetProps) {
   const animationConfigs = useBottomSheetSpringConfigs({
     damping: 28,
@@ -78,7 +87,7 @@ export function MapBottomSheet({
     overshootClamping: true,
   });
   /** 시트 배경과 핸들 색상, 모서리에 적용할 공통 테마다. */
-  const { colors, radius } = useAppTheme();
+  const { colors } = useAppTheme();
 
   /** 툴바 전체 높이를 최소 시트와 목록의 실제 표시 높이에 반영한다. */
   const [toolbarHeight, setToolbarHeight] = useState(0);
@@ -87,25 +96,37 @@ export function MapBottomSheet({
   const ref = useRef<BottomSheet>(null);
 
   /** 회전·창 크기 변화에 따라 갱신되는 화면 높이다. 정착 지점을 다시 계산한다. */
-  const { height, width } = useWindowDimensions();
+  const { height } = useWindowDimensions();
 
   /** 시트가 상태 표시줄과 홈 인디케이터를 피하도록 적용하는 안전 영역이다. */
   const insets = useSafeAreaInsets();
 
   /** 떠 있는 시트와 화면 하단 사이의 여백이다. */
-  const bottomGap = edgeToEdge ? 0 : insets.bottom;
+  const bottomGap = Math.max(12, insets.bottom);
 
   /** 드래그 진행률을 UI 스레드에서 공유해 여백과 지도 딤이 시트를 따라 움직이게 한다. */
   const animatedIndex = useSharedValue(snap ? SNAPS.indexOf(snap) : 1);
+  const nativePosition = useSharedValue(height);
+  // 네이티브 위치에는 외부 컨테이너의 안전 영역 이동이 포함되지 않는다.
+  useAnimatedReaction(
+    () => {
+      const t = Math.max(0, Math.min(1, animatedIndex.value - 1));
+      const remaining = 1 - t * t * (3 - 2 * t);
+      return nativePosition.value - bottomGap * remaining;
+    },
+    (top) => {
+      animatedPosition?.set(top);
+    },
+    [animatedPosition, bottomGap],
+  );
   /** 라이브러리 내부의 위치 transform과 충돌하지 않도록 하단 간격은 바깥 컨테이너에 적용한다. */
   const containerStyle = useAnimatedStyle(() => {
     const t = Math.max(0, Math.min(1, animatedIndex.value - 1));
     const remaining = 1 - t * t * (3 - 2 * t);
     return {
-      transform: [
-        { translateY: -bottomGap * remaining },
-        { scaleX: edgeToEdge ? 1 : 1 - (24 / width) * remaining },
-      ],
+      left: 12 * remaining,
+      right: 12 * remaining,
+      transform: [{ translateY: -bottomGap * remaining }],
     };
   });
   const dimStyle = useAnimatedStyle(() => {
@@ -124,7 +145,7 @@ export function MapBottomSheet({
   }, [animatedIndex]);
 
   /** 기본은 안전 영역이며 길찾기는 실제 헤더 하단을 전달한다. */
-  const topBoundary = topInset ?? insets.top + (edgeToEdge ? 0 : 8);
+  const topBoundary = topInset ?? insets.top + 8;
 
   const hasToolbar = Boolean(toolbar);
 
@@ -133,11 +154,14 @@ export function MapBottomSheet({
     /** 회전하거나 화면이 작아져도 헤더 아래에 세 정착 높이가 순서대로 들어가도록 제한한다. */
     const available = Math.max(1, height - topBoundary);
     return [
-      Math.min(hasToolbar && toolbarHeight > 0 ? toolbarHeight + 29 : 150, available * 0.3),
-      Math.min(height * (edgeToEdge ? 0.5 : 0.47), available * 0.65),
+      Math.min(
+        Math.max(compactHeight ?? 0, hasToolbar && toolbarHeight > 0 ? toolbarHeight + 29 : 150),
+        available * (compactHeight ? 0.4 : 0.3),
+      ),
+      Math.min(height * 0.47, available * 0.65),
       available,
     ];
-  }, [height, topBoundary, edgeToEdge, hasToolbar, toolbarHeight]);
+  }, [height, topBoundary, hasToolbar, toolbarHeight, compactHeight]);
 
   const background = useCallback(
     (props: BottomSheetBackgroundProps) => <SheetBackground {...props} points={points} />,
@@ -228,7 +252,7 @@ export function MapBottomSheet({
         <BottomSheet
           ref={ref}
           animatedIndex={animatedIndex}
-          animatedPosition={animatedPosition}
+          animatedPosition={nativePosition}
           animationConfigs={animationConfigs}
           index={snap ? SNAPS.indexOf(snap) : 1}
           snapPoints={points}
@@ -240,14 +264,17 @@ export function MapBottomSheet({
           enablePanDownToClose={false}
           enableOverDrag={false}
           topInset={topBoundary}
-          backgroundStyle={{
-            borderRadius: edgeToEdge && snap === 'full' ? 0 : radius.sheet,
-            backgroundColor: colors.surface,
-            borderWidth: 1.5,
-            borderBottomWidth: 3,
-            borderColor: colors.borderStrong,
-            boxShadow: '0px 3px 0px rgba(34, 34, 34, 0.05), 0px -3px 14px rgba(34, 34, 34, 0.06)',
-          }}
+          backgroundStyle={[
+            {
+              borderRadius: 16,
+              backgroundColor: colors.surface,
+              borderWidth: 1,
+              borderBottomWidth: 1,
+              borderColor: colors.borderStrong,
+              boxShadow: appShadows.floating,
+            },
+            surfaceStyle,
+          ]}
           handleStyle={{ paddingVertical: 12 }}
           handleIndicatorStyle={{
             width: 44,

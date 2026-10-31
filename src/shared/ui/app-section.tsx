@@ -20,7 +20,7 @@ export function AppSection({
       {title ? (
         <Text
           accessibilityRole="header"
-          style={{ color: colors.secondaryText, fontSize: 13, paddingHorizontal: 16 }}
+          style={{ color: colors.text, fontSize: 15, fontWeight: '600', paddingHorizontal: 0 }}
         >
           {title}
         </Text>
@@ -28,10 +28,10 @@ export function AppSection({
       <View
         style={{
           backgroundColor: colors.surface,
-          borderRadius: 20,
+          borderRadius: 16,
           borderWidth: 1,
           borderColor: colors.separator,
-          padding: 18,
+          padding: 16,
           gap: 12,
         }}
       >
@@ -43,7 +43,7 @@ export function AppSection({
             color: colors.secondaryText,
             fontSize: 13,
             lineHeight: 19,
-            paddingHorizontal: 16,
+            paddingHorizontal: 0,
           }}
         >
           {footer}

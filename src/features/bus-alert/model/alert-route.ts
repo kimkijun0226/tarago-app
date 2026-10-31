@@ -21,17 +21,18 @@ export type AlertRouteParams = {
   lineName?: string;
   direction?: string;
   destination?: string;
+  destinations?: string;
   nextStationName?: string;
   destinationNames?: string;
 };
 /** 표시 후보와 감시 대상을 제한하는 destination 필터를 구분한다. */
-function routeDestinationNames(value?: string): string[] | undefined {
+function routeDestinationNames(value?: string, limit = 12): string[] | undefined {
   if (!value) return undefined;
   try {
     const names: unknown = JSON.parse(value);
     return Array.isArray(names) &&
       names.length > 0 &&
-      names.length <= 12 &&
+      names.length <= limit &&
       names.every((n) => typeof n === 'string' && n.trim().length > 0 && n.length <= 100)
       ? [...new Set(names as string[])]
       : undefined;
@@ -54,19 +55,17 @@ function coordinates(params: AlertRouteParams) {
     ? { latitude, longitude }
     : null;
 }
-function schedule(params: AlertRouteParams, openedAt: number) {
-  const requested = Number(params.requestId);
-  const now = Number.isFinite(requested) && requested > 0 ? requested : openedAt;
+function schedule() {
   return {
     days: [1, 2, 3, 4, 5],
-    startTime: new Date(now + 9 * 3600_000).toISOString().slice(11, 16),
-    endTime: new Date(now + 11 * 3600_000).toISOString().slice(11, 16),
+    startTime: '00:00',
+    endTime: '00:00',
     thresholdMinutes: 5,
     notificationStages: [5, 3, 2, 1, 0],
     enabled: true,
   };
 }
-export function busDraftFromRoute(params: AlertRouteParams, openedAt: number): AlertDraft | null {
+export function busDraftFromRoute(params: AlertRouteParams, _openedAt: number): AlertDraft | null {
   const point = coordinates(params);
   if (
     params.alertId ||
@@ -80,7 +79,7 @@ export function busDraftFromRoute(params: AlertRouteParams, openedAt: number): A
   const kind = routeKind(params.alertKind) ?? 'time';
   const stationSeq = Number(params.stationSeq);
   return {
-    ...schedule(params, openedAt),
+    ...schedule(),
     stationId: params.stationId,
     routeId: params.routeId,
     busNumber: params.busNumber ?? params.routeId,
@@ -95,7 +94,7 @@ export function busDraftFromRoute(params: AlertRouteParams, openedAt: number): A
 }
 export function subwayDraftFromRoute(
   params: AlertRouteParams,
-  openedAt: number,
+  _openedAt: number,
 ): SubwayAlertDraft | null {
   if (
     params.alertId ||
@@ -110,7 +109,7 @@ export function subwayDraftFromRoute(
   const point = coordinates(params);
   if (kind === 'location' && !point) return null;
   return {
-    ...schedule(params, openedAt),
+    ...schedule(),
     stationName: params.stationName,
     lineId: params.lineId,
     lineName: params.lineName,
@@ -120,6 +119,9 @@ export function subwayDraftFromRoute(
       ? { destinationNames: routeDestinationNames(params.destinationNames) }
       : {}),
     ...(params.destination ? { destination: params.destination } : {}),
+    ...(routeDestinationNames(params.destinations, 100)
+      ? { destinations: routeDestinationNames(params.destinations, 100) }
+      : {}),
     ...(point ?? {}),
     scheduledEnabled: kind === 'time',
     proximityEnabled: kind === 'location',

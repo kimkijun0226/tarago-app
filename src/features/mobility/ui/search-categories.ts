@@ -4,22 +4,22 @@ import { TRANSPORT_SYMBOLS } from '@/shared/ui/transport-icon';
 export const HOME_CATEGORIES = [
   {
     label: '음식점',
-    color: '#ff8700',
+    color: '#525252',
     symbol: { ios: 'fork.knife', android: 'restaurant' },
   },
   {
     label: '카페',
-    color: '#ff8700',
+    color: '#525252',
     symbol: { ios: 'cup.and.saucer.fill', android: 'local_cafe' },
   },
   {
     label: '편의점',
-    color: '#eab900',
+    color: '#525252',
     symbol: { ios: 'basket.fill', android: 'shopping_basket' },
   },
   {
     label: '지하철역',
-    color: '#2c73dd',
+    color: '#525252',
     symbol: TRANSPORT_SYMBOLS.subway,
   },
 ] as const;

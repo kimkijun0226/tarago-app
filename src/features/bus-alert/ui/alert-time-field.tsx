@@ -59,20 +59,19 @@ export function AlertTimeRange({
             key={field}
             disabled={disabled}
             accessibilityRole="button"
-            accessibilityLabel={`${field === 'startTime' ? '시작' : '종료'} 시간 선택, ${field === 'startTime' ? startTime : endTime}`}
+            accessibilityLabel={`${field === 'startTime' ? '시작' : '종료'} 시간 선택, ${(field === 'startTime' ? startTime : endTime).replace(':', ' : ')}`}
             accessibilityState={{ disabled, expanded: active === field }}
             onPress={() => setActive(field)}
             style={({ pressed }) => ({
               flex: 1,
               gap: 4,
-              minHeight: 88,
+              minHeight: 96,
               backgroundColor: active === field ? colors.accentSurface : colors.secondarySurface,
-              borderRadius: 20,
+              borderRadius: 14,
               borderWidth: 1,
-              borderBottomWidth: pressed ? 1 : 3,
+              borderBottomWidth: 1,
               borderColor: active === field ? colors.accentBorder : colors.separator,
-              padding: 12,
-              transform: [{ translateY: pressed ? 2 : 0 }],
+              padding: 16,
             })}
           >
             <Text style={{ fontSize: 14, color: colors.secondaryText }}>
@@ -80,13 +79,13 @@ export function AlertTimeRange({
             </Text>
             <Text
               style={{
-                fontSize: 22,
-                fontWeight: '700',
+                fontSize: 24,
+                fontWeight: '600',
                 color: colors.text,
                 fontVariant: ['tabular-nums'],
               }}
             >
-              {field === 'startTime' ? startTime : endTime}
+              {(field === 'startTime' ? startTime : endTime).replace(':', ' : ')}
             </Text>
           </Pressable>
         ))}
@@ -115,10 +114,11 @@ export function AlertTimeRange({
             <View
               style={{
                 backgroundColor: colors.surface,
-                borderTopLeftRadius: 24,
-                borderTopRightRadius: 24,
+                borderRadius: 16,
+                marginHorizontal: 12,
+                marginBottom: Math.max(12, insets.bottom),
                 padding: 20,
-                paddingBottom: Math.max(insets.bottom, 20),
+                paddingBottom: 20,
               }}
             >
               <View

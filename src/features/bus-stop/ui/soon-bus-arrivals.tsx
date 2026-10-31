@@ -5,6 +5,7 @@ import { ScrollView } from 'react-native-gesture-handler';
 import type { BusArrival } from '../api/get-bus-arrivals';
 import { getBusRouteBadge, type BusArrivalGroup } from '../model/bus-arrival';
 import { useAppTheme } from '@/shared/ui';
+import { appColors } from '@/shared/ui/theme';
 
 type Props = {
   groups: BusArrivalGroup[];
@@ -17,7 +18,7 @@ export const SoonBusArrivals = memo(function SoonBusArrivals({ groups, onSelectR
   return (
     <View style={styles.container}>
       <View style={styles.heading}>
-        <Text style={[styles.label, { color: colors.danger }]}>곧도착</Text>
+        <Text style={[styles.label, { color: colors.text }]}>곧도착</Text>
       </View>
       <ScrollView
         horizontal
@@ -67,18 +68,18 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginHorizontal: 16,
     paddingVertical: 4,
-    borderTopWidth: 1,
-    borderBottomWidth: 1,
-    borderColor: '#E4E6E9',
+    borderRadius: 14,
+    backgroundColor: appColors.accentSurface,
+    paddingHorizontal: 12,
   },
   heading: {
     height: 30,
     justifyContent: 'center',
     paddingRight: 12,
     borderRightWidth: 1,
-    borderRightColor: '#E4E6E9',
+    borderRightColor: appColors.accentBorder,
   },
-  label: { fontSize: 12, lineHeight: 18, fontWeight: '700' },
+  label: { fontSize: 12, lineHeight: 18, fontWeight: '600' },
   list: { flex: 1 },
   cards: { alignItems: 'center' },
   touch: { minHeight: 48, width: 106, justifyContent: 'center' },
@@ -88,10 +89,10 @@ const styles = StyleSheet.create({
     top: 12,
     bottom: 12,
     width: 1,
-    backgroundColor: '#ECEDEF',
+    backgroundColor: appColors.accentBorder,
   },
   card: { alignItems: 'flex-start', justifyContent: 'center', gap: 2, paddingHorizontal: 12 },
-  number: { fontSize: 14, lineHeight: 18, fontWeight: '700' },
+  number: { fontSize: 14, lineHeight: 18, fontWeight: '600' },
   direction: { fontSize: 10, lineHeight: 14, maxWidth: 82 },
   pressed: { opacity: 0.6 },
 });

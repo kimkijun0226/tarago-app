@@ -1,3 +1,4 @@
+import { showAlertError } from './alert-error-dialog';
 import { useCallback, useRef, useState } from 'react';
 import { Alert } from 'react-native';
 import { useQueryClient } from '@tanstack/react-query';
@@ -12,13 +13,16 @@ import type { BusAlert, BusAlertInput } from './bus-alert';
 import {
   buildBusAlertInput,
   resolveAlertKind,
-  alertErrorMessage,
   type AlertDraft,
   type AlertKind,
 } from './alert-form';
 
 /** 알림 초안·권한·서버 변경을 연결한다. 서버 원본은 Query에만 둔다. */
-export function useAlertScreen(initialDraft: AlertDraft | null, initialKind: AlertKind = 'time') {
+export function useAlertScreen(
+  initialDraft: AlertDraft | null,
+  initialKind: AlertKind = 'time',
+  onSaved?: () => void,
+) {
   /** 현재 기기에 저장된 서버 알림 목록으로, 필터와 감시 설정의 원본이다. */
   const { data: alerts = [], isPending, isError, isFetching, refetch } = useAlerts();
 
@@ -101,14 +105,15 @@ export function useAlertScreen(initialDraft: AlertDraft | null, initialKind: Ale
       const input = buildBusAlertInput(draft, kind, threshold);
       await prepare(input);
       await saveAsync({ input, id: draft.id });
-      setDraft(null);
+      if (onSaved) onSaved();
+      else setDraft(null);
     } catch (error) {
-      Alert.alert('알림을 저장하지 못했어요', alertErrorMessage(error));
+      showAlertError('알림을 저장하지 못했어요', error);
     } finally {
       operation.current = false;
       setBusy(false);
     }
-  }, [draft, threshold, prepare, saveAsync, kind]);
+  }, [draft, threshold, prepare, saveAsync, kind, onSaved]);
 
   /** 알림 활성화 전 필요한 권한을 확인하고 서버에 반영한다. 준비·저장 함수가 같으면 참조를 유지한다. */
   const toggle = useCallback(
@@ -123,7 +128,7 @@ export function useAlertScreen(initialDraft: AlertDraft | null, initialKind: Ale
         await prepare(input);
         await saveAsync({ input, id: alert.id });
       } catch (error) {
-        Alert.alert('알림을 변경하지 못했어요', alertErrorMessage(error));
+        showAlertError('알림을 변경하지 못했어요', error);
       } finally {
         operation.current = false;
         setBusy(false);
@@ -145,7 +150,7 @@ export function useAlertScreen(initialDraft: AlertDraft | null, initialKind: Ale
             operation.current = true;
             setBusy(true);
             void removeAsync(alert.id)
-              .catch((error) => Alert.alert('삭제하지 못했어요', alertErrorMessage(error)))
+              .catch((error) => showAlertError('삭제하지 못했어요', error))
               .finally(() => {
                 operation.current = false;
                 setBusy(false);
@@ -167,7 +172,7 @@ export function useAlertScreen(initialDraft: AlertDraft | null, initialKind: Ale
       setPushWarning(await preparePush());
       await client.invalidateQueries({ queryKey: ['alerts', 'push-status'] });
     } catch (error) {
-      Alert.alert('알림 연결 확인', alertErrorMessage(error));
+      showAlertError('알림 연결 확인', error);
     } finally {
       operation.current = false;
       setBusy(false);

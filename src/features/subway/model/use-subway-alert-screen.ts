@@ -1,3 +1,4 @@
+import { showAlertError } from '@/features/bus-alert/model/alert-error-dialog';
 import { getSubwayMapStations } from '../api/get-subway-station';
 import { useRef, useState } from 'react';
 import { Alert } from 'react-native';
@@ -8,11 +9,7 @@ import {
   preparePush,
 } from '@/features/bus-alert/model/alert-runtime';
 import { usePushStatus } from '@/features/bus-alert/model/use-alerts';
-import {
-  alertErrorMessage,
-  resolveAlertKind,
-  type AlertKind,
-} from '@/features/bus-alert/model/alert-form';
+import { resolveAlertKind, type AlertKind } from '@/features/bus-alert/model/alert-form';
 import { useSubwayAlerts, useSubwayAlertMutations } from './use-subway-alerts';
 import type { SubwayStationDetail, SubwayTimetable } from '../api/get-subway-station';
 import type { SubwayArrivals } from '../api/get-subway-arrivals';
@@ -26,6 +23,7 @@ export type SubwayAlertDraft = SubwayAlertInput & { id?: string };
 export function useSubwayAlertScreen(
   initial: SubwayAlertDraft | null,
   initialKind: AlertKind = 'time',
+  onSaved?: () => void,
 ) {
   const operation = useRef(false);
   const [kind, setKind] = useState<AlertKind>(() => resolveAlertKind(initial, initialKind));
@@ -114,9 +112,10 @@ export function useSubwayAlertScreen(
         },
         id: input.id,
       });
-      setDraft(null);
+      if (onSaved) onSaved();
+      else setDraft(null);
     } catch (error) {
-      Alert.alert('알림을 저장하지 못했어요', alertErrorMessage(error));
+      showAlertError('알림을 저장하지 못했어요', error);
     } finally {
       operation.current = false;
       setBusy(false);
@@ -149,7 +148,7 @@ export function useSubwayAlertScreen(
       }
       await persist(buildSubwayAlertInput(resolved, kind, threshold));
     } catch (error) {
-      Alert.alert('설정을 확인해주세요', alertErrorMessage(error));
+      showAlertError('설정을 확인해주세요', error);
     } finally {
       setBusy(false);
     }
@@ -171,7 +170,7 @@ export function useSubwayAlertScreen(
           setBusy(true);
           void remove
             .mutateAsync(alert.id)
-            .catch((error) => Alert.alert('삭제하지 못했어요', alertErrorMessage(error)))
+            .catch((error) => showAlertError('삭제하지 못했어요', error))
             .finally(() => {
               operation.current = false;
               setBusy(false);
@@ -187,7 +186,7 @@ export function useSubwayAlertScreen(
     try {
       await prepare();
     } catch (error) {
-      Alert.alert('알림 연결 확인', alertErrorMessage(error));
+      showAlertError('알림 연결 확인', error);
     } finally {
       operation.current = false;
       setBusy(false);

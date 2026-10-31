@@ -53,8 +53,8 @@ export function AlertHistoryBell({ disabled }: { disabled: boolean }) {
             top: 6,
             width: 8,
             height: 8,
-            borderRadius: 4,
-            backgroundColor: colors.brand,
+            borderRadius: 99,
+            backgroundColor: colors.highlight,
           }}
         />
       )}

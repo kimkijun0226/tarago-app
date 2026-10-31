@@ -1,16 +1,13 @@
-/** Phosphor 기반 로컬 에셋으로 시간·위치 알림 진입을 일관되게 표시한다. */
-import { Image, Pressable, StyleSheet, View } from 'react-native';
+import { Pressable } from 'react-native';
+import { SymbolView } from 'expo-symbols';
+import { appColors } from './theme';
 
-const images = {
-  time: require('../../../assets/images/alert-actions/time.png'),
-  location: require('../../../assets/images/alert-actions/location.png'),
-};
-
+/** 시간·위치 알림의 터치 영역은 유지하고 장식 없이 선형 심벌로 표시한다. */
 export function TransitAlertAction({
   kind,
   label,
   onPress,
-  iconSize = 23,
+  iconSize = 22,
 }: {
   kind: 'time' | 'location';
   label: string;
@@ -22,29 +19,27 @@ export function TransitAlertAction({
       accessibilityRole="button"
       accessibilityLabel={label}
       onPress={onPress}
-      style={styles.touch}
+      style={({ pressed }) => ({
+        width: 44,
+        height: 44,
+        alignItems: 'center',
+        justifyContent: 'center',
+        borderRadius: 14,
+        backgroundColor: pressed ? appColors.strongSurface : appColors.accentSurface,
+        marginLeft: 4,
+        opacity: pressed ? 0.7 : 1,
+      })}
     >
-      {({ pressed }) => (
-        <View style={[styles.face, pressed && styles.pressed]}>
-          <Image
-            source={images[kind]}
-            style={{ width: iconSize, height: iconSize }}
-            accessible={false}
-          />
-        </View>
-      )}
+      <SymbolView
+        name={
+          kind === 'time'
+            ? { ios: 'clock', android: 'schedule' }
+            : { ios: 'location', android: 'near_me' }
+        }
+        size={Math.min(iconSize, 24)}
+        tintColor={appColors.accent}
+        weight="regular"
+      />
     </Pressable>
   );
 }
-
-const styles = StyleSheet.create({
-  touch: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center' },
-  face: {
-    width: 30,
-    height: 30,
-    borderRadius: 15,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  pressed: { opacity: 0.65 },
-});

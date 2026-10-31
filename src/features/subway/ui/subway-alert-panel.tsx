@@ -38,7 +38,7 @@ export function SubwayAlertsPanel({
       : null);
   return (
     <>
-      {warning && (
+      {warning && (all || draft) && (
         <AlertNotice
           action="알림 다시 연결"
           disabled={busy}
@@ -62,6 +62,8 @@ export function SubwayAlertsPanel({
             onPress={state.submit}
           />
         </>
+      ) : !all ? (
+        <EmptyAlertCard transport="subway" kind={kind} disabled={busy} />
       ) : list.isPending ? (
         <ActivityIndicator style={styles.loading} color={colors.accent} />
       ) : (
@@ -97,14 +99,6 @@ export function SubwayAlertsPanel({
                 />
               );
             })}
-          {!all && (
-            <EmptyAlertCard
-              transport="subway"
-              kind={kind}
-              compact={visibleAlerts.length > 0}
-              disabled={busy}
-            />
-          )}
         </>
       )}
     </>

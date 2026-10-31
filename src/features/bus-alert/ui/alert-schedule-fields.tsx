@@ -50,6 +50,7 @@ export function AlertScheduleFields({
         />
       </View>
       <View style={styles.card}>
+        <Text style={styles.sectionTitle}>예약 시간 선택</Text>
         <AlertTimeRange
           startTime={value.startTime}
           endTime={value.endTime}

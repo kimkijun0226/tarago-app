@@ -8,7 +8,7 @@ import { MobilitySearch } from '@/features/mobility/ui/mobility-search';
 import { SubwayArrivalSheet } from '@/features/subway/ui/subway-arrival-sheet';
 import { mapUi } from '@/shared/ui/map-design-tokens';
 import { MapView } from '@/shared/ui/map/map-view';
-import { useCallback, useEffect } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { router, useFocusEffect } from 'expo-router';
 import { useAppStore } from '@/shared/model/app-store';
 import { AlertMapPicker } from '@/features/map/ui/alert-map-picker';
@@ -30,6 +30,7 @@ import { styles } from '@/features/map/ui/map-screen.styles';
  */
 export default function MapScreen() {
   const { height: screenHeight } = useWindowDimensions();
+  const [mapHeight, setMapHeight] = useState(screenHeight);
   const alertSelection = useAppStore((state) => state.alertSelection);
   const finishAlertSelection = useAppStore((state) => state.finishAlertSelection);
   /** 지도 표시 값과 사용자 동작을 컨트롤러에서 받아 UI에 연결한다. 각 상태와 동작의 의미는 해당 훅의 선언에서 설명한다. */
@@ -103,8 +104,14 @@ export default function MapScreen() {
     if (!hasSheet) sheetPosition.value = withTiming(screenHeight, { duration: 180 });
   }, [hasSheet, screenHeight, sheetPosition]);
   const locationStyle = useAnimatedStyle(() => {
-    const coveredHeight = Math.max(0, screenHeight - sheetPosition.value);
-    return { transform: [{ translateY: -coveredHeight - Math.min(8, coveredHeight) }] };
+    const top =
+      selectedPlace && !alertSelection
+        ? mapHeight - sheetHeight - 60
+        : hasSheet
+          ? sheetPosition.value - 60
+          : mapHeight - insets.bottom - 64;
+    const visible = top >= insets.top + 64 && !(searchActive && !searchMapActive);
+    return { top: visible ? top : -100, opacity: visible ? 1 : 0 };
   });
   /** 알림 선택 중에도 검색창을 유지한다. */
   const hideSearch = Boolean(!alertSelection && selectedRoute && showRouteSheet);
@@ -129,20 +136,26 @@ export default function MapScreen() {
     >
       <SymbolView
         name={{ ios: 'chevron.left', android: 'arrow_back' }}
-        size={24}
+        size={20}
         tintColor={colors.accent}
       />
     </Pressable>
   );
   if (!initialPosition)
     return (
-      <View style={styles.container}>
+      <View
+        style={styles.container}
+        onLayout={(event) => setMapHeight(event.nativeEvent.layout.height)}
+      >
         <MapLocationGate preparing={preparingLocation} onRetry={prepareInitialPosition} />
         {alertSelection ? alertBackButton : null}
       </View>
     );
   return (
-    <View style={styles.container}>
+    <View
+      style={styles.container}
+      onLayout={(event) => setMapHeight(event.nativeEvent.layout.height)}
+    >
       <MapView
         ref={mapRef}
         style={styles.container}
@@ -191,7 +204,7 @@ export default function MapScreen() {
               ios: 'chevron.left',
               android: 'arrow_back',
             }}
-            size={24}
+            size={20}
             tintColor={colors.accent}
           />
         </Pressable>
@@ -204,12 +217,9 @@ export default function MapScreen() {
             opacity: searchActive && !searchMapActive ? 0 : 1,
             position: 'absolute',
             right: 16,
-            bottom: insets.bottom + 16,
             zIndex: 25,
           },
-          (alertSelection && !searchActive) || selectedPlace
-            ? { transform: [{ translateY: -sheetHeight }] }
-            : locationStyle,
+          locationStyle,
         ]}
       >
         <Pressable
@@ -281,7 +291,7 @@ export default function MapScreen() {
           key={alertSelection?.requestId ?? 'map-search'}
           position={position ?? initialPosition}
           top={insets.top + 12}
-          left={alertSelection && !searchActive ? 76 : 16}
+          left={alertSelection && !searchActive ? 68 : 16}
           alertTransport={alertSelection?.transport}
           onPlace={selectPlace}
           onActivate={activateSearch}
@@ -313,14 +323,14 @@ export default function MapScreen() {
       ) : null}
       {alertSelection && !searchActive ? (
         <AlertMapPicker
-          key={subwayStation ?? alertSelection.requestId}
+          key={`${alertSelection.requestId}:${selectedBusStop?.id ?? subwayStation ?? ''}`}
           busStop={selectedBusStop}
           stationName={subwayStation}
           initialLineName={subwayLineName}
           stationPoint={selectedPlace}
           bottom={insets.bottom}
           onHeightChange={setSheetHeight}
-          onComplete={resetAlertMapSelection}
+          animatedPosition={sheetPosition}
         />
       ) : null}
     </View>

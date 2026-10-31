@@ -36,6 +36,8 @@ export default function AlertsScreen() {
     <AlertsScreenContent
       key={`${params.requestId ?? ''}:${params.alertId ?? ''}:${transport ?? ''}:${kind ?? ''}:${Boolean(saved || savedSubway)}`}
       returnToMap={params.returnTo === 'map'}
+      stackEditor={params.returnTo === 'map-stack'}
+      returnToSubwaySelection={params.returnTo === 'subway-selection'}
       initialDraft={initial}
       initialSubwayDraft={initialSubway}
       initialTransport={transport}

@@ -36,9 +36,12 @@ export function subwayDirectionPresentation(
   const matches = neighbors.filter((n) =>
     namedNeighbors.some((name) => stationKey(name) === stationKey(n.name)),
   );
-  let nextStationName = matches.length === 1 ? matches[0].name : undefined;
+  let nextStationName =
+    matches.length === 1
+      ? matches[0].name
+      : scheduled.find((item) => item.direction === direction)?.nextStationName;
   // 직선 구간의 상·하행만 공식 역번호 인접 관계를 보완값으로 사용한다.
-  if (!nextStationName && line?.lineId !== '1002') {
+  if (!nextStationName && !['1002', '1063'].includes(line?.lineId ?? '')) {
     if (direction === '상행') nextStationName = line?.previousStation?.name;
     else if (direction === '하행') nextStationName = line?.nextStation?.name;
   }
@@ -61,15 +64,109 @@ export function subwayDirectionPresentation(
 export function subwayAlertSubtitle(alert: {
   lineName?: string;
   lineId: string;
+  direction?: string;
   nextStationName?: string;
   destination?: string;
+  destinations?: string[];
   destinationNames?: string[];
 }) {
-  const destinations = alert.destination ? [alert.destination] : (alert.destinationNames ?? []);
+  if ('direction' in alert && alert.direction === 'all')
+    return `${alert.lineName ?? alert.lineId} · 방면 상관없음`;
+  const destinations = alert.destinations ?? (alert.destination ? [alert.destination] : []);
   const bounds = destinations.slice(0, 2).map(destinationLabel).join(' · ');
   return [
     alert.lineName ?? alert.lineId,
     alert.nextStationName ? `${stationLabel(alert.nextStationName)} 방면` : '방면 확인 중',
-    bounds || '행선지 미제공',
+    bounds
+      ? `${bounds}${destinations.length > 2 ? ` 외 ${destinations.length - 2}개` : ''}`
+      : '모든 행선지',
   ].join(' · ');
+}
+
+export const subwayDestinationKey = (name: string) =>
+  name
+    .replace(/\([^)]*\)/g, '')
+    .trim()
+    .replace(/행$/, '')
+    .replace(/역$/, '')
+    .trim();
+
+/** 현재 실시간 열차뿐 아니라 시간표 전체의 종착역을 모아 개별 알림 대상을 제공한다. */
+export function subwayAlertOptions(
+  line: SubwayStationLine | undefined,
+  arrivals: SubwayArrival[],
+  scheduled: SubwayTimetable['directions'] = [],
+  existing?: { direction: string; destination?: string; destinations?: string[] },
+) {
+  type Option = {
+    key: string;
+    direction: string;
+    destination?: string;
+    nextStationName?: string;
+    destinationNames?: string[];
+    title: string;
+    subtitle: string;
+  };
+  const options: Option[] = [
+    { key: 'all', direction: 'all', title: '상관없음', subtitle: '이 호선의 모든 행선지' },
+  ];
+  if (!line) return options;
+  const directions = [
+    ...new Set([
+      ...scheduled.map((item) => item.direction),
+      ...arrivals.filter((item) => item.lineId === line.lineId).map((item) => item.direction),
+      ...(existing?.direction && existing.direction !== 'all' ? [existing.direction] : []),
+    ]),
+  ];
+  for (const direction of directions) {
+    const presentation = subwayDirectionPresentation(line, direction, arrivals, scheduled);
+    const names = new Map<string, string>();
+    for (const name of [
+      ...scheduled
+        .filter((item) => item.direction === direction)
+        .flatMap((item) => item.trains.map((train) => train.destination)),
+      ...arrivals
+        .filter((item) => item.lineId === line.lineId && item.direction === direction)
+        .map((item) => item.destination),
+      ...(existing?.direction === direction
+        ? (existing.destinations ?? (existing.destination ? [existing.destination] : []))
+        : []),
+    ]) {
+      if (name.trim()) names.set(subwayDestinationKey(name), name.replace(/행$/, '').trim());
+    }
+    const bounds = presentation.nextStationName
+      ? `${stationLabel(presentation.nextStationName)} 방면`
+      : `${direction} 방면`;
+    options.push({
+      key: `${direction}:all`,
+      direction,
+      nextStationName: presentation.nextStationName,
+      destinationNames: [...names.values()].slice(0, 12),
+      title: `${bounds} · 전체`,
+      subtitle: '이 방향의 모든 행선지',
+    });
+    for (const [key, destination] of [...names].sort((a, b) => a[1].localeCompare(b[1], 'ko'))) {
+      options.push({
+        key: `${direction}:${key}`,
+        direction,
+        destination,
+        nextStationName: presentation.nextStationName,
+        destinationNames: [destination],
+        title: destinationLabel(destination),
+        subtitle: bounds,
+      });
+    }
+  }
+  return options;
+}
+
+/** 저장된 단일 행선지 알림도 함께 지원한다. */
+export function matchesSubwayDestination(
+  target: { destination?: string; destinations?: string[] },
+  destination: string,
+) {
+  const names = target.destinations ?? (target.destination ? [target.destination] : undefined);
+  return (
+    !names || names.some((name) => subwayDestinationKey(name) === subwayDestinationKey(destination))
+  );
 }

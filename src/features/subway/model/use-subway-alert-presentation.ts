@@ -6,7 +6,9 @@ import type { SubwayAlertInput } from './subway-alert';
 
 /** 새 알림은 저장된 표시 정보를 쓰고, 기존 알림은 Query에서 인접역·행선지를 보완한다. */
 export function useSubwayAlertPresentation(alert: SubwayAlertInput) {
-  const missing = !alert.nextStationName || (!alert.destination && !alert.destinationNames?.length);
+  const missing =
+    alert.direction !== 'all' &&
+    (!alert.nextStationName || (!alert.destination && !alert.destinationNames?.length));
   const station = useSubwayStation(missing ? alert.stationName : '');
   const live = useSubwayArrivals(missing ? alert.stationName : '');
   const [openedAt] = useState(Date.now);

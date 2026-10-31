@@ -45,7 +45,7 @@ export const RouteStopRow = memo(function RouteStopRow({
   const styles = useMemo(() => createStyles(colors), [colors]);
 
   /** 회차 순번 전후를 구분하는 레일 색상이다. 단순 비교이므로 별도 메모를 두지 않는다. */
-  const color = stop.stationSeq <= (turnStationSeq ?? Infinity) ? '#E8AF25' : '#13B976';
+  const color = stop.stationSeq <= (turnStationSeq ?? Infinity) ? '#404040' : '#929292';
   return (
     <View
       key={`${stop.stationId}:${stop.stationSeq}`}
@@ -122,7 +122,7 @@ const createStyles = (colors: ReturnType<typeof useAppTheme>['colors']) =>
     selectedRow: {
       height: SELECTED_ROUTE_STOP_ROW_HEIGHT,
       backgroundColor: colors.accentSurface,
-      borderRadius: 20,
+      borderRadius: 12,
     },
     rail: { width: 72, alignItems: 'center', justifyContent: 'center' },
     railLine: { position: 'absolute', width: 5, top: 0, bottom: 0, left: 33.5 },
@@ -131,18 +131,18 @@ const createStyles = (colors: ReturnType<typeof useAppTheme>['colors']) =>
     railDot: {
       width: 11,
       height: 11,
-      borderRadius: 6,
+      borderRadius: 99,
       backgroundColor: colors.surface,
-      borderWidth: 2,
+      borderWidth: 1,
       borderColor: colors.tertiaryText,
       zIndex: 1,
     },
     selectedDot: {
       width: 15,
       height: 15,
-      borderRadius: 8,
+      borderRadius: 99,
       borderColor: colors.accent,
-      borderWidth: 3,
+      borderWidth: 1,
     },
     busOnRail: {
       position: 'absolute',
@@ -150,7 +150,7 @@ const createStyles = (colors: ReturnType<typeof useAppTheme>['colors']) =>
       top: 6,
       width: 28,
       height: 28,
-      borderRadius: 14,
+      borderRadius: 12,
       alignItems: 'center',
       justifyContent: 'center',
       backgroundColor: colors.accent,
@@ -164,12 +164,12 @@ const createStyles = (colors: ReturnType<typeof useAppTheme>['colors']) =>
     },
     rowTitle: { flexDirection: 'row', alignItems: 'center', gap: 8 },
     stopName: { flexShrink: 1, fontSize: 17, color: colors.text },
-    selectedName: { fontWeight: '700' },
+    selectedName: { fontWeight: '600' },
     turnBadge: {
       width: 38,
       height: 44,
-      borderRadius: 999,
-      borderWidth: 1.5,
+      borderRadius: 12,
+      borderWidth: 1,
       backgroundColor: colors.surface,
       alignItems: 'center',
       justifyContent: 'center',

@@ -77,7 +77,7 @@ export const BusArrivalRow = memo(function BusArrivalRow({
             <TransitAlertAction
               key={kind}
               kind={kind}
-              iconSize={26}
+              iconSize={22}
               label={`${group.busNumber}번 ${kind === 'time' ? '예약' : '위치'} 알림 설정`}
               onPress={() => onConfigureAlert(group, kind)}
             />
@@ -116,10 +116,10 @@ function ArrivalTime({ arrival }: { arrival: BusArrivalGroup['first'] }) {
 const styles = StyleSheet.create({
   row: {
     paddingHorizontal: 0,
-    paddingTop: 10,
-    paddingBottom: 0,
+    paddingTop: 8,
+    paddingBottom: 8,
     borderBottomWidth: 1,
-    borderBottomColor: '#ECEDEF',
+    borderBottomColor: mapUi.separator,
     gap: 0,
     marginHorizontal: 16,
     marginVertical: 0,
@@ -130,7 +130,7 @@ const styles = StyleSheet.create({
   badge: {
     paddingHorizontal: 5,
     height: 18,
-    borderRadius: 4,
+    borderRadius: 6,
     borderWidth: StyleSheet.hairlineWidth,
     alignItems: 'center',
     justifyContent: 'center',
@@ -138,7 +138,7 @@ const styles = StyleSheet.create({
   badgeText: { fontSize: 10, lineHeight: 13, fontWeight: '500', includeFontPadding: false },
   heading: { flexDirection: 'row', alignItems: 'center', gap: 7, minWidth: 0 },
   direction: { color: mapUi.secondaryText, fontSize: 12, lineHeight: 17, flexShrink: 1 },
-  number: { fontSize: 19, lineHeight: 24, fontWeight: '700', color: mapUi.text },
+  number: { fontSize: 18, lineHeight: 24, fontWeight: '600', color: mapUi.text },
   arrivalRow: { height: 44, flexDirection: 'row', alignItems: 'center', gap: 8 },
   times: { flex: 1, minWidth: 0, height: 44, flexDirection: 'row', alignItems: 'center', gap: 5 },
   arrivalTime: {
@@ -151,7 +151,7 @@ const styles = StyleSheet.create({
   },
   eta: {
     flexShrink: 1,
-    fontSize: 14,
+    fontSize: 15,
     lineHeight: 22,
     includeFontPadding: false,
     textAlignVertical: 'center',
@@ -168,7 +168,7 @@ const styles = StyleSheet.create({
   red: { color: mapUi.blue, fontWeight: '500' },
   secondary: { color: mapUi.secondaryText, fontSize: 11, fontWeight: '400' },
   dot: {
-    color: '#C5C7CB',
+    color: mapUi.border,
     fontSize: 14,
     lineHeight: 22,
     includeFontPadding: false,

@@ -1,41 +1,47 @@
 /** @fileoverview 앱 공통 색상·간격·글자·모서리 토큰. 컴포넌트나 서버 상태는 관리하지 않는다. */
-/** Airbnb의 흰 표면·Rausch 코랄을 공유한다. 작은 글자와 흰 CTA 글자는 대비를 확보한 코랄을 쓴다. */
+/** 확정된 교통 말풍선 심볼의 맑은 파랑과 흰 표면을 공유한다. */
 export const appColors = {
-  background: '#FFFFFF',
+  background: '#F6F8FC',
   surface: '#FFFFFF',
-  secondarySurface: '#F7F7F7',
-  strongSurface: '#F2F2F2',
-  text: '#222222',
-  bodyText: '#3F3F3F',
-  secondaryText: '#6A6A6A',
-  tertiaryText: '#929292',
-  separator: '#EBEBEB',
-  borderStrong: '#DDDDDD',
-  brand: '#FF385C',
-  accent: '#D92850',
-  accentActive: '#E00B41',
-  accentSurface: '#FFF7F8',
-  accentBorder: '#FFD1DA',
+  secondarySurface: '#F3F7FD',
+  strongSurface: '#E8F0FC',
+  text: '#1B2D48',
+  bodyText: '#465873',
+  secondaryText: '#586B86',
+  tertiaryText: '#64758D',
+  separator: '#E3EAF4',
+  borderStrong: '#D1DEEF',
+  brand: '#3385F5',
+  accent: '#2468D4',
+  accentActive: '#1E56B3',
+  accentSurface: '#ECF4FF',
+  accentBorder: '#A9C9F5',
   onAccent: '#FFFFFF',
-  danger: '#C13515',
-  warning: '#855000',
-  warningSurface: '#FFF7E8',
-  success: '#24735C',
-  luxe: '#460479',
-  plus: '#92174D',
-  legalLink: '#428BFF',
+  highlight: '#3385F5',
+  highlightSurface: '#ECF4FF',
+  danger: '#A34842',
+  warning: '#805F24',
+  warningSurface: '#FFF7DB',
+  success: '#2468D4',
+  luxe: '#465873',
+  plus: '#586B86',
+  legalLink: '#465873',
 };
 
 /** 작은 여백부터 큰 여백까지 재사용하는 논리 픽셀 간격 토큰이다. */
 const spacing = { xs: 4, sm: 8, md: 12, lg: 16, xl: 20, xxl: 24 };
 
 /** 버튼·카드·시트 모서리 크기를 통일하는 토큰이다. */
-const radius = { sm: 12, md: 16, lg: 20, sheet: 28 };
+export const appRadius = { sm: 8, md: 14, lg: 16, sheet: 16 };
+
+/** 지도 위에 떠 있는 표면에만 적용하는 얕은 그림자. */
+export const appShadows = { floating: '0px 3px 12px rgba(27, 45, 72, 0.07)' };
+const radius = appRadius;
 
 /** 제목·본문·설명의 글자 크기와 두께를 통일하는 텍스트 토큰이다. */
 const type = {
-  largeTitle: { fontSize: 34, fontWeight: '700' as const, letterSpacing: 0.3 },
-  title: { fontSize: 22, fontWeight: '700' as const },
+  largeTitle: { fontSize: 28, fontWeight: '600' as const, letterSpacing: -0.6 },
+  title: { fontSize: 21, fontWeight: '600' as const },
   headline: { fontSize: 17, fontWeight: '600' as const },
   body: { fontSize: 17, lineHeight: 24 },
   footnote: { fontSize: 13, lineHeight: 19 },

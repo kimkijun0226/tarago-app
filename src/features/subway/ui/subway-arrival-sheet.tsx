@@ -293,31 +293,42 @@ export function SubwayArrivalSheet({
       header={
         detailDirection ? (
           <View style={s.detailHeader}>
-            <Pressable onPress={() => setDetailDirection('')}
-              accessibilityRole="button" accessibilityLabel="전체 방면으로 돌아가기"
-              style={({ pressed }) => [s.directionBack, pressed && s.pressed]}>
-              <SymbolView name={{ ios: 'chevron.left', android: 'arrow_back' }}
-                size={18} tintColor={INK} />
+            <Pressable
+              onPress={() => setDetailDirection('')}
+              accessibilityRole="button"
+              accessibilityLabel="전체 방면으로 돌아가기"
+              style={({ pressed }) => [s.directionBack, pressed && s.pressed]}
+            >
+              <SymbolView
+                name={{ ios: 'chevron.left', android: 'arrow_back' }}
+                size={18}
+                tintColor={INK}
+              />
             </Pressable>
-            <Text numberOfLines={1} style={s.detailTitle}>{directionLabel(detailDirection)}</Text>
-          </View>
-        ) : (
-        <View style={[s.header, activeSnap === 'full' && { paddingTop: 0 }]}>
-          <View style={s.titleRow}>
-            <Text accessibilityRole="header" style={s.title}>
-              {title} <Text style={{ color }}>{lineName}</Text>
+            <Text numberOfLines={1} style={s.detailTitle}>
+              {directionLabel(detailDirection)}
             </Text>
           </View>
-        </View>
+        ) : (
+          <View style={[s.header, activeSnap === 'full' && { paddingTop: 0 }]}>
+            <View style={s.titleRow}>
+              <Text accessibilityRole="header" style={s.title}>
+                {title} <Text style={{ color }}>{lineName}</Text>
+              </Text>
+            </View>
+          </View>
         )
       }
     >
       {detailDirection && selectedLineId ? (
         <>
           {(['time', 'location'] as const).map((kind) => (
-            <TransitAlertAction key={kind} kind={kind}
+            <TransitAlertAction
+              key={kind}
+              kind={kind}
               label={`${directionLabel(detailDirection)} ${kind === 'time' ? '예약' : '위치'} 알림 설정`}
-              onPress={() => openAlert(detailDirection, kind)} />
+              onPress={() => openAlert(detailDirection, kind)}
+            />
           ))}
         </>
       ) : null}
@@ -328,7 +339,6 @@ export function SubwayArrivalSheet({
     <>
       <MapBottomSheet
         toolbar={toolbar}
-        edgeToEdge={false}
         onHeightChange={onHeightChange}
         animatedPosition={animatedPosition}
         snap={activeSnap}
@@ -337,65 +347,67 @@ export function SubwayArrivalSheet({
         <View style={s.sheetContent}>
           <BottomSheetScrollView contentContainerStyle={s.content}>
             <View style={s.arrivalSection}>
-              {!detailDirection && <>
-              <SubwayStationRail
-                stationName={stationName}
-                lineName={lineName}
-                line={line}
-                color={color}
-                onSelectStation={onSelectStation}
-              />
-              <View style={s.liveToolbar}>
-                <View style={s.segment}>
-                  <Pressable
-                    accessibilityRole="button"
-                    accessibilityState={{ selected: tab === 'live' }}
-                    hitSlop={{ top: 6, bottom: 6 }}
-                    onPress={() => setTab('live')}
-                    style={({ pressed }) => [
-                      s.segmentButton,
-                      tab === 'live' && s.liveSelected,
-                      pressed && s.pressed,
-                    ]}
-                  >
-                    <Text style={[s.segmentText, { color: tab === 'live' ? BLUE : GRAY }]}>
-                      실시간
-                    </Text>
-                  </Pressable>
-                  <Pressable
-                    accessibilityRole="button"
-                    accessibilityState={{ selected: tab !== 'live' }}
-                    hitSlop={{ top: 6, bottom: 6 }}
-                    onPress={() => setTab('timetable')}
-                    style={({ pressed }) => [
-                      s.segmentButton,
-                      tab !== 'live' && s.scheduleSelected,
-                      pressed && s.pressed,
-                    ]}
-                  >
-                    <Text style={[s.segmentText, { color: tab !== 'live' ? BLUE : GRAY }]}>
-                      시간표
-                    </Text>
-                  </Pressable>
-                </View>
-                <View style={s.refreshRow}>
-                  <Text style={s.clock}>{updatedAt}</Text>
-                  <Pressable
-                    onPress={() => void query.refetch()}
-                    disabled={query.isFetching}
-                    accessibilityRole="button"
-                    accessibilityLabel="도착정보 새로고침"
-                    style={({ pressed }) => [s.refresh, pressed && s.pressed]}
-                  >
-                    {query.isFetching ? (
-                      <ActivityIndicator size="small" color={GRAY} />
-                    ) : (
-                      <Text style={s.refreshIcon}>↻</Text>
-                    )}
-                  </Pressable>
-                </View>
-              </View>
-              </>}
+              {!detailDirection && (
+                <>
+                  <SubwayStationRail
+                    stationName={stationName}
+                    lineName={lineName}
+                    line={line}
+                    color={color}
+                    onSelectStation={onSelectStation}
+                  />
+                  <View style={s.liveToolbar}>
+                    <View style={s.segment}>
+                      <Pressable
+                        accessibilityRole="button"
+                        accessibilityState={{ selected: tab === 'live' }}
+                        hitSlop={{ top: 6, bottom: 6 }}
+                        onPress={() => setTab('live')}
+                        style={({ pressed }) => [
+                          s.segmentButton,
+                          tab === 'live' && s.liveSelected,
+                          pressed && s.pressed,
+                        ]}
+                      >
+                        <Text style={[s.segmentText, { color: tab === 'live' ? BLUE : GRAY }]}>
+                          실시간
+                        </Text>
+                      </Pressable>
+                      <Pressable
+                        accessibilityRole="button"
+                        accessibilityState={{ selected: tab !== 'live' }}
+                        hitSlop={{ top: 6, bottom: 6 }}
+                        onPress={() => setTab('timetable')}
+                        style={({ pressed }) => [
+                          s.segmentButton,
+                          tab !== 'live' && s.scheduleSelected,
+                          pressed && s.pressed,
+                        ]}
+                      >
+                        <Text style={[s.segmentText, { color: tab !== 'live' ? BLUE : GRAY }]}>
+                          시간표
+                        </Text>
+                      </Pressable>
+                    </View>
+                    <View style={s.refreshRow}>
+                      <Text style={s.clock}>{updatedAt}</Text>
+                      <Pressable
+                        onPress={() => void query.refetch()}
+                        disabled={query.isFetching}
+                        accessibilityRole="button"
+                        accessibilityLabel="도착정보 새로고침"
+                        style={({ pressed }) => [s.refresh, pressed && s.pressed]}
+                      >
+                        {query.isFetching ? (
+                          <ActivityIndicator size="small" color={GRAY} />
+                        ) : (
+                          <Text style={s.refreshIcon}>↻</Text>
+                        )}
+                      </Pressable>
+                    </View>
+                  </View>
+                </>
+              )}
               <>
                 {query.isError ? <Text style={s.error}>{errorMessage}</Text> : null}
                 {query.isPending ? <ActivityIndicator color={BLUE} /> : null}
@@ -423,121 +435,131 @@ export function SubwayArrivalSheet({
                   ) : null}
                 </View>
               </>
-              {!detailDirection && <View style={s.transferRow}>
-                <Text style={s.transferTitle}>환승역</Text>
-                {lines.map(([name]) => (
-                  <Pressable
-                    key={name}
-                    onPress={() => setLine(name)}
-                    accessibilityRole="button"
-                    accessibilityLabel={`${name} 선택`}
-                    accessibilityState={{ selected: name === lineName }}
-                    style={({ pressed }) => [
-                      s.badge,
-                      { backgroundColor: LINE_COLORS[name] ?? BLUE },
-                      name === lineName && s.selectedBadge,
-                      pressed && s.pressed,
-                    ]}
-                  >
-                    <Text style={s.badgeText}>{name.replace('호선', '')}</Text>
-                  </Pressable>
-                ))}
-              </View>}
-            </View>
-            {!detailDirection && <>
-            <ScrollView
-              horizontal
-              showsHorizontalScrollIndicator={false}
-              contentContainerStyle={s.actions}
-            >
-              <Pressable
-                onPress={() => {
-                  setTab('timetable');
-                  changeSnap('full');
-                }}
-                accessibilityRole="button"
-                style={({ pressed }) => [s.action, pressed && s.pressed]}
-              >
-                <SymbolView
-                  name={{ ios: 'calendar', android: 'calendar_month' }}
-                  size={18}
-                  tintColor="#333"
-                />
-                <Text style={s.actionText}>전체 시간표</Text>
-              </Pressable>
-              <Pressable
-                onPress={() => {
-                  setTab('firstLast');
-                  changeSnap('full');
-                }}
-                accessibilityRole="button"
-                style={({ pressed }) => [s.action, pressed && s.pressed]}
-              >
-                <TransportIcon transport="subway" size={18} tintColor="#333" />
-                <Text style={s.actionText}>첫차·막차</Text>
-              </Pressable>
-            </ScrollView>
-            <View style={s.sectionDivider} />
-            <SubwayNetworkPanel
-              line={line}
-              lineName={lineName}
-              color={color}
-              pending={station.isPending}
-              onOpen={() => setShowNetwork(true)}
-              onSelectStation={onSelectStation}
-            />
-            <View style={s.sectionDivider} />
-            <View style={s.infoSection}>
-              <Text style={s.sectionTitle}>역정보</Text>
-              {facilities.data?.contacts
-                .filter((item) => item.lineName === lineName)
-                .map((item) => (
-                  <View key={`${item.lineName}:${item.phone}`} style={{ gap: 7, marginTop: 16 }}>
-                    <Text style={s.unavailable}>{item.address}</Text>
-                    <Text style={s.unavailable}>{item.phone}</Text>
-                  </View>
-                ))}
-              <View style={s.infoRule} />
-              <Text style={s.facilityTitle}>시설정보</Text>
-              {facilities.isPending ? (
-                <ActivityIndicator color={BLUE} />
-              ) : facilities.isError ? (
-                <View style={{ gap: 8 }}>
-                  <Text style={s.error}>시설정보를 불러오지 못했습니다.</Text>
-                  <Pressable onPress={() => void facilities.refetch()} accessibilityRole="button">
-                    <Text style={s.link}>다시 조회</Text>
-                  </Pressable>
-                </View>
-              ) : facilities.data?.elevators.length ? (
-                <View style={{ gap: 10 }}>
-                  <Text style={s.unavailable}>
-                    엘리베이터 위치 {facilities.data.elevators.length}개 지점 ·{' '}
-                    {facilities.data.elevatorSourceYear}년 기준
-                  </Text>
-                  <Text style={s.unavailable}>
-                    공식 위치 자료이며 현재 운행 여부는 제공되지 않습니다.
-                  </Text>
-                  {onSelectStation ? (
+              {!detailDirection && (
+                <View style={s.transferRow}>
+                  <Text style={s.transferTitle}>환승역</Text>
+                  {lines.map(([name]) => (
                     <Pressable
-                      onPress={() =>
-                        onSelectStation(stationName, lineName, facilities.data!.elevators[0])
-                      }
+                      key={name}
+                      onPress={() => setLine(name)}
                       accessibilityRole="button"
+                      accessibilityLabel={`${name} 선택`}
+                      accessibilityState={{ selected: name === lineName }}
+                      style={({ pressed }) => [
+                        s.badge,
+                        { backgroundColor: LINE_COLORS[name] ?? BLUE },
+                        name === lineName && s.selectedBadge,
+                        pressed && s.pressed,
+                      ]}
                     >
-                      <Text style={s.link}>첫 번째 엘리베이터 지점 지도 보기</Text>
+                      <Text style={s.badgeText}>{name.replace('호선', '')}</Text>
                     </Pressable>
+                  ))}
+                </View>
+              )}
+            </View>
+            {!detailDirection && (
+              <>
+                <ScrollView
+                  horizontal
+                  showsHorizontalScrollIndicator={false}
+                  contentContainerStyle={s.actions}
+                >
+                  <Pressable
+                    onPress={() => {
+                      setTab('timetable');
+                      changeSnap('full');
+                    }}
+                    accessibilityRole="button"
+                    style={({ pressed }) => [s.action, pressed && s.pressed]}
+                  >
+                    <SymbolView
+                      name={{ ios: 'calendar', android: 'calendar_month' }}
+                      size={18}
+                      tintColor="#333"
+                    />
+                    <Text style={s.actionText}>전체 시간표</Text>
+                  </Pressable>
+                  <Pressable
+                    onPress={() => {
+                      setTab('firstLast');
+                      changeSnap('full');
+                    }}
+                    accessibilityRole="button"
+                    style={({ pressed }) => [s.action, pressed && s.pressed]}
+                  >
+                    <TransportIcon transport="subway" size={18} tintColor="#333" />
+                    <Text style={s.actionText}>첫차·막차</Text>
+                  </Pressable>
+                </ScrollView>
+                <View style={s.sectionDivider} />
+                <SubwayNetworkPanel
+                  line={line}
+                  lineName={lineName}
+                  color={color}
+                  pending={station.isPending}
+                  onOpen={() => setShowNetwork(true)}
+                  onSelectStation={onSelectStation}
+                />
+                <View style={s.sectionDivider} />
+                <View style={s.infoSection}>
+                  <Text style={s.sectionTitle}>역정보</Text>
+                  {facilities.data?.contacts
+                    .filter((item) => item.lineName === lineName)
+                    .map((item) => (
+                      <View
+                        key={`${item.lineName}:${item.phone}`}
+                        style={{ gap: 7, marginTop: 16 }}
+                      >
+                        <Text style={s.unavailable}>{item.address}</Text>
+                        <Text style={s.unavailable}>{item.phone}</Text>
+                      </View>
+                    ))}
+                  <View style={s.infoRule} />
+                  <Text style={s.facilityTitle}>시설정보</Text>
+                  {facilities.isPending ? (
+                    <ActivityIndicator color={BLUE} />
+                  ) : facilities.isError ? (
+                    <View style={{ gap: 8 }}>
+                      <Text style={s.error}>시설정보를 불러오지 못했습니다.</Text>
+                      <Pressable
+                        onPress={() => void facilities.refetch()}
+                        accessibilityRole="button"
+                      >
+                        <Text style={s.link}>다시 조회</Text>
+                      </Pressable>
+                    </View>
+                  ) : facilities.data?.elevators.length ? (
+                    <View style={{ gap: 10 }}>
+                      <Text style={s.unavailable}>
+                        엘리베이터 위치 {facilities.data.elevators.length}개 지점 ·{' '}
+                        {facilities.data.elevatorSourceYear}년 기준
+                      </Text>
+                      <Text style={s.unavailable}>
+                        공식 위치 자료이며 현재 운행 여부는 제공되지 않습니다.
+                      </Text>
+                      {onSelectStation ? (
+                        <Pressable
+                          onPress={() =>
+                            onSelectStation(stationName, lineName, facilities.data!.elevators[0])
+                          }
+                          accessibilityRole="button"
+                        >
+                          <Text style={s.link}>첫 번째 엘리베이터 지점 지도 보기</Text>
+                        </Pressable>
+                      ) : null}
+                    </View>
+                  ) : (
+                    <Text style={s.unavailable}>공개된 시설정보가 없습니다.</Text>
+                  )}
+                  {facilities.data ? (
+                    <Text style={s.attribution}>{facilities.data.attribution}</Text>
+                  ) : query.data ? (
+                    <Text style={s.attribution}>{query.data.attribution}</Text>
                   ) : null}
                 </View>
-              ) : (
-                <Text style={s.unavailable}>공개된 시설정보가 없습니다.</Text>
-              )}
-              {facilities.data ? (
-                <Text style={s.attribution}>{facilities.data.attribution}</Text>
-              ) : query.data ? (
-                <Text style={s.attribution}>{query.data.attribution}</Text>
-              ) : null}
-            </View>
-            </>}
+              </>
+            )}
           </BottomSheetScrollView>
         </View>
       </MapBottomSheet>
@@ -567,15 +589,15 @@ const s = StyleSheet.create({
   content: { paddingBottom: 32, backgroundColor: 'white' },
   header: { paddingVertical: 4 },
   sheetContent: { flex: 1 },
-  pressed: { opacity: 0.7, transform: [{ scale: 0.98 }] },
-  selectedBadge: { borderWidth: 3, borderColor: mapUi.blueSurface },
+  pressed: { opacity: 0.7, transform: [] },
+  selectedBadge: { borderColor: mapUi.blueSurface },
   titleRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
-  title: { fontSize: 20, fontWeight: '700', color: INK, flex: 1, letterSpacing: -0.8 },
+  title: { fontSize: 20, fontWeight: '600', color: INK, flex: 1, letterSpacing: -0.8 },
   actions: { paddingHorizontal: 18, gap: 8, paddingTop: 4, paddingBottom: 16 },
   action: {
     height: 44,
     paddingHorizontal: 13,
-    borderRadius: 24,
+    borderRadius: 12,
     borderWidth: 1,
     borderColor: mapUi.border,
     backgroundColor: mapUi.separator,
@@ -587,10 +609,12 @@ const s = StyleSheet.create({
   actionText: { fontSize: 13, fontWeight: '500', color: INK },
   arrivalSection: { paddingHorizontal: 18, paddingTop: 8 },
   badge: {
+    borderWidth: 1,
+    borderColor: 'transparent',
     minWidth: 44,
     height: 44,
     paddingHorizontal: 10,
-    borderRadius: 22,
+    borderRadius: 12,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -602,21 +626,27 @@ const s = StyleSheet.create({
     marginTop: 4,
     marginBottom: 6,
   },
-  segment: { flexDirection: 'row', padding: 2, backgroundColor: mapUi.separator, borderRadius: 18 },
+  segment: { flexDirection: 'row', padding: 2, backgroundColor: mapUi.separator, borderRadius: 12 },
   segmentButton: {
     paddingHorizontal: 10,
     height: 32,
     justifyContent: 'center',
     borderWidth: 1,
     borderColor: 'transparent',
-    borderRadius: 20,
+    borderRadius: 12,
   },
   liveSelected: { borderColor: mapUi.blueSurface, backgroundColor: mapUi.blueSurface },
   scheduleSelected: { borderColor: mapUi.blueSurface, backgroundColor: mapUi.blueSurface },
   segmentText: { fontSize: 12, fontWeight: '600' },
   detailHeader: { flexDirection: 'row', alignItems: 'center', flex: 1, gap: 4 },
-  detailTitle: { flex: 1, fontSize: 16, fontWeight: '700', color: INK },
-  directionBack: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center', marginLeft: -10 },
+  detailTitle: { flex: 1, fontSize: 16, fontWeight: '600', color: INK },
+  directionBack: {
+    width: 44,
+    height: 44,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginLeft: -10,
+  },
   refreshRow: { flexDirection: 'row', alignItems: 'center', gap: 7 },
   clock: { color: GRAY, fontSize: 11 },
   refresh: {
@@ -635,10 +665,10 @@ const s = StyleSheet.create({
     marginTop: 20,
     marginBottom: 20,
   },
-  transferTitle: { fontSize: 15, fontWeight: '700', color: INK },
+  transferTitle: { fontSize: 15, fontWeight: '600', color: INK },
   sectionDivider: { height: 8, backgroundColor: mapUi.separator },
   infoSection: { paddingHorizontal: 18, paddingVertical: 20 },
-  sectionTitle: { fontSize: 19, fontWeight: '700', color: INK },
+  sectionTitle: { fontSize: 19, fontWeight: '600', color: INK },
   infoRule: { height: 1, backgroundColor: '#EEE', marginHorizontal: -18, marginVertical: 16 },
   facilityTitle: { fontSize: 17, fontWeight: '600', color: '#555', marginBottom: 12 },
   unavailable: { fontSize: 14, lineHeight: 21, color: GRAY },
@@ -647,7 +677,7 @@ const s = StyleSheet.create({
     flex: 1,
     borderWidth: 1,
     borderColor: '#E1E1E1',
-    borderRadius: 20,
+    borderRadius: 12,
     backgroundColor: mapUi.separator,
     alignItems: 'center',
     justifyContent: 'center',

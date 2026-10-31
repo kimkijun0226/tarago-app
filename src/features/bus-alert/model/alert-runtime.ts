@@ -1,3 +1,4 @@
+import { LocationPermissionError, NotificationPermissionError } from './alert-form';
 /** @fileoverview React 외부에서도 실행되는 접근 감지 작업과 네이티브 권한·푸시·지오펜스 경계를 연결한다. */
 import {
   subwayProximityRegions,
@@ -116,8 +117,12 @@ export async function ensureNotificationPermission() {
   }
 
   /** OS 알림 권한 요청 결과로, 거절되면 설정 저장 흐름에 이유를 전달한다. */
-  const permission = await Notifications.requestPermissionsAsync();
-  if (!permission.granted) throw new Error('기기 설정에서 TaraGo의 알림 권한을 허용해주세요.');
+  const current = await Notifications.getPermissionsAsync();
+  const permission =
+    current.granted || !current.canAskAgain
+      ? current
+      : await Notifications.requestPermissionsAsync();
+  if (!permission.granted) throw new NotificationPermissionError();
 }
 
 /** 위치 서비스·전경·백그라운드 권한과 작업 실행 가능 여부를 확인한다. */
@@ -127,19 +132,17 @@ export async function ensureProximityPermission() {
 
   /** 전경 위치 권한의 현재·요청 결과이며 배경 권한보다 먼저 확보해야 한다. */
   let foreground = await Location.getForegroundPermissionsAsync();
-  if (!foreground.granted) foreground = await Location.requestForegroundPermissionsAsync();
-  if (!foreground.granted) throw new Error('정류소 접근 알림을 위해 위치 권한이 필요해요.');
+  if (!foreground.granted && foreground.canAskAgain)
+    foreground = await Location.requestForegroundPermissionsAsync();
+  if (!foreground.granted) throw new LocationPermissionError();
 
   /** 백그라운드 위치 허용 여부로, 접근 감지 권한 요청과 영역 등록 가능 여부를 판단한다. */
   let background = await Location.getBackgroundPermissionsAsync();
-  if (!background.granted) {
+  if (!background.granted && background.canAskAgain) {
     await Location.requestBackgroundPermissionsAsync();
     background = await Location.getBackgroundPermissionsAsync();
   }
-  if (!background.granted)
-    throw new Error(
-      '위치 권한을 항상 허용해주세요. Android에서는 위치 권한 설정에서 모든 시간 허용을 선택해주세요.',
-    );
+  if (!background.granted) throw new LocationPermissionError();
   if (!(await TaskManager.isAvailableAsync()))
     throw new Error('접근 알림은 새 개발 빌드에서 사용할 수 있어요.');
 }

@@ -37,28 +37,29 @@ export function AppButton({
       disabled={disabled || loading}
       onPress={onPress}
       style={({ pressed }) => ({
-        minHeight: 52,
-        borderRadius: 18,
+        minHeight: 50,
+        borderRadius: 14,
         paddingHorizontal: 16,
         alignItems: 'center',
         justifyContent: 'center',
-        backgroundColor: variant === 'primary' ? colors.accent : colors.secondarySurface,
+        backgroundColor:
+          variant === 'primary'
+            ? pressed
+              ? colors.accentActive
+              : colors.accent
+            : pressed
+              ? colors.strongSurface
+              : colors.accentSurface,
         borderWidth: 1,
-        borderColor: variant === 'primary' ? colors.accent : colors.separator,
-        boxShadow:
-          disabled || loading || pressed
-            ? 'none'
-            : variant === 'primary'
-              ? '0 3px 0 #FFD1DA'
-              : '0 3px 0 #EBEBEB',
-        transform: [{ translateY: pressed && !disabled && !loading ? 2 : 0 }],
+        borderColor: variant === 'primary' ? colors.accent : colors.accentBorder,
+        boxShadow: 'none',
         opacity: disabled || loading ? 0.5 : pressed ? 0.9 : 1,
       })}
     >
       {loading ? (
         <ActivityIndicator color={foreground} />
       ) : (
-        <Text style={{ color: foreground, fontSize: 17, fontWeight: '600', textAlign: 'center' }}>
+        <Text style={{ color: foreground, fontSize: 16, fontWeight: '600', textAlign: 'center' }}>
           {title}
         </Text>
       )}

@@ -1,10 +1,14 @@
 import { AppHeader } from '@/shared/ui/app-header';
 import { AlertSetupPreview } from './alert-setup-preview';
 import { TransportIcon } from '@/shared/ui/transport-icon';
-import type { ComponentProps, ReactNode } from 'react';
+import { useCallback, useRef, useState, type ComponentProps, type ReactNode } from 'react';
+import { useQuery } from '@tanstack/react-query';
+import * as Location from 'expo-location';
+import { ensureProximityPermission } from '../model/alert-runtime';
+import { showAlertError } from '../model/alert-error-dialog';
 import { SymbolView } from 'expo-symbols';
-import { ActivityIndicator, Pressable, Switch, Text, View } from 'react-native';
-import { router } from 'expo-router';
+import { ActivityIndicator, AppState, Pressable, Switch, Text, View } from 'react-native';
+import { router, useFocusEffect } from 'expo-router';
 import { useAppStore } from '@/shared/model/app-store';
 import { WEEKDAYS, WEEKDAY_ORDER } from '../model/alert-form';
 import { alertColors as colors } from './alert-design';
@@ -41,16 +45,11 @@ export function AlertIconButton({
       style={({ pressed }) => ({
         width: compact ? 32 : 44,
         height: compact ? 32 : 44,
-        borderRadius: compact ? 12 : 16,
+        borderRadius: 14,
         alignItems: 'center',
         justifyContent: 'center',
-        backgroundColor: plain
-          ? 'transparent'
-          : warning
-            ? colors.warningSurface
-            : colors.accentSurface,
-        opacity: disabled ? 0.4 : 1,
-        transform: [{ translateY: pressed ? 2 : 0 }, { scale: pressed ? 0.97 : 1 }],
+        backgroundColor: pressed && !plain ? colors.secondarySurface : 'transparent',
+        opacity: disabled ? 0.4 : pressed ? 0.7 : 1,
       })}
     >
       <SymbolView
@@ -75,34 +74,74 @@ export function EmptyAlertCard({
   disabled?: boolean;
 }) {
   const startSelection = useAppStore((s) => s.startAlertSelection);
+  const [preparing, setPreparing] = useState(false);
+  const operation = useRef(false);
+  const permission = useQuery({
+    queryKey: ['permissions', 'location', 'background'],
+    queryFn: () => Location.getBackgroundPermissionsAsync(),
+    enabled: kind === 'location',
+    retry: false,
+  });
+  const refetchPermission = permission.refetch;
+  useFocusEffect(
+    useCallback(() => {
+      if (kind !== 'location') return;
+      void refetchPermission();
+      const subscription = AppState.addEventListener('change', (state) => {
+        if (state === 'active') void refetchPermission();
+      });
+      return () => subscription.remove();
+    }, [kind, refetchPermission]),
+  );
+  const beginSelection = async () => {
+    if (disabled || operation.current) return;
+    operation.current = true;
+    setPreparing(true);
+    try {
+      if (kind === 'location') {
+        await ensureProximityPermission();
+        await refetchPermission();
+      }
+      startSelection({ transport, kind, requestId: String(Date.now()) });
+      router.navigate('/');
+    } catch (error) {
+      showAlertError('위치 알림 설정', error);
+    } finally {
+      operation.current = false;
+      setPreparing(false);
+    }
+  };
   return (
     <Pressable
       accessibilityRole="button"
       accessibilityLabel={`${transport === 'bus' ? '버스' : '지하철'} 알림 추가`}
-      accessibilityHint="지도에서 알림 대상을 선택합니다"
-      accessibilityState={{ disabled }}
-      disabled={disabled}
-      onPress={() => {
-        startSelection({ transport, kind, requestId: String(Date.now()) });
-        router.navigate('/');
-      }}
+      accessibilityHint="필요한 권한을 확인한 뒤 지도에서 알림 대상을 선택합니다"
+      accessibilityState={{ disabled: disabled || preparing, busy: preparing }}
+      disabled={disabled || preparing}
+      onPress={() => void beginSelection()}
       style={({ pressed }) => [
         styles.card,
         styles.savedCard,
         {
-          borderStyle: 'dashed',
-          borderWidth: 1.5,
-          borderColor: colors.accentBorder,
+          borderStyle: 'solid',
+          borderWidth: 1,
+          borderColor: colors.separator,
           justifyContent: 'center',
           alignItems: 'center',
           gap: 12,
-          minHeight: compact ? 220 : 260,
-          opacity: disabled ? 0.4 : 1,
-          transform: [{ translateY: pressed ? 2 : 0 }, { scale: pressed ? 0.99 : 1 }],
+          minHeight: compact ? 200 : 220,
+          paddingHorizontal: 20,
+          opacity: disabled ? 0.4 : pressed ? 0.7 : 1,
         },
       ]}
     >
-      <AlertSetupPreview transport={transport} kind={kind} />
+      <AlertSetupPreview
+        transport={transport}
+        kind={kind}
+        needsLocationPermission={kind === 'location' && permission.data?.granted !== true}
+        locationPermissionError={kind === 'location' && permission.isError}
+        preparing={preparing}
+      />
     </Pressable>
   );
 }
@@ -123,16 +162,15 @@ export function AlertPrimaryButton({
       disabled={busy}
       onPress={onPress}
       style={({ pressed }) => ({
-        minHeight: 54,
-        borderRadius: 20,
+        minHeight: 50,
+        borderRadius: 14,
         padding: 16,
         justifyContent: 'center',
         alignItems: 'center',
         backgroundColor: colors.accent,
-        borderBottomWidth: pressed ? 1 : 4,
-        borderBottomColor: colors.accentActive,
-        opacity: busy ? 0.6 : 1,
-        transform: [{ translateY: pressed ? 2 : 0 }],
+        borderWidth: 1,
+        borderColor: colors.accent,
+        opacity: busy ? 0.6 : pressed ? 0.8 : 1,
       })}
     >
       {busy ? (
@@ -182,30 +220,30 @@ export function AlertPageHeader({
               onPress={() => onTransportChange(value)}
               style={({ pressed }) => ({
                 flex: 1,
-                minHeight: 104,
-                gap: 10,
-                padding: 16,
+                minHeight: 80,
+                gap: 12,
+                padding: 14,
+                flexDirection: 'row',
                 alignItems: 'center',
                 justifyContent: 'center',
-                borderRadius: 24,
-                borderWidth: 1.5,
-                borderBottomWidth: transport === value && !pressed ? 4 : 1.5,
-                borderColor: transport === value ? colors.accentBorder : colors.separator,
-                backgroundColor:
-                  transport === value ? colors.accentSurface : colors.secondarySurface,
-                transform: [{ translateY: pressed ? 2 : 0 }, { scale: pressed ? 0.98 : 1 }],
+                borderRadius: 14,
+                borderWidth: 1,
+                borderBottomWidth: 1,
+                borderColor: transport === value ? colors.accent : colors.borderStrong,
+                backgroundColor: transport === value ? colors.accent : colors.surface,
+                opacity: busy ? 0.5 : pressed ? 0.85 : 1,
               })}
             >
               <TransportIcon
                 transport={value}
-                size={30}
-                tintColor={transport === value ? colors.accent : colors.secondaryText}
+                size={28}
+                tintColor={transport === value ? colors.onAccent : colors.bodyText}
               />
               <Text
                 style={{
-                  fontSize: 17,
+                  fontSize: 15,
                   fontWeight: '600',
-                  color: transport === value ? colors.accent : colors.secondaryText,
+                  color: transport === value ? colors.onAccent : colors.bodyText,
                 }}
               >
                 {value === 'bus' ? '버스' : '지하철'}
@@ -239,8 +277,7 @@ export function AlertChoice({
         styles.chip,
         selected && styles.selectedChip,
         {
-          opacity: disabled ? 0.4 : 1,
-          transform: [{ translateY: pressed ? 2 : 0 }, { scale: pressed ? 0.97 : 1 }],
+          opacity: disabled ? 0.4 : pressed ? 0.7 : 1,
         },
       ]}
     >
@@ -273,7 +310,7 @@ export function AlertWeekdays({
           }
           style={({ pressed }) => [
             styles.weekday,
-            { opacity: disabled ? 0.4 : 1, transform: [{ translateY: pressed ? 2 : 0 }] },
+            { opacity: disabled ? 0.4 : pressed ? 0.7 : 1, transform: [] },
           ]}
         >
           <View style={[styles.weekdayCircle, days.includes(day) && styles.selectedChip]}>
@@ -343,7 +380,7 @@ export function SavedAlertCard({
       style={[
         styles.card,
         styles.savedCard,
-        compact && { minHeight: 120, padding: 12, gap: 6, borderRadius: 16 },
+        compact && { minHeight: 0, padding: 16, gap: 10 },
         !enabled && styles.dim,
       ]}
     >
@@ -354,10 +391,10 @@ export function SavedAlertCard({
           onPress={onOpen}
           style={{ flex: 1, gap: 4 }}
         >
-          <Text style={[styles.stationName, compact && { fontSize: 16 }]}>{title}</Text>
+          <Text style={[styles.stationName, compact && { fontSize: 17 }]}>{title}</Text>
           <Text
             numberOfLines={compact ? 1 : undefined}
-            style={[styles.help, compact && { fontSize: 12, lineHeight: 16 }]}
+            style={[styles.help, compact && { fontSize: 13, lineHeight: 18 }]}
           >
             {subtitle}
           </Text>
@@ -368,13 +405,13 @@ export function SavedAlertCard({
             disabled={busy}
             value={enabled}
             onValueChange={onToggle}
-            trackColor={{ true: colors.accent }}
+            trackColor={{ false: colors.borderStrong, true: colors.brand }}
           />
         </View>
       </View>
       <Text
         style={{
-          fontSize: compact ? 15 : 24,
+          fontSize: compact ? 16 : 24,
           fontWeight: '600',
           color: colors.text,
           fontVariant: ['tabular-nums'],
@@ -384,7 +421,7 @@ export function SavedAlertCard({
       </Text>
       <Text
         numberOfLines={compact ? 1 : undefined}
-        style={[styles.detail, compact && { fontSize: 11 }]}
+        style={[styles.detail, compact && { fontSize: 12, lineHeight: 18 }]}
       >
         {detail}
       </Text>
@@ -400,7 +437,7 @@ export function SavedAlertCard({
           gap: 16,
           borderTopWidth: 1,
           borderTopColor: colors.separator,
-          paddingTop: compact ? 6 : 12,
+          paddingTop: 10,
         }}
       >
         <Pressable

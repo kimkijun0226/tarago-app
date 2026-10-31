@@ -94,9 +94,10 @@ export function AlertEditorForm({
             <View style={styles.heading}>
               <View style={{ flex: 1, gap: 4 }}>
                 <Text style={styles.sectionTitle}>차량번호 표시</Text>
+                <Text style={styles.detail}>버스 번호판 뒤 4자리를 알림에 표시해요.</Text>
               </View>
               <Switch
-                accessibilityLabel="차량번호 표시"
+                accessibilityLabel="버스 번호판 뒤 4자리 표시"
                 disabled={disabled}
                 value={draft.showVehicleNumber !== false}
                 onValueChange={(showVehicleNumber) => setDraft({ ...draft, showVehicleNumber })}

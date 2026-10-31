@@ -282,7 +282,7 @@ const createStyles = (colors: ReturnType<typeof useAppTheme>['colors']) =>
       paddingVertical: 4,
       borderRadius: 12,
     },
-    title: { fontSize: 23, fontWeight: '700', color: colors.text },
+    title: { fontSize: 23, fontWeight: '600', color: colors.text },
     action: {
       color: colors.accent,
       fontSize: 15,
@@ -304,7 +304,7 @@ const createStyles = (colors: ReturnType<typeof useAppTheme>['colors']) =>
     },
     footer: {
       margin: 16,
-      borderRadius: 20,
+      borderRadius: 12,
       backgroundColor: colors.background,
       flexDirection: 'row',
       justifyContent: 'space-between',

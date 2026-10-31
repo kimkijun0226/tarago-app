@@ -117,9 +117,9 @@ export function NotificationHistoryScreen() {
             style={{
               backgroundColor: colors.surface,
               borderWidth: 1,
-              borderBottomWidth: 3,
+              borderBottomWidth: 1,
               borderColor: colors.separator,
-              borderRadius: 24,
+              borderRadius: 12,
               padding: 18,
               gap: 12,
             }}
@@ -129,7 +129,7 @@ export function NotificationHistoryScreen() {
                 style={{
                   width: 40,
                   height: 40,
-                  borderRadius: 15,
+                  borderRadius: 12,
                   alignItems: 'center',
                   justifyContent: 'center',
                   backgroundColor: colors.accentSurface,
@@ -138,7 +138,7 @@ export function NotificationHistoryScreen() {
                 <TransportIcon transport={item.transport} size={21} tintColor={colors.accent} />
               </View>
               <View style={{ flex: 1, gap: 4 }}>
-                <Text style={{ color: colors.text, fontSize: 16, fontWeight: '700' }}>
+                <Text style={{ color: colors.text, fontSize: 16, fontWeight: '600' }}>
                   {item.title}
                 </Text>
                 <Text style={{ color: colors.secondaryText, fontSize: 12 }}>

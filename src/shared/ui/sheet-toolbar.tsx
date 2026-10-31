@@ -1,6 +1,5 @@
 /** @fileoverview 바텀 시트의 공통 추가 동작·닫기 버튼 배치를 담당한다. */
 import { SymbolView } from 'expo-symbols';
-import bold from 'expo-symbols/androidWeights/bold';
 import type { ReactNode } from 'react';
 import { Pressable, StyleSheet, View, type StyleProp, type ViewStyle } from 'react-native';
 import { mapUi } from './map-design-tokens';
@@ -39,7 +38,7 @@ export function SheetToolbar({
           >
             <SymbolView
               name={{ ios: 'xmark', android: 'close' }}
-              weight={{ ios: 'bold', android: bold }}
+              weight="regular"
               size={18}
               tintColor={mapUi.blue}
             />
@@ -53,7 +52,7 @@ export function SheetToolbar({
 const styles = StyleSheet.create({
   toolbar: {
     flexDirection: 'row',
-    paddingHorizontal: 14,
+    paddingHorizontal: 16,
     paddingVertical: 6,
   },
   header: { flex: 1, minWidth: 0 },
@@ -63,11 +62,11 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     gap: 6,
   },
-  pressed: { transform: [{ translateY: 1 }, { scale: 0.97 }], boxShadow: 'none' },
+  pressed: { opacity: 0.6 },
   button: {
     width: 44,
     height: 44,
-    borderRadius: 16,
+    borderRadius: 12,
     alignItems: 'center',
     justifyContent: 'center',
   },

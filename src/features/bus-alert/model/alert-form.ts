@@ -121,3 +121,19 @@ export function alertErrorMessage(error: unknown) {
       ? error.message
       : '네트워크와 권한 설정을 확인해주세요.';
 }
+
+/** 알림 권한 거절을 저장·통신 실패와 구분한다. */
+export class NotificationPermissionError extends Error {
+  constructor() {
+    super('타라고의 알림 권한을 허용해주세요.');
+    this.name = 'NotificationPermissionError';
+  }
+}
+
+/** 백그라운드 위치 거절을 저장·통신 오류와 구별한다. */
+export class LocationPermissionError extends Error {
+  constructor() {
+    super('위치 알림을 받으려면 위치 권한을 항상 허용해주세요.');
+    this.name = 'LocationPermissionError';
+  }
+}

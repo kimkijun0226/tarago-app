@@ -1,14 +1,14 @@
 {
   "expo": {
-    "name": "tarago",
+    "name": "TaraGo",
     "slug": "tarago",
     "version": "1.0.0",
     "orientation": "portrait",
-    "icon": "./assets/images/icon.png",
+    "icon": "./assets/brand/tarago-icon.png",
     "scheme": "tarago",
     "userInterfaceStyle": "light",
     "ios": {
-      "icon": "./assets/expo.icon",
+      "icon": "./assets/brand/tarago-icon.png",
       "bundleIdentifier": "com.anonymous.tarago",
       "infoPlist": {
         "NSAppTransportSecurity": {
@@ -22,10 +22,9 @@
     },
     "android": {
       "adaptiveIcon": {
-        "backgroundColor": "#E6F4FE",
-        "foregroundImage": "./assets/images/android-icon-foreground.png",
-        "backgroundImage": "./assets/images/android-icon-background.png",
-        "monochromeImage": "./assets/images/android-icon-monochrome.png"
+        "backgroundColor": "#FFFFFF",
+        "foregroundImage": "./assets/brand/tarago-adaptive.png",
+        "monochromeImage": "./assets/brand/tarago-monochrome.png"
       },
       "predictiveBackGestureEnabled": false,
       "package": "com.anonymous.tarago",
@@ -42,19 +41,22 @@
       [
         "expo-splash-screen",
         {
-          "backgroundColor": "#FF385C",
-          "image": "./assets/images/splash-icon.png",
-          "imageWidth": 76
+          "backgroundColor": "#FFFFFF",
+          "image": "./assets/brand/tarago-mark.png",
+          "imageWidth": 112
         }
       ],
       [
         "expo-build-properties",
         {
           "ios": {
-            "enableSceneSupport": true
+            "enableSceneSupport": true,
+            "usePrecompiledModules": false
           },
           "android": {
-            "extraMavenRepos": ["https://repository.map.naver.com/archive/maven"]
+            "extraMavenRepos": [
+              "https://repository.map.naver.com/archive/maven"
+            ]
           }
         }
       ],
@@ -78,7 +80,8 @@
           "microphonePermission": false
         }
       ],
-      "./plugins/with-naver-map"
+      "./plugins/with-naver-map",
+      "./plugins/with-tarago-launch-screen"
     ],
     "experiments": {
       "typedRoutes": true,
@@ -91,6 +94,9 @@
       }
     },
     "owner": "kimkijun",
-    "platforms": ["ios", "android"]
+    "platforms": [
+      "ios",
+      "android"
+    ]
   }
 }

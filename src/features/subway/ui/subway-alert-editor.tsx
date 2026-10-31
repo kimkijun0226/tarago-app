@@ -1,3 +1,4 @@
+import { SubwayAlertDirectionFields } from './subway-alert-direction-fields';
 import { AlertTargetSummary } from '@/features/bus-alert/ui/alert-target-summary';
 import type { Dispatch, SetStateAction } from 'react';
 import { ActivityIndicator, Text, View } from 'react-native';
@@ -7,7 +8,11 @@ import { alertColors as colors } from '@/features/bus-alert/ui/alert-design';
 import { createStyles } from '@/features/bus-alert/ui/alert-screen-styles';
 import { useSubwayArrivals } from '../model/use-subway-arrivals';
 import { useSubwayAlertPresentation } from '../model/use-subway-alert-presentation';
-import { subwayAlertSubtitle, destinationLabel } from '../model/subway-direction';
+import {
+  subwayAlertSubtitle,
+  destinationLabel,
+  matchesSubwayDestination,
+} from '../model/subway-direction';
 import type { SubwayAlertDraft } from '../model/use-subway-alert-screen';
 const styles = createStyles(colors);
 
@@ -27,13 +32,13 @@ export function SubwayAlertEditor({
   const presentation = useSubwayAlertPresentation(draft);
   const showSchedule = draft.scheduledEnabled !== false;
   const showLocation = Boolean(draft.proximityEnabled);
-  const live = useSubwayArrivals(showSchedule ? draft.stationName : '');
+  const live = useSubwayArrivals(showSchedule ? draft.stationName : '', draft);
   const arrivals =
     live.data?.arrivals.filter(
       (a) =>
         a.lineId === draft.lineId &&
-        a.direction === draft.direction &&
-        (!draft.destination || a.destination === draft.destination),
+        (draft.direction === 'all' || a.direction === draft.direction) &&
+        matchesSubwayDestination(draft, a.destination),
     ) ?? [];
   return (
     <>
@@ -44,7 +49,12 @@ export function SubwayAlertEditor({
       >
         {showSchedule && (
           <View
-            style={{ borderTopWidth: 1, borderTopColor: colors.separator, paddingTop: 10, gap: 6 }}
+            style={{
+              borderTopWidth: 1,
+              borderTopColor: colors.separator,
+              paddingTop: 10,
+              gap: 6,
+            }}
           >
             <Text style={styles.sectionTitle}>도착정보</Text>
             {live.isError ? (
@@ -56,6 +66,7 @@ export function SubwayAlertEditor({
             ) : (
               arrivals.slice(0, 2).map((a, i) => (
                 <Text key={`${a.trainId}:${i}`} style={styles.help}>
+                  {a.etaSource === 'schedule' ? '시간표 기준 · ' : ''}
                   {destinationLabel(a.destination)} · {a.arrivalMessage || '시간 확인 중'}
                 </Text>
               ))
@@ -64,6 +75,7 @@ export function SubwayAlertEditor({
         )}
       </AlertTargetSummary>
 
+      <SubwayAlertDirectionFields draft={draft} setDraft={setDraft} disabled={disabled} />
       {showSchedule && (
         <AlertScheduleFields
           value={draft}

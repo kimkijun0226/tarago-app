@@ -45,12 +45,11 @@ export function MapLocationGate({
             onPress={() => void onRetry()}
             style={({ pressed }) => ({
               minHeight: 48,
-              borderRadius: 20,
+              borderRadius: 12,
               backgroundColor: mapUi.background,
               borderWidth: 1,
-              borderBottomWidth: 3,
+              borderBottomWidth: 1,
               borderColor: mapUi.accentBorder,
-              transform: [{ scale: pressed ? 0.97 : 1 }],
             })}
           >
             <Text style={{ color: mapUi.text, fontSize: 18, padding: 12 }}>다시 찾기</Text>

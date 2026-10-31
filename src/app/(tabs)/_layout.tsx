@@ -28,14 +28,14 @@ export default function TabsLayout() {
 
   return (
     <NativeTabs
-      hidden={isMapTabHidden}
+      hidden={pathname === '/' && isMapTabHidden}
       tintColor={appColors.accent}
       backgroundColor={appColors.surface}
       disableTransparentOnScrollEdge
       iconColor={{ default: appColors.secondaryText, selected: appColors.accent }}
       labelStyle={{
         default: { color: appColors.secondaryText, fontSize: 11, fontWeight: '600' },
-        selected: { color: appColors.accent, fontSize: 11, fontWeight: '700' },
+        selected: { color: appColors.accent, fontSize: 11, fontWeight: '600' },
       }}
     >
       <NativeTabs.Trigger name="index">

@@ -1,3 +1,4 @@
+import { appShadows } from '@/shared/ui/theme';
 /** 지도 검색 진입 버튼과 검색어 지우기·검색 종료 동작을 분리한다. */
 import { mapUi } from '@/shared/ui/map-design-tokens';
 import { SymbolView } from 'expo-symbols';
@@ -96,7 +97,7 @@ export function MobilitySearchBar({
         >
           <SymbolView
             name={{ ios: 'magnifyingglass', android: 'search' }}
-            size={22}
+            size={20}
             weight="semibold"
             tintColor="#FFFFFF"
           />
@@ -120,36 +121,36 @@ const styles = StyleSheet.create({
   pill: {
     flex: 1,
     minWidth: 0,
-    height: 56,
+    height: 44,
     flexDirection: 'row',
     alignItems: 'center',
-    borderRadius: 28,
+    borderRadius: 14,
     backgroundColor: '#FFFFFF',
     paddingLeft: 12,
     paddingRight: 10,
-    borderWidth: 1.25,
-    borderBottomWidth: 2,
+    borderWidth: 1,
+    borderBottomWidth: 1,
     borderColor: mapUi.border,
-    boxShadow: '0px 2px 8px #2222220A',
+    boxShadow: appShadows.floating,
   },
-  editingPill: { height: 44, borderRadius: 22, borderBottomWidth: 1.25, boxShadow: 'none' },
+  editingPill: { height: 44, borderRadius: 14, borderBottomWidth: 1, boxShadow: 'none' },
   entry: {
     flex: 1,
     minWidth: 0,
-    height: 50,
-    paddingLeft: 8,
+    height: 44,
+    paddingLeft: 0,
     justifyContent: 'center',
     paddingRight: 8,
   },
-  placeholder: { fontSize: 15, color: mapUi.secondaryText, fontWeight: '500' },
+  placeholder: { fontSize: 15, color: mapUi.secondaryText, fontWeight: '400' },
   input: { flex: 1, minWidth: 0, height: 40, color: mapUi.text, fontSize: 15, paddingVertical: 0 },
   back: { width: 30, height: 44, alignItems: 'center', justifyContent: 'center' },
   endSearch: {
     width: 44,
     height: 44,
-    borderRadius: 22,
+    borderRadius: 14,
     backgroundColor: '#FFFFFF',
-    borderWidth: 1.25,
+    borderWidth: 1,
     borderColor: mapUi.border,
     alignItems: 'center',
     justifyContent: 'center',
@@ -157,20 +158,20 @@ const styles = StyleSheet.create({
   clearCircle: {
     width: 20,
     height: 20,
-    borderRadius: 10,
-    backgroundColor: '#A4A6AC',
+    borderRadius: 14,
+    backgroundColor: mapUi.secondaryText,
     marginHorizontal: 8,
   },
   clear: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center' },
   submit: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    backgroundColor: mapUi.brand,
+    width: 44,
+    height: 44,
+    borderRadius: 14,
+    backgroundColor: mapUi.blue,
     alignItems: 'center',
     justifyContent: 'center',
-    boxShadow: '0px 1px 0px #D92850',
+    boxShadow: appShadows.floating,
   },
-  submitPressed: { backgroundColor: '#D92850', transform: [{ translateY: 1 }, { scale: 0.96 }] },
+  submitPressed: { backgroundColor: mapUi.blue, opacity: 0.85 },
   pressed: { opacity: 0.7 },
 });

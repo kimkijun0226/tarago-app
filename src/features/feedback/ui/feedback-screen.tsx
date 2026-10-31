@@ -172,17 +172,18 @@ export function FeedbackScreen() {
   );
 }
 const s = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: c.surface },
+  screen: { flex: 1, backgroundColor: c.background },
   body: { paddingHorizontal: 20, gap: 24 },
   field: { gap: 8 },
   label: { fontSize: 14, fontWeight: '600', color: c.text },
   required: { color: c.accent },
   input: {
     borderWidth: 1,
-    borderColor: c.separator,
-    borderRadius: 16,
-    paddingHorizontal: 14,
-    paddingVertical: 13,
+    borderColor: c.borderStrong,
+    backgroundColor: c.surface,
+    borderRadius: 14,
+    paddingHorizontal: 16,
+    paddingVertical: 15,
     color: c.text,
     fontSize: 15,
   },
@@ -190,7 +191,8 @@ const s = StyleSheet.create({
   attach: {
     width: 76,
     height: 76,
-    borderRadius: 16,
+    borderRadius: 14,
+    backgroundColor: c.accentSurface,
     borderStyle: 'dashed',
     borderWidth: 1,
     borderColor: c.accentBorder,
@@ -198,11 +200,11 @@ const s = StyleSheet.create({
     justifyContent: 'center',
   },
   preview: { width: 120, height: 120 },
-  image: { width: 120, height: 120, borderRadius: 16 },
-  remove: { position: 'absolute', top: 5, right: 5, backgroundColor: c.surface, borderRadius: 15 },
+  image: { width: 120, height: 120, borderRadius: 14 },
+  remove: { position: 'absolute', top: 5, right: 5, backgroundColor: c.surface, borderRadius: 14 },
   send: {
     minHeight: 48,
-    borderRadius: 24,
+    borderRadius: 14,
     backgroundColor: c.accent,
     alignItems: 'center',
     justifyContent: 'center',

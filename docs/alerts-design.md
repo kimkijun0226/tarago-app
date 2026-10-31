@@ -1,5 +1,6 @@
 # 타라고 알림 화면
 
+> 현재 시각 기준은 [design-system.md](design-system.md)를 우선합니다. 아래의 코랄·게임·둥근 형태 관련 설명은 이전 디자인 기록입니다.
 Airbnb의 밝은 배경, 둥근 요소, 명확한 정보 위계를 참고한다.
 참고: https://getdesign.md/design-md/airbnb/preview
 

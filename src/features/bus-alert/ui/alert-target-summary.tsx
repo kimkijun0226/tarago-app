@@ -18,7 +18,7 @@ export function AlertTargetSummary({
   return (
     <View style={s.card}>
       <View style={s.heading}>
-        <TransportIcon transport={transport} size={28} tintColor={c.accent} />
+        <TransportIcon transport={transport} size={24} tintColor={c.accent} />
         <View style={s.text}>
           <Text style={s.title}>{title}</Text>
           <Text style={s.subtitle}>{subtitle}</Text>
@@ -31,7 +31,7 @@ export function AlertTargetSummary({
 const s = StyleSheet.create({
   card: {
     padding: 16,
-    borderRadius: 20,
+    borderRadius: 16,
     borderWidth: 1,
     borderColor: c.separator,
     backgroundColor: c.surface,

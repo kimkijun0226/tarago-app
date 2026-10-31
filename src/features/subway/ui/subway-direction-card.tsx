@@ -5,7 +5,7 @@ import type { SubwayArrival } from '../api/get-subway-arrivals';
 import { getArrivalTime, getUpcomingTrains } from '../model/subway-arrival-display';
 import { mapUi } from '@/shared/ui/map-design-tokens';
 
-/** 지하철 링크·강조 표시에 쓰는 지도 공통 코랄이다. 지연·보조 정보와 비활성 선택에 사용하는 회색이다. */
+/** 지하철 링크·강조 표시에 쓰는 지도 공통 차콜이다. 지연·보조 정보와 비활성 선택에 사용하는 회색이다. */
 const GRAY = mapUi.secondaryText;
 type Props = {
   arrivals: SubwayArrival[];
@@ -75,15 +75,15 @@ const s = StyleSheet.create({
   serviceStatus: { color: GRAY, fontSize: 15, textAlign: 'center', marginTop: 18 },
   directionCard: {
     flex: 1,
-    minHeight: 108,
+    minHeight: 96,
     borderWidth: 1,
     borderColor: mapUi.border,
-    borderBottomWidth: 3,
-    borderRadius: 20,
+    borderBottomWidth: 1,
+    borderRadius: 14,
     backgroundColor: mapUi.background,
     paddingHorizontal: 14,
-    paddingTop: 9,
-    paddingBottom: 10,
+    paddingTop: 8,
+    paddingBottom: 8,
   },
   train: {
     flexDirection: 'row',
@@ -91,11 +91,11 @@ const s = StyleSheet.create({
     justifyContent: 'space-between',
     gap: 8,
     minHeight: 44,
-    paddingVertical: 10,
-    borderRadius: 12,
+    paddingVertical: 8,
+    borderRadius: 14,
   },
-  trainDestination: { flexShrink: 0, fontSize: 14, color: mapUi.text },
-  express: { color: '#E44136' },
+  trainDestination: { flexShrink: 0, fontSize: 15, fontWeight: '500', color: mapUi.text },
+  express: { color: mapUi.text },
   trainTime: {
     flex: 1,
     minWidth: 0,

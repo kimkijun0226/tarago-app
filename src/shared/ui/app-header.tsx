@@ -11,6 +11,7 @@ export function AppHeader({
   disabled = false,
   large = false,
   right,
+  titleVisual,
 }: {
   title: string;
   onBack?: () => void;
@@ -18,6 +19,7 @@ export function AppHeader({
   disabled?: boolean;
   large?: boolean;
   right?: ReactNode;
+  titleVisual?: ReactNode;
 }) {
   return (
     <View style={s.row}>
@@ -38,9 +40,11 @@ export function AppHeader({
         </Pressable>
       ) : null}
       <View style={s.titleArea}>
-        <Text accessibilityRole="header" numberOfLines={1} style={[s.title, large && s.large]}>
-          {title}
-        </Text>
+        {titleVisual ?? (
+          <Text accessibilityRole="header" numberOfLines={1} style={[s.title, large && s.large]}>
+            {title}
+          </Text>
+        )}
       </View>
       {right}
     </View>
@@ -51,12 +55,12 @@ const s = StyleSheet.create({
   back: { width: 22, height: 44, alignItems: 'flex-start', justifyContent: 'center' },
   titleArea: { flex: 1, minWidth: 0, height: 44, justifyContent: 'center' },
   title: {
-    fontSize: 22,
+    fontSize: 21,
     lineHeight: 28,
-    fontWeight: '700',
+    fontWeight: '600',
     color: c.text,
     includeFontPadding: false,
     textAlignVertical: 'center',
   },
-  large: { fontSize: 30, lineHeight: 36 },
+  large: { fontSize: 28, lineHeight: 34 },
 });
