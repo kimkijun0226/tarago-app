@@ -28,7 +28,12 @@ export type BusAlertInput = {
   monitoringEndsAt?: string;
   monitoringSourceId?: string;
 };
-export type BusAlert = BusAlertInput & { id: string; stop: AlertStop; busNumber: string };
+export type BusAlert = BusAlertInput & {
+  id: string;
+  stop: AlertStop;
+  busNumber: string;
+  notificationControl?: import('./notification-actions').NotificationControl;
+};
 
 /** 같은 정류장의 여러 노선은 지오펜스 한 개로 묶어 iOS 20개 제한을 지킨다. */
 export function proximityRegions(

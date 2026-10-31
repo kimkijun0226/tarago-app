@@ -1,3 +1,8 @@
+import {
+  handleNotificationAction,
+  registerNotificationActions,
+  retryNotificationActions,
+} from './notification-actions';
 /** @fileoverview 루트에서 위치 감지와 알림 응답 구독을 연결하고 오류를 앱 스토어에 공유한다. */
 import { useEffect, useRef } from 'react';
 import { useSubwayAlerts } from '@/features/subway/model/use-subway-alerts';
@@ -48,6 +53,8 @@ export function useAlertRuntime() {
   /** 런타임 시작과 해제 시 일시적 오류를 초기화한다. 스토어 액션 참조가 바뀌면 다시 등록한다. */
   useEffect(() => {
     setError(null);
+    void registerNotificationActions().catch(() => setError('알림 버튼을 준비하지 못했어요.'));
+    void retryNotificationActions().catch((error) => setError(error.message));
     void Notifications.getAllScheduledNotificationsAsync()
       .then(async (scheduled) => {
         for (const notification of scheduled) {
@@ -158,8 +165,14 @@ export function useAlertRuntime() {
       const responseKey = `${id}:${data.promptId ?? data.monitoringEndsAt ?? ''}:${response.actionIdentifier}`;
       if (handledResponse.current === responseKey || typeof data.alertId !== 'string') return;
       handledResponse.current = responseKey;
-      setMapTabHidden(false);
       try {
+        if (await handleNotificationAction(response)) {
+          await Notifications.clearLastNotificationResponseAsync();
+          await queryClient.invalidateQueries({ queryKey: ['alerts'] });
+          await queryClient.invalidateQueries({ queryKey: ['subway-alerts'] });
+          return;
+        }
+        setMapTabHidden(false);
         const transport = String(data.kind).startsWith('subway-') ? 'subway' : 'bus';
         if (await openAlertTarget(transport, data.alertId, responseKey, data)) {
           await Notifications.clearLastNotificationResponseAsync();
@@ -192,6 +205,20 @@ export function useAlertRuntime() {
     /** 앱 복귀 시 버스·지하철 알림과 기기 저장 오류를 다시 확인하는 구독이며 정리 때 제거한다. */
     const appListener = AppState.addEventListener('change', (state) => {
       if (state !== 'active') return;
+      void retryNotificationActions()
+        .then(() => {
+          void queryClient.invalidateQueries({ queryKey: ['alerts'] });
+          void queryClient.invalidateQueries({ queryKey: ['subway-alerts'] });
+        })
+        .catch((error) => {
+          if (!disposed) setError(error.message);
+        });
+      void alertStorage.getItem('tarago-action-error').then(async (error) => {
+        if (error && !disposed) {
+          setError(error);
+          await alertStorage.removeItem('tarago-action-error');
+        }
+      });
       void retryProximityReports().catch((error) => {
         if (!disposed)
           setError(error instanceof Error ? error.message : '위치 알림 상태를 전송하지 못했어요.');

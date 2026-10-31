@@ -81,7 +81,8 @@
         }
       ],
       "./plugins/with-naver-map",
-      "./plugins/with-tarago-launch-screen"
+      "./plugins/with-tarago-launch-screen",
+      "./plugins/with-notification-actions"
     ],
     "experiments": {
       "typedRoutes": true,

@@ -1,3 +1,4 @@
+import { notificationPause } from '../model/notification-actions';
 /** @fileoverview 저장된 알림의 노선·방향에 해당하는 첫 두 차량을 기존 도착 Query로 표시한다. */
 import { useCallback, useEffect, useState } from 'react';
 import { useAppStore } from '@/shared/model/app-store';
@@ -7,39 +8,63 @@ import { isAlertQueryWindow } from '../model/alert-query-window';
 import { useBusArrivals } from '@/features/bus-stop/model/use-bus-arrivals';
 import { formatEta, groupBusArrivals } from '@/features/bus-stop/model/bus-arrival';
 import { useSubwayArrivals } from '@/features/subway/model/use-subway-arrivals';
+import { matchesSubwayDestination } from '@/features/subway/model/subway-direction';
 import type { SubwayAlert } from '@/features/subway/model/subway-alert';
 import type { BusAlert } from '../model/bus-alert';
 import { alertColors as colors } from './alert-design';
 
-type Props = ({ transport: 'bus'; alert: BusAlert } | { transport: 'subway'; alert: SubwayAlert }) & { kind: 'time' | 'location' };
+type Props = (
+  { transport: 'bus'; alert: BusAlert } | { transport: 'subway'; alert: SubwayAlert }
+) & { kind: 'time' | 'location' };
 
 export function AlertArrivalTimes(props: Props) {
   const { alert } = props;
   const [queryNow, setQueryNow] = useState(Date.now);
-  useFocusEffect(useCallback(() => {
-    let timer: ReturnType<typeof setTimeout>;
-    const refresh = () => {
-      clearTimeout(timer);
-      setQueryNow(Date.now());
-      timer = setTimeout(refresh, 60_000 - Date.now() % 60_000);
-    };
-    refresh();
-    const subscription = AppState.addEventListener('change', (state) => {
-      if (state === 'active') refresh();
-      else clearTimeout(timer);
-    });
-    return () => {
-      clearTimeout(timer);
-      subscription.remove();
-    };
-  }, []));
-  const inside = useAppStore((state) =>
-    state.proximityVisits[`${props.transport}:${alert.id}`]?.inside === true,
+  useFocusEffect(
+    useCallback(() => {
+      let timer: ReturnType<typeof setTimeout>;
+      const refresh = () => {
+        clearTimeout(timer);
+        setQueryNow(Date.now());
+        timer = setTimeout(refresh, 60_000 - (Date.now() % 60_000));
+      };
+      refresh();
+      const subscription = AppState.addEventListener('change', (state) => {
+        if (state === 'active') refresh();
+        else clearTimeout(timer);
+      });
+      return () => {
+        clearTimeout(timer);
+        subscription.remove();
+      };
+    }, []),
   );
+  const visit = useAppStore((state) => state.proximityVisits[`${props.transport}:${alert.id}`]);
+  const pausedUntil = Date.parse(alert.notificationControl?.location?.pausedUntil ?? '');
+  const inside =
+    visit?.inside === true && (!Number.isFinite(pausedUntil) || visit.observedAt >= pausedUntil);
   const scheduledEnabled =
     props.transport === 'subway' ? alert.scheduledEnabled !== false : alert.scheduledEnabled;
   if (!alert.enabled) return null;
-  if (props.kind === 'location' ? !alert.proximityEnabled || !inside : !scheduledEnabled || !isAlertQueryWindow(alert, queryNow))
+  const pause = notificationPause(alert.notificationControl, props.kind, queryNow);
+  if (pause) {
+    const next = nextNotificationDay(alert, props.kind, queryNow);
+    return (
+      <View style={{ gap: 4 }} accessibilityLiveRegion="polite">
+        <Text style={{ color: colors.accent, fontSize: 13, fontWeight: '600' }}>
+          {pause === 'paused' ? '오늘은 쉬어요' : '5분 뒤 다시 확인해요'}
+        </Text>
+        <Text style={{ color: colors.secondaryText, fontSize: 12 }}>
+          {pause === 'snoozed' ? '예약 시간과 위치 조건 안에서 다시 알려드려요' : next}
+        </Text>
+      </View>
+    );
+  }
+  if (
+    props.kind === 'location'
+      ? !alert.proximityEnabled || !inside
+      : !scheduledEnabled || !isAlertQueryWindow(alert, queryNow)
+  )
     return null;
   return <ActiveAlertArrivalTimes {...props} />;
 }
@@ -63,7 +88,10 @@ function ActiveAlertArrivalTimes(props: Props) {
     props.transport === 'bus' ? props.alert.stationId : '',
     focused && props.transport === 'bus',
   );
-  const subway = useSubwayArrivals(props.transport === 'subway' ? props.alert.stationName : '');
+  const subway = useSubwayArrivals(
+    props.transport === 'subway' ? props.alert.stationName : '',
+    props.transport === 'subway' ? props.alert : undefined,
+  );
   const query = props.transport === 'bus' ? bus : subway;
   let times: string[] = [];
   if (props.transport === 'bus') {
@@ -101,8 +129,8 @@ function ActiveAlertArrivalTimes(props: Props) {
         .filter(
           (train) =>
             train.lineId === alert.lineId &&
-            train.direction === alert.direction &&
-            (!alert.destination || train.destination === alert.destination) &&
+            (alert.direction === 'all' || train.direction === alert.direction) &&
+            matchesSubwayDestination(alert, train.destination) &&
             train.arrivalCode !== '2' &&
             train.etaSeconds !== null &&
             train.etaSeconds >= 0,
@@ -116,7 +144,7 @@ function ActiveAlertArrivalTimes(props: Props) {
         .slice(0, 2)
         .map(
           (train) =>
-            `${train.etaSource === 'estimated' ? '예상 ' : ''}${formatEta(Math.max(0, train.etaSeconds! - Math.max(0, now - fetched) / 1000))}${train.destination ? ` · ${train.destination.replace(/행$/, '')}행` : ''}`,
+            `${train.etaSource === 'schedule' ? '시간표 기준 · ' : train.etaSource === 'estimated' ? '예상 ' : ''}${formatEta(Math.max(0, train.etaSeconds! - Math.max(0, now - fetched) / 1000))}${train.destination ? ` · ${train.destination.replace(/행$/, '')}행` : ''}`,
         );
     }
   }
@@ -149,4 +177,27 @@ function ActiveAlertArrivalTimes(props: Props) {
       ))}
     </View>
   );
+}
+
+/** 다음 설정 요일을 찾아 주말·자정 넘는 예약도 실제 재개일로 안내한다. */
+function nextNotificationDay(
+  alert: BusAlert | SubwayAlert,
+  kind: 'time' | 'location',
+  now: number,
+) {
+  const until = Date.parse(alert.notificationControl?.[kind]?.pausedUntil ?? '');
+  const base = new Date(now + 9 * 60 * 60_000);
+  const [hour, minute] = alert.startTime.split(':').map(Number);
+  for (let offset = 0; offset <= 7; offset++) {
+    const day = new Date(base);
+    day.setUTCDate(day.getUTCDate() + offset);
+    day.setUTCHours(kind === 'time' ? hour : 0, kind === 'time' ? minute : 0, 0, 0);
+    const start = day.getTime() - 9 * 60 * 60_000;
+    if (start < until || start <= now || !alert.days.includes(day.getUTCDay())) continue;
+    const date = `${day.getUTCMonth() + 1}/${day.getUTCDate()} (${['일', '월', '화', '수', '목', '금', '토'][day.getUTCDay()]})`;
+    return kind === 'time'
+      ? `다음 예약 · ${date} ${alert.startTime}`
+      : `${date}부터 반경에 들어오면 다시 알려드려요`;
+  }
+  return '다음 예약일에 다시 알려드려요';
 }

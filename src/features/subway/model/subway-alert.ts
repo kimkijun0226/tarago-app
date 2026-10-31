@@ -7,6 +7,8 @@ export interface SubwayAlertInput {
   lineName?: string;
   direction: string;
   destination?: string;
+  /** 미지정이면 선택 방면의 모든 행선지, 배열이면 해당 행선지만 감시한다. */
+  destinations?: string[];
   nextStationName?: string;
   destinationNames?: string[];
   days: number[];
@@ -28,5 +30,6 @@ export interface SubwayAlertInput {
 }
 /** 서버가 예약 ID를 부여한 저장 결과. */
 export interface SubwayAlert extends SubwayAlertInput {
+  notificationControl?: import('@/features/bus-alert/model/notification-actions').NotificationControl;
   id: string;
 }
