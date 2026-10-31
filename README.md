@@ -62,3 +62,16 @@ Xcode에서 직접 실행하려면:
 일반 개발로 돌아갈 때는 Run 설정을 Debug로 되돌린다. `.xcodeproj` 대신 Pods가 포함된 `.xcworkspace`를 사용한다.
 
 설치 파일을 공유하는 EAS 배포는 `bunx eas-cli build --platform all --profile preview`를 사용한다. 이는 스토어 공개와 별개이며 iOS는 등록된 기기에 설치한다.
+
+## Xcode 변경 후 ExpoModulesCore 컴파일 오류
+
+`Failed to build module 'ExpoModulesCore'; this SDK is not supported by the compiler`가 나오면 오류에 표시된 사전 빌드 모듈의 Swift 버전과 현재 Xcode의 Swift 버전을 확인한다. `ExpoModulesJSI` import 오류와 `__ObjC::expo` 타입 오류가 함께 나타날 수 있다.
+
+이 프로젝트는 `expo-build-properties`의 `ios.usePrecompiledModules`를 `false`로 설정해 Expo 모듈을 현재 Xcode로 소스 빌드한다. Swift 6.4에서 생성되는 `__ObjC::` 내부 확장 선언도 정리하도록 `scripts/patch-expo-jsi-swift-interface.cjs`를 postinstall에서 적용한다. SDK 업데이트 시 공식 빌드 스크립트의 대응 여부를 확인한 뒤 이 호환 패치를 제거한다. 설정 변경 후 다음 명령으로 네이티브 프로젝트와 Pods를 갱신한다.
+
+```bash
+bunx expo prebuild --platform ios --no-install
+pod install --project-directory=ios
+```
+
+Xcode에서 `ios/tarago.xcworkspace`를 다시 열고 Product → Clean Build Folder 후 빌드한다. 사전 빌드 모듈을 사용하던 때보다 첫 빌드는 오래 걸릴 수 있다. 자세한 옵션은 [Expo 사전 빌드 모듈 문서](https://docs.expo.dev/guides/prebuilt-expo-modules/)를 참고한다.

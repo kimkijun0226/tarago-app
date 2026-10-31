@@ -44,7 +44,7 @@
     "typescript": "~6.0.3"
   },
   "scripts": {
-    "postinstall": "node scripts/patch-naver-symbol-tap.cjs",
+    "postinstall": "node scripts/patch-naver-symbol-tap.cjs && node scripts/patch-expo-jsi-swift-interface.cjs",
     "start": "expo start",
     "start:simulator": "REACT_NATIVE_PACKAGER_HOSTNAME=localhost NODE_OPTIONS=--dns-result-order=ipv4first expo start --dev-client --localhost --port 8083",
     "start:device": "expo start --dev-client --lan",
