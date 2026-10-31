@@ -63,10 +63,16 @@ export function SubwayDestinationPicker({
             disabled={disabled}
             accessibilityRole="checkbox"
             accessibilityState={{ checked: all, disabled }}
-            onPress={() => chooseDirection(direction)}
+            onPress={() =>
+              onChange({
+                ...value,
+                destination: undefined,
+                destinations: all ? [] : undefined,
+              })
+            }
             style={[s.row, all && s.selectedRow]}
           >
-            <Text style={s.label}>상관없음 · 전체</Text>
+            <Text style={[s.label, all && s.activeText]}>상관없음 · 전체</Text>
           </Pressable>
           {trains.map((option) => {
             const checked =
@@ -111,7 +117,7 @@ const s = StyleSheet.create({
   directions: { flexDirection: 'row', gap: 10 },
   direction: {
     flex: 1,
-    borderWidth: 1,
+    borderWidth: 2,
     borderColor: c.separator,
     borderRadius: 14,
     padding: 14,
@@ -130,9 +136,9 @@ const s = StyleSheet.create({
     gap: 12,
     paddingHorizontal: 12,
     borderRadius: 12,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: c.separator,
+    borderWidth: 2,
+    borderColor: c.separator,
   },
-  selectedRow: { backgroundColor: c.accentSurface, borderBottomColor: c.accentBorder },
+  selectedRow: { backgroundColor: c.accentSurface, borderColor: c.accent },
   label: { flex: 1, fontSize: 14, color: c.text },
 });
