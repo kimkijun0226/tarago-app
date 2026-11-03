@@ -1,3 +1,5 @@
+import { clearAlertNotifications } from '@/features/bus-alert/model/notification-cleanup';
+import { supportsBundledNotificationVoice } from '../model/notification-voice';
 /** @fileoverview 기기 자격 증명을 보안 저장소에서 얻어 버스·지하철 공용 인증과 버스 알림 HTTP 요청을 제공한다. */
 import * as SecureStore from 'expo-secure-store';
 import { apiClient } from '@/shared/api/client';
@@ -75,10 +77,15 @@ export async function registerPushToken(token: string) {
 
 /** ID가 있으면 기존 알림을 갱신하고 없으면 생성하여 서버의 최종 레코드를 반환한다. */
 export async function saveAlert(input: BusAlertInput, id?: string): Promise<BusAlert> {
-  /** 생성·수정 요청에 동일한 기기 소유권 인증 헤더를 제공한다. */
-  const config = await alertAuth();
-
-  /** 인증한 기기의 서버 응답 본문이며 호출자에게 필요한 데이터만 반환한다. */
+  /** 저장과 동시에 번들 음성 지원을 알려 첫 푸시부터 선택 목소리를 유지한다. */
+  const auth = await alertAuth();
+  const config = {
+    ...auth,
+    headers: {
+      ...auth.headers,
+      ...(supportsBundledNotificationVoice ? { 'X-TaraGo-Voice-Bundle': '1' } : {}),
+    },
+  };
   const { data } = id
     ? await apiClient.put<BusAlert>(`/alerts/${id}`, input, config)
     : await apiClient.post<BusAlert>('/alerts', input, config);
@@ -88,6 +95,10 @@ export async function saveAlert(input: BusAlertInput, id?: string): Promise<BusA
 /** 기기 소유권 인증을 포함해 해당 알림을 삭제한다. */
 export async function deleteAlert(id: string) {
   await apiClient.delete(`/alerts/${id}`, await alertAuth());
+  await clearAlertNotifications(id).catch(() => {
+    // 서버 삭제는 완료됐으므로 기기 표시 정리 실패로 삭제 실패를 보고하지 않는다.
+    console.warn('삭제한 예약의 기기 알림을 정리하지 못했습니다.');
+  });
 }
 
 /** 알림별 실제 영역 진입·이탈을 전달한다. 서버는 진입 중에만 반복 푸시를 발송한다. */
@@ -119,5 +130,20 @@ export async function getNotificationHistory(cursor?: string, signal?: AbortSign
     params: cursor ? { cursor } : undefined,
     signal,
   });
+  return data;
+}
+
+/** A device owner can resume a reservation even after its original push action expires. */
+export async function setNotificationPause(
+  transport: 'bus' | 'subway',
+  id: string,
+  paused: boolean,
+) {
+  const { data } = await apiClient.put<{
+    alertId: string;
+    transport: 'bus' | 'subway';
+    notificationControl: import('../model/notification-actions').NotificationControl;
+    pausedToday: boolean;
+  }>(`/alerts/control/${transport}/${id}`, { paused, requestedAt: Date.now() }, await alertAuth());
   return data;
 }

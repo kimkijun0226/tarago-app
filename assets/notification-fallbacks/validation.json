@@ -1,0 +1,72 @@
+[
+  {
+    "profile": "clear-young",
+    "file": "tg_fallback_v1_clear-young.caf",
+    "seconds": 3.76,
+    "sampleRate": 24000,
+    "channels": 1,
+    "format": "16-bit little-endian PCM CAF",
+    "peak": 0.487,
+    "bytes": 184576
+  },
+  {
+    "profile": "soft-cute",
+    "file": "tg_fallback_v1_soft-cute.caf",
+    "seconds": 4.03,
+    "sampleRate": 24000,
+    "channels": 1,
+    "format": "16-bit little-endian PCM CAF",
+    "peak": 0.5155,
+    "bytes": 197536
+  },
+  {
+    "profile": "calm-woman",
+    "file": "tg_fallback_v1_calm-woman.caf",
+    "seconds": 3.54,
+    "sampleRate": 24000,
+    "channels": 1,
+    "format": "16-bit little-endian PCM CAF",
+    "peak": 0.6693,
+    "bytes": 174016
+  },
+  {
+    "profile": "announcer-woman",
+    "file": "tg_fallback_v1_announcer-woman.caf",
+    "seconds": 3.59,
+    "sampleRate": 24000,
+    "channels": 1,
+    "format": "16-bit little-endian PCM CAF",
+    "peak": 0.6733,
+    "bytes": 176416
+  },
+  {
+    "profile": "warm-man",
+    "file": "tg_fallback_v1_warm-man.caf",
+    "seconds": 3.13,
+    "sampleRate": 24000,
+    "channels": 1,
+    "format": "16-bit little-endian PCM CAF",
+    "peak": 0.712,
+    "bytes": 154336
+  },
+  {
+    "profile": "system-female",
+    "file": "tg_fallback_v1_system-female.caf",
+    "seconds": 3.746,
+    "sampleRate": 24000,
+    "channels": 1,
+    "format": "16-bit little-endian PCM CAF",
+    "peak": 0.7018,
+    "bytes": 183882
+  },
+  {
+    "profile": "system-male",
+    "file": "tg_fallback_v1_system-male.caf",
+    "seconds": 5.582,
+    "sampleRate": 24000,
+    "channels": 1,
+    "format": "16-bit little-endian PCM CAF",
+    "peak": 0.5843,
+    "bytes": 272032
+  }
+]

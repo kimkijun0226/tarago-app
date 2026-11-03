@@ -1,7 +1,7 @@
 /** @fileoverview Query의 갱신 시각으로 남은 초를 표시한다. 네트워크 재조회는 Query의 폴링에 맡긴다. */
 import { useEffect, useState } from 'react';
 import { ActivityIndicator, AppState, Pressable, StyleSheet, Text, View } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { SymbolView } from 'expo-symbols';
 import { mapUi } from '@/shared/ui/map-design-tokens';
 import { BUS_ARRIVALS_REFRESH_INTERVAL } from '../model/use-bus-arrivals';
 
@@ -9,9 +9,6 @@ type Props = { updatedAt: number; fetching: boolean; onRefresh: () => void };
 
 /** 초 단위 표시만 이 버튼 안에서 갱신해 버스 목록 전체를 매초 다시 그리지 않는다. */
 export function ArrivalRefreshButton({ updatedAt, fetching, onRefresh }: Props) {
-  /** 홈 인디케이터 위에 버튼을 배치하기 위한 안전 영역이다. */
-  const insets = useSafeAreaInsets();
-
   /** 카운트다운 표시용 시각이다. 서버 데이터나 새로고침 타이머 역할을 하지 않는다. */
   const [now, setNow] = useState(Date.now);
 
@@ -34,7 +31,8 @@ export function ArrivalRefreshButton({ updatedAt, fetching, onRefresh }: Props) 
   );
 
   return (
-    <View pointerEvents="box-none" style={[styles.container, { bottom: insets.bottom + 14 }]}>
+    <View style={styles.container}>
+      <Text style={styles.updatedAt}>{updatedAt ? `${remaining}초 후 갱신` : '조회 중'}</Text>
       <Pressable
         accessibilityRole="button"
         accessibilityLabel="버스 도착정보 새로고침"
@@ -44,54 +42,41 @@ export function ArrivalRefreshButton({ updatedAt, fetching, onRefresh }: Props) 
         style={({ pressed }) => [styles.button, pressed && styles.pressed]}
       >
         {fetching ? (
-          <ActivityIndicator color="#FFFFFF" />
+          <ActivityIndicator color={mapUi.blue} size="small" />
         ) : (
-          <View style={styles.ring}>
-            <Text style={styles.number}>{remaining}</Text>
-            <Text style={styles.arrow}>↻</Text>
-          </View>
+          <SymbolView
+            name={{ ios: 'arrow.clockwise', android: 'refresh' }}
+            size={16}
+            tintColor={mapUi.blue}
+          />
         )}
+        <Text style={styles.buttonText}>새로고침</Text>
       </Pressable>
-      <Text style={styles.updatedAt}>
-        {updatedAt
-          ? `${new Date(updatedAt).toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' })} 갱신`
-          : '조회 중'}
-      </Text>
     </View>
   );
 }
 
-/** 지도 위 버튼의 고정 스타일이다. 화면 안전 영역만 렌더링에서 합성한다. */
+/** 목록과 겹치지 않는 시트 하단 갱신 행이다. */
 const styles = StyleSheet.create({
-  container: { position: 'absolute', right: 20, alignItems: 'center', gap: 5 },
+  container: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    minHeight: 44,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: mapUi.separator,
+    backgroundColor: mapUi.background,
+  },
   button: {
-    width: 54,
-    height: 54,
-    borderRadius: 12,
-    backgroundColor: mapUi.blue,
-    alignItems: 'center',
-    justifyContent: 'center',
-    elevation: 0,
-    boxShadow: 'none',
-  },
-  ring: {
-    width: 31,
-    height: 31,
-    borderRadius: 12,
-    borderColor: '#FFFFFF',
-    borderWidth: 1,
+    minWidth: 44,
+    minHeight: 44,
+    flexDirection: 'row',
+    gap: 6,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  number: { color: '#FFFFFF', fontSize: 15, fontWeight: '600' },
-  arrow: {
-    color: '#FFFFFF',
-    fontSize: 18,
-    position: 'absolute',
-    right: -9,
-    bottom: -3,
-    backgroundColor: mapUi.blue,
-  },
-  updatedAt: { color: mapUi.secondaryText, fontSize: 10 },
-  pressed: { opacity: 0.75, transform: [] },
+  buttonText: { fontSize: 13, fontWeight: '500', color: mapUi.blue },
+  updatedAt: { color: mapUi.secondaryText, fontSize: 12 },
+  pressed: { opacity: 0.65 },
 });

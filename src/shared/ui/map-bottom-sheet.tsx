@@ -32,6 +32,7 @@ export type MapSheetSnap = 'compact' | 'half' | 'full';
 
 /** 네이티브 정착 인덱스와 대응하는 compact·half·full 순서다. */
 const SNAPS: MapSheetSnap[] = ['compact', 'half', 'full'];
+const HANDLE_HEIGHT = 20;
 
 type MapBottomSheetProps = {
   children: ReactNode;
@@ -131,7 +132,7 @@ export function MapBottomSheet({
   });
   const dimStyle = useAnimatedStyle(() => {
     const t = Math.max(0, Math.min(1, animatedIndex.value - 1));
-    return { opacity: 0.8 * t * t * (3 - 2 * t) };
+    return { opacity: 0.24 * t * t * (3 - 2 * t) };
   });
 
   /** 투명한 딤은 투명한 상태에서 종료해야 시트 교체 순간 검정색으로 번쩍이지 않는다. */
@@ -139,7 +140,7 @@ export function MapBottomSheet({
     'worklet';
     const t = Math.max(0, Math.min(1, animatedIndex.value - 1));
     return {
-      initialValues: { opacity: 0.8 * t * t * (3 - 2 * t) },
+      initialValues: { opacity: 0.24 * t * t * (3 - 2 * t) },
       animations: { opacity: withTiming(0, { duration: 180 }) },
     };
   }, [animatedIndex]);
@@ -155,7 +156,10 @@ export function MapBottomSheet({
     const available = Math.max(1, height - topBoundary);
     return [
       Math.min(
-        Math.max(compactHeight ?? 0, hasToolbar && toolbarHeight > 0 ? toolbarHeight + 29 : 150),
+        Math.max(
+          compactHeight ?? 0,
+          hasToolbar && toolbarHeight > 0 ? toolbarHeight + HANDLE_HEIGHT : 150,
+        ),
         available * (compactHeight ? 0.4 : 0.3),
       ),
       Math.min(height * 0.47, available * 0.65),
@@ -173,7 +177,7 @@ export function MapBottomSheet({
       <View>
         <BottomSheetHandle
           {...props}
-          style={{ paddingVertical: 12 }}
+          style={{ paddingVertical: 8 }}
           indicatorStyle={{
             width: 44,
             height: 4,
@@ -198,7 +202,10 @@ export function MapBottomSheet({
   const contentStyle = useAnimatedStyle(() => ({
     height: Math.max(
       0,
-      interpolate(animatedIndex.value, [0, 1, 2], points, Extrapolation.CLAMP) - 28 - toolbarHeight,
+      interpolate(animatedIndex.value, [0, 1, 2], points, Extrapolation.CLAMP) -
+        HANDLE_HEIGHT -
+        toolbarHeight -
+        interpolate(animatedIndex.value, [0, 1, 2], [0, 0, insets.bottom], Extrapolation.CLAMP),
     ),
     overflow: 'hidden',
   }));
@@ -216,16 +223,29 @@ export function MapBottomSheet({
       index.current = next;
       onHeightChange(points[next]);
       onChangeSnap?.(SNAPS[next]);
-      onSettled?.(Math.max(0, points[next] - 28 - toolbarHeight));
+      onSettled?.(
+        Math.max(
+          0,
+          points[next] - HANDLE_HEIGHT - toolbarHeight - (next === 2 ? insets.bottom : 0),
+        ),
+      );
     },
-    [onHeightChange, onChangeSnap, onSettled, points, toolbarHeight],
+    [onHeightChange, onChangeSnap, onSettled, points, toolbarHeight, insets.bottom],
   );
 
   /** 화면 크기·안전 영역으로 정착 높이가 바뀌면 현재 높이를 지도 패딩에 다시 전달한다. 구독을 만들지 않아 해제 작업은 없다. */
   useEffect(() => {
     onHeightChange(points[index.current]);
-    onSettled?.(Math.max(0, points[index.current] - 28 - toolbarHeight));
-  }, [onHeightChange, onSettled, points, toolbarHeight]);
+    onSettled?.(
+      Math.max(
+        0,
+        points[index.current] -
+          HANDLE_HEIGHT -
+          toolbarHeight -
+          (index.current === 2 ? insets.bottom : 0),
+      ),
+    );
+  }, [onHeightChange, onSettled, points, toolbarHeight, insets.bottom]);
 
   return (
     <>
@@ -268,14 +288,12 @@ export function MapBottomSheet({
             {
               borderRadius: 16,
               backgroundColor: colors.surface,
-              borderWidth: 1,
-              borderBottomWidth: 1,
-              borderColor: colors.borderStrong,
+              borderWidth: 0,
               boxShadow: appShadows.floating,
             },
             surfaceStyle,
           ]}
-          handleStyle={{ paddingVertical: 12 }}
+          handleStyle={{ paddingVertical: 8 }}
           handleIndicatorStyle={{
             width: 44,
             height: 4,

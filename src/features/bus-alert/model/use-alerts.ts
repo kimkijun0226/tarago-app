@@ -53,7 +53,9 @@ export function useAlertMutations() {
     onMutate: cancel,
     mutationFn: ({ input, id }: { input: BusAlertInput; id?: string }) => saveAlert(input, id),
     onSuccess: (alert) =>
-      updateCache((current) => [alert, ...current.filter((a) => a.id !== alert.id)]),
+      updateCache((current) => current.some((a) => a.id === alert.id)
+        ? current.map((a) => a.id === alert.id ? alert : a)
+        : [alert, ...current]),
   });
 
   /** 서버 삭제 성공을 기기 사본과 쿼리 캐시에 반영하는 변이다. */

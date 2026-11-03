@@ -1,3 +1,5 @@
+import { getMapSelection, useMapSelection, type MapSelectionMode } from './map-selection';
+import { useWidgetSelection } from '@/features/widgets/model/widget-selection';
 /**
  * @fileoverview 지도 화면의 선택·전환을 조율하는 컨트롤러 훅.
  * 정류장·노선 Query와 검색 결과를 연결하고, 최신 선택만 반영하며 카메라와 시트를 함께 전환한다.
@@ -14,7 +16,7 @@ import {
 } from '@/features/subway/api/get-subway-station';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Alert } from 'react-native';
-import { useFocusEffect, useLocalSearchParams } from 'expo-router';
+import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { useQueryClient } from '@tanstack/react-query';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { getNearbyBusStops, type BusStop } from '@/features/bus-stop/api/get-nearby-bus-stops';
@@ -59,10 +61,10 @@ const EMPTY_SUBWAY_STATIONS: SubwayMapStation[] = [];
  * 선택한 정류장·노선 식별자와 시트 높이는 이 화면에서만 쓰는 일시적 UI 상태다.
  * @returns 지도 화면이 표시할 값과 클릭·카메라 이벤트 처리 함수.
  */
-export function useMapController() {
+export function useMapController(mode: MapSelectionMode = 'map') {
   /** 지도와 버튼에 적용할 공통 라이트 테마 색상이다. */
   const { colors } = useAppTheme();
-  const alertSelection = useAppStore((state) => state.alertSelection);
+  const alertSelection = useMapSelection(mode);
   const selectionZoom = 16;
 
   /** 선택한 지하철 역 이름과 변경 함수다. null이면 지하철 시트를 닫는다. */
@@ -181,12 +183,14 @@ export function useMapController() {
   );
 
   const centeredAlertRequest = useRef<string | null>(null);
-  const alertSelectionRequestId = alertSelection?.requestId;
+  const alertSelectionRequestId = alertSelection
+    ? `${alertSelection.requestId}:${alertSelection.transport}`
+    : undefined;
   useEffect(() => {
-    const alertSelection = useAppStore.getState().alertSelection;
+    const alertSelection = getMapSelection(mode);
     if (!mapReady || !initialPosition || !alertSelection) return;
-    if (centeredAlertRequest.current === alertSelection.requestId) return;
-    centeredAlertRequest.current = alertSelection.requestId;
+    if (centeredAlertRequest.current === alertSelectionRequestId) return;
+    centeredAlertRequest.current = alertSelectionRequestId ?? null;
     let cancelled = false;
     let transition: ReturnType<typeof setTimeout> | undefined;
     const request = selectionRequest.current;
@@ -224,7 +228,7 @@ export function useMapController() {
       clearTimeout(transition);
       centeredAlertRequest.current = null;
     };
-  }, [mapReady, initialPosition, alertSelectionRequestId, getCurrentLocation]);
+  }, [mapReady, initialPosition, alertSelectionRequestId, getCurrentLocation, mode]);
 
   /** 복귀한 역을 검색창과 펼친 시트 사이의 지도 중앙에 다시 맞춘다. */
   const centeredResume = useRef<string | null>(null);
@@ -377,33 +381,40 @@ export function useMapController() {
   }, []);
 
   /** 교통수단만 바꾸며 선택 요청 ID를 유지해 현재 지도에서 이어간다. */
-  const confirmAlertTransport = useCallback(async (transport: 'bus' | 'subway') => {
-    const current = useAppStore.getState().alertSelection;
-    if (!current || current.transport === transport) return true;
-    const currentLabel = current.transport === 'bus' ? '버스' : '지하철';
-    const nextLabel = transport === 'bus' ? '버스' : '지하철';
-    const generation = selectionRequest.current;
-    const accepted = await new Promise<boolean>((resolve) =>
-      Alert.alert(
-        `${currentLabel} 알림 설정 중`,
-        `${nextLabel} 알림으로 변경할까요?`,
-        [
-          { text: '취소', style: 'cancel', onPress: () => resolve(false) },
-          { text: '변경', onPress: () => resolve(true) },
-        ],
-        { cancelable: true, onDismiss: () => resolve(false) },
-      ),
-    );
-    if (
-      !accepted ||
-      generation !== selectionRequest.current ||
-      useAppStore.getState().alertSelection?.requestId !== current.requestId
-    )
-      return false;
-    selectionRequest.current++;
-    useAppStore.getState().switchAlertTransport(transport);
-    return true;
-  }, []);
+  const confirmAlertTransport = useCallback(
+    async (transport: 'bus' | 'subway') => {
+      const current = getMapSelection(mode);
+      if (!current || current.transport === transport) return true;
+      if (mode === 'widget') {
+        useWidgetSelection.getState().switchMapTransport(transport);
+        return true;
+      }
+      const currentLabel = current.transport === 'bus' ? '버스' : '지하철';
+      const nextLabel = transport === 'bus' ? '버스' : '지하철';
+      const generation = selectionRequest.current;
+      const accepted = await new Promise<boolean>((resolve) =>
+        Alert.alert(
+          `${currentLabel} 알림 설정 중`,
+          `${nextLabel} 알림으로 변경할까요?`,
+          [
+            { text: '취소', style: 'cancel', onPress: () => resolve(false) },
+            { text: '변경', onPress: () => resolve(true) },
+          ],
+          { cancelable: true, onDismiss: () => resolve(false) },
+        ),
+      );
+      if (
+        !accepted ||
+        generation !== selectionRequest.current ||
+        getMapSelection(mode)?.requestId !== current.requestId
+      )
+        return false;
+      selectionRequest.current++;
+      useAppStore.getState().switchAlertTransport(transport);
+      return true;
+    },
+    [mode],
+  );
 
   /** 지하철·장소 선택을 해제하고 선택한 정류장의 버스 목록을 연다. 여러 지도 이벤트에서 공유하는 선택 동작이다. */
   const selectBusStop = useCallback(
@@ -514,18 +525,24 @@ export function useMapController() {
     setSheetHeight(0);
     setLocationViewport(null);
   }, []);
-  useEffect(
-    () =>
-      useAppStore.subscribe((state, previous) => {
+  useEffect(() => {
+    if (mode === 'widget') {
+      return useWidgetSelection.subscribe((state, previous) => {
         if (
-          state.alertSelection?.requestId &&
-          state.alertSelection.requestId !== previous.alertSelection?.requestId
-        ) {
+          state.mapSelection?.requestId &&
+          state.mapSelection.requestId !== previous.mapSelection?.requestId
+        )
           resetAlertMapSelection();
-        }
-      }),
-    [resetAlertMapSelection],
-  );
+      });
+    }
+    return useAppStore.subscribe((state, previous) => {
+      if (
+        state.alertSelection?.requestId &&
+        state.alertSelection.requestId !== previous.alertSelection?.requestId
+      )
+        resetAlertMapSelection();
+    });
+  }, [resetAlertMapSelection, mode]);
 
   const onSearchActiveChange = useCallback((active: boolean) => {
     setSearchActive(active);
@@ -693,7 +710,7 @@ export function useMapController() {
     if (!initializedRef.current) return;
 
     /** 위치 훅이 권한·정확도를 확인해 반환한 현재 좌표다. 실패한 경우 null이다. */
-    const coordinate = await getCurrentLocation();
+    const coordinate = await getCurrentLocation(true);
     if (!coordinate) return;
 
     setLocationViewport({
@@ -1179,6 +1196,31 @@ export function useMapController() {
     ],
   );
 
+  const configureRouteAlert = (kind: 'time' | 'location') => {
+    if (!selectedBusStop || !selectedRoute || !routeDetail) return;
+    setMapTabHidden(false);
+    router.navigate({
+      pathname: '/alerts',
+      params: {
+        alertTransport: 'bus',
+        returnTo: 'map',
+        alertKind: kind,
+        sourceAlertId: '',
+        sourceAlertIds: '',
+        monitoringId: '',
+        alertId: '',
+        stationId: selectedBusStop.id,
+        stationName: selectedBusStop.name,
+        latitude: String(selectedBusStop.latitude),
+        longitude: String(selectedBusStop.longitude),
+        routeId: selectedRoute.routeId,
+        busNumber: routeDetail.busNumber,
+        stationSeq: String(selectedRoute.stationSeq),
+        requestId: String(Date.now()),
+      },
+    });
+  };
+
   return {
     colors,
     selectedPlace,
@@ -1199,6 +1241,8 @@ export function useMapController() {
     onMarkerPress,
     onSymbolPress,
     selectedRoute,
+    configureRouteAlert,
+    routeAlertReady: Boolean(routeDetail && selectedRoute && selectedBusStop),
     closeRoute,
     loading,
     moveToMyLocation,

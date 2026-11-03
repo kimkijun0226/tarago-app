@@ -8,11 +8,13 @@ export function TransitAlertAction({
   label,
   onPress,
   iconSize = 22,
+  compact = false,
 }: {
   kind: 'time' | 'location';
   label: string;
   onPress: () => void;
   iconSize?: number;
+  compact?: boolean;
 }) {
   return (
     <Pressable
@@ -20,13 +22,13 @@ export function TransitAlertAction({
       accessibilityLabel={label}
       onPress={onPress}
       style={({ pressed }) => ({
-        width: 44,
-        height: 44,
+        width: compact ? 36 : 44,
+        height: compact ? 32 : 44,
         alignItems: 'center',
         justifyContent: 'center',
-        borderRadius: 14,
+        borderRadius: compact ? 10 : 14,
         backgroundColor: pressed ? appColors.strongSurface : appColors.accentSurface,
-        marginLeft: 4,
+        marginLeft: compact ? 0 : 4,
         opacity: pressed ? 0.7 : 1,
       })}
     >

@@ -8,7 +8,7 @@ export const createStyles = (colors: ReturnType<typeof useAppTheme>['colors']) =
   colors = { ...colors, ...alertColors };
   return StyleSheet.create({
     page: { flex: 1, backgroundColor: colors.background },
-    content: { padding: 20, paddingBottom: 120, gap: 20 },
+    content: { padding: 16, paddingBottom: 16, gap: 16 },
     heading: { flexDirection: 'row', alignItems: 'center', gap: 12 },
     flex: { flex: 1 },
     title: { flex: 1, fontSize: 28, fontWeight: '600', color: colors.text },
@@ -24,7 +24,7 @@ export const createStyles = (colors: ReturnType<typeof useAppTheme>['colors']) =
     card: {
       backgroundColor: colors.surface,
       borderRadius: 16,
-      borderWidth: 1,
+      borderWidth: 0,
       borderColor: colors.separator,
       padding: 16,
       gap: 16,
@@ -126,8 +126,6 @@ export const createStyles = (colors: ReturnType<typeof useAppTheme>['colors']) =
     deleteText: { color: colors.danger, minHeight: 44, paddingVertical: 11, fontSize: 17 },
     empty: { paddingVertical: 36, paddingHorizontal: 16, gap: 16, alignItems: 'center' },
     loading: { paddingVertical: 60 },
-    warning: { backgroundColor: colors.warningSurface, padding: 16, borderRadius: 14, gap: 8 },
-    warningText: { color: colors.warning, fontSize: 15, lineHeight: 22 },
     liveRow: { flexDirection: 'row', justifyContent: 'space-between', gap: 10 },
     liveNumber: { color: colors.text, fontSize: 14, fontWeight: '600' },
     liveEta: { color: colors.accent, fontSize: 14, flexShrink: 1, textAlign: 'right' },

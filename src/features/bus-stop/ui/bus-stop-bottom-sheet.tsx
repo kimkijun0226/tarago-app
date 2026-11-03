@@ -2,12 +2,10 @@
 import type { SharedValue } from 'react-native-reanimated';
 
 import type { BusArrival } from '../api/get-bus-arrivals';
-import { useAppStore } from '@/shared/model/app-store';
 import type { Point } from '@/shared/types/geo';
 import { useAppTheme } from '@/shared/ui';
 import { MapBottomSheet, type MapSheetSnap } from '@/shared/ui/map-bottom-sheet';
 import { isAxiosError } from 'axios';
-import { router } from 'expo-router';
 import { memo, useCallback, useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
@@ -95,9 +93,6 @@ export const BusStopBottomSheet = memo(function BusStopBottomSheet({
   /** 현재 테마의 스타일 계산 결과이며 팔레트가 바뀔 때만 다시 만든다. */
   const styles = useMemo(() => createStyles(colors), [colors]);
 
-  /** 알림 화면으로 이동할 때 지도 탭을 다시 표시하기 위한 공유 UI 상태 변경 함수다. */
-  const setMapTabHidden = useAppStore((state) => state.setMapTabHidden);
-
   /** 도착 목록과 갱신 시각·오류·요청 상태를 읽어 시트 안내 및 새로고침에 사용한다. */
   const {
     data: arrivals = EMPTY_ARRIVALS,
@@ -139,37 +134,6 @@ export const BusStopBottomSheet = memo(function BusStopBottomSheet({
         (group) => group.first.etaSeconds !== null && group.first.etaSeconds <= 60,
       ),
     [arrivalGroups],
-  );
-
-  /**
-   * 알림 경로에 필요한 정류장·노선 정보를 조합한다. memo 행에 전달하므로 참조를 유지한다.
-   * busStop 또는 지도 탭 변경 함수가 바뀌면 최신 정류장으로 동작하도록 콜백을 교체한다.
-   */
-  const configureAlert = useCallback(
-    (group: BusArrivalGroup, kind: 'time' | 'location') => {
-      setMapTabHidden(false);
-      router.navigate({
-        pathname: '/alerts',
-        params: {
-          alertTransport: 'bus',
-          returnTo: 'map',
-          alertKind: kind,
-          sourceAlertId: '',
-          sourceAlertIds: '',
-          monitoringId: '',
-          stationId: busStop.id,
-          stationName: busStop.name,
-          latitude: String(busStop.latitude),
-          longitude: String(busStop.longitude),
-          routeId: group.routeId,
-          busNumber: group.busNumber,
-          ...(group.stationSeq === undefined ? {} : { stationSeq: String(group.stationSeq) }),
-          requestId: String(Date.now()),
-          alertId: '',
-        },
-      });
-    },
-    [busStop, setMapTabHidden],
   );
 
   /** 현재 로딩·오류·빈 응답 또는 축소 상태를 안내하는 목록 대체 요소다. */
@@ -229,8 +193,8 @@ export const BusStopBottomSheet = memo(function BusStopBottomSheet({
                 style={{
                   color: colors.secondaryText,
                   fontSize: 11,
-                  paddingHorizontal: 20,
-                  paddingVertical: 16,
+                  paddingHorizontal: 16,
+                  paddingVertical: 12,
                 }}
               >
                 {
@@ -241,22 +205,18 @@ export const BusStopBottomSheet = memo(function BusStopBottomSheet({
             contentContainerStyle={styles.arrivalList}
             showsVerticalScrollIndicator={true}
             renderItem={({ item: group }) => (
-              <BusArrivalRow
-                group={group}
-                onSelectRoute={onSelectRoute}
-                onConfigureAlert={configureAlert}
-              />
+              <BusArrivalRow group={group} onSelectRoute={onSelectRoute} />
             )}
           />
+          {snap !== 'compact' ? (
+            <ArrivalRefreshButton
+              updatedAt={dataUpdatedAt}
+              fetching={isFetching}
+              onRefresh={() => void refetch()}
+            />
+          ) : null}
         </View>
       </MapBottomSheet>
-      {snap !== 'compact' ? (
-        <ArrivalRefreshButton
-          updatedAt={dataUpdatedAt}
-          fetching={isFetching}
-          onRefresh={() => void refetch()}
-        />
-      ) : null}
     </>
   );
 });
@@ -274,8 +234,8 @@ const createStyles = (colors: ReturnType<typeof useAppTheme>['colors']) =>
       margin: 16,
       borderRadius: 12,
       backgroundColor: colors.background,
-      padding: 20,
-      minHeight: 140,
+      padding: 16,
+      minHeight: 88,
       alignItems: 'center',
       justifyContent: 'center',
       gap: 10,
@@ -292,7 +252,7 @@ const createStyles = (colors: ReturnType<typeof useAppTheme>['colors']) =>
       fontWeight: '600',
     },
     arrivalList: {
-      paddingBottom: 110,
+      paddingBottom: 16,
     },
     pressed: {
       opacity: 0.65,

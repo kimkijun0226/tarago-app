@@ -1,8 +1,7 @@
-/** @fileoverview 노선 번호 아래에 최대 두 차량의 도착정보를 나란히 표시하고 알림 진입을 제공한다. */
+/** @fileoverview 노선 번호 아래에 최대 두 차량의 도착정보를 두 줄의 간결한 행으로 표시한다. */
 
 import type { BusArrival } from '../api/get-bus-arrivals';
 import { mapUi } from '@/shared/ui/map-design-tokens';
-import { TransitAlertAction } from '@/shared/ui/transit-alert-action';
 import { memo } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { formatEta, getBusRouteBadge, type BusArrivalGroup } from '../model/bus-arrival';
@@ -10,15 +9,10 @@ import { formatEta, getBusRouteBadge, type BusArrivalGroup } from '../model/bus-
 type Props = {
   group: BusArrivalGroup;
   onSelectRoute: (routeId: string, stationSeq: number, source?: BusArrival['routeSource']) => void;
-  onConfigureAlert: (group: BusArrivalGroup, kind: 'time' | 'location') => void;
 };
 
 /** 지도 이동에 따른 부모 갱신을 memo로 차단한다. 서버가 주지 않는 방면·혼잡도는 추정하지 않는다. */
-export const BusArrivalRow = memo(function BusArrivalRow({
-  group,
-  onSelectRoute,
-  onConfigureAlert,
-}: Props) {
+export const BusArrivalRow = memo(function BusArrivalRow({ group, onSelectRoute }: Props) {
   /** 해당 노선 유형의 배지 이름과 색상이다. */
   const badge = getBusRouteBadge(group.routeType);
   const direction = (group.first.direction || group.first.nextStopName || '').replace(
@@ -27,64 +21,35 @@ export const BusArrivalRow = memo(function BusArrivalRow({
   );
 
   return (
-    <View style={styles.row}>
-      <Pressable
-        accessibilityRole="button"
-        accessibilityLabel={`${group.busNumber}번 노선 상세 보기`}
-        onPress={() => onSelectRoute(group.routeId, group.stationSeq ?? 0, group.first.routeSource)}
-        style={styles.content}
-      >
-        <View style={styles.routeInfo}>
-          <View style={styles.heading}>
-            {badge ? (
-              <View
-                style={[
-                  styles.badge,
-                  { backgroundColor: `${badge.color}14`, borderColor: `${badge.color}30` },
-                ]}
-              >
-                <Text style={[styles.badgeText, { color: badge.color }]}>{badge.label}</Text>
-              </View>
-            ) : null}
-            <Text style={styles.number}>{group.busNumber}</Text>
-            {direction ? (
-              <Text numberOfLines={1} style={styles.direction}>
-                → {direction} 방면
-              </Text>
-            ) : null}
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={`${group.busNumber}번 노선 상세 보기`}
+      onPress={() => onSelectRoute(group.routeId, group.stationSeq ?? 0, group.first.routeSource)}
+      style={styles.row}
+    >
+      <View style={styles.heading}>
+        {badge ? (
+          <View style={[styles.badge, { backgroundColor: badge.color, borderColor: badge.color }]}>
+            <Text style={[styles.badgeText, { color: '#FFFFFF' }]}>{badge.label}</Text>
           </View>
-        </View>
-      </Pressable>
-      <View style={styles.arrivalRow}>
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel={`${group.busNumber}번 도착정보 상세 보기`}
-          onPress={() =>
-            onSelectRoute(group.routeId, group.stationSeq ?? 0, group.first.routeSource)
-          }
-          style={styles.times}
-        >
-          <ArrivalTime arrival={group.first} />
-          {group.second ? (
-            <>
-              <Text style={styles.dot}>·</Text>
-              <ArrivalTime arrival={group.second} />
-            </>
-          ) : null}
-        </Pressable>
-        <View style={styles.actions}>
-          {(['time', 'location'] as const).map((kind) => (
-            <TransitAlertAction
-              key={kind}
-              kind={kind}
-              iconSize={22}
-              label={`${group.busNumber}번 ${kind === 'time' ? '예약' : '위치'} 알림 설정`}
-              onPress={() => onConfigureAlert(group, kind)}
-            />
-          ))}
-        </View>
+        ) : null}
+        <Text style={styles.number}>{group.busNumber}</Text>
+        {direction ? (
+          <Text numberOfLines={1} style={styles.direction}>
+            → {direction} 방면
+          </Text>
+        ) : null}
       </View>
-    </View>
+      <View style={styles.times}>
+        <ArrivalTime arrival={group.first} />
+        {group.second ? (
+          <>
+            <View style={styles.timeDivider} />
+            <ArrivalTime arrival={group.second} />
+          </>
+        ) : null}
+      </View>
+    </Pressable>
   );
 });
 
@@ -116,17 +81,15 @@ function ArrivalTime({ arrival }: { arrival: BusArrivalGroup['first'] }) {
 const styles = StyleSheet.create({
   row: {
     paddingHorizontal: 0,
-    paddingTop: 8,
-    paddingBottom: 8,
+    paddingTop: 9,
+    paddingBottom: 9,
     borderBottomWidth: 1,
     borderBottomColor: mapUi.separator,
-    gap: 0,
+    gap: 2,
     marginHorizontal: 16,
     marginVertical: 0,
     backgroundColor: '#FFFFFF',
   },
-  content: { minWidth: 0, justifyContent: 'center' },
-  routeInfo: { minWidth: 0 },
   badge: {
     paddingHorizontal: 5,
     height: 18,
@@ -139,12 +102,11 @@ const styles = StyleSheet.create({
   heading: { flexDirection: 'row', alignItems: 'center', gap: 7, minWidth: 0 },
   direction: { color: mapUi.secondaryText, fontSize: 12, lineHeight: 17, flexShrink: 1 },
   number: { fontSize: 18, lineHeight: 24, fontWeight: '600', color: mapUi.text },
-  arrivalRow: { height: 44, flexDirection: 'row', alignItems: 'center', gap: 8 },
-  times: { flex: 1, minWidth: 0, height: 44, flexDirection: 'row', alignItems: 'center', gap: 5 },
+  times: { minWidth: 0, flexDirection: 'row', alignItems: 'center', gap: 10 },
+  timeDivider: { width: StyleSheet.hairlineWidth, height: 12, backgroundColor: mapUi.border },
   arrivalTime: {
     flexShrink: 1,
     minWidth: 0,
-    height: 44,
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
@@ -165,21 +127,6 @@ const styles = StyleSheet.create({
     includeFontPadding: false,
     textAlignVertical: 'center',
   },
-  red: { color: mapUi.blue, fontWeight: '500' },
+  red: { color: '#E5484D', fontWeight: '500' },
   secondary: { color: mapUi.secondaryText, fontSize: 11, fontWeight: '400' },
-  dot: {
-    color: mapUi.border,
-    fontSize: 14,
-    lineHeight: 22,
-    includeFontPadding: false,
-    textAlignVertical: 'center',
-    marginHorizontal: 3,
-  },
-  actions: {
-    height: 44,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginLeft: 4,
-  },
 });

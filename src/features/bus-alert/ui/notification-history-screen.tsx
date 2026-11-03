@@ -46,9 +46,9 @@ export function NotificationHistoryScreen() {
     >
       <View
         style={{
-          paddingHorizontal: 24,
-          paddingTop: 20,
-          paddingBottom: 18,
+          paddingHorizontal: 16,
+          paddingTop: 4,
+          paddingBottom: 12,
         }}
       >
         <AppHeader
@@ -60,7 +60,7 @@ export function NotificationHistoryScreen() {
       <FlatList
         data={items}
         keyExtractor={(item) => item.id}
-        contentContainerStyle={{ paddingHorizontal: 24, paddingBottom: 24, gap: 12, flexGrow: 1 }}
+        contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: 16, gap: 12, flexGrow: 1 }}
         onEndReachedThreshold={0.4}
         onEndReached={() => {
           if (history.hasNextPage && !history.isFetching) void history.fetchNextPage();

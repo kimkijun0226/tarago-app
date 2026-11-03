@@ -43,14 +43,21 @@ export default function TabsLayout() {
         <NativeTabs.Trigger.Icon sf={{ default: 'map', selected: 'map.fill' }} md="map" />
       </NativeTabs.Trigger>
 
-      <NativeTabs.Trigger name="alerts">
+      <NativeTabs.Trigger name="alerts" disableAutomaticContentInsets>
         <NativeTabs.Trigger.Label>알림</NativeTabs.Trigger.Label>
         <NativeTabs.Trigger.Icon
           sf={{ default: 'bell', selected: 'bell.fill' }}
           md="notifications"
         />
       </NativeTabs.Trigger>
-      <NativeTabs.Trigger name="feedback">
+      <NativeTabs.Trigger name="widgets" disableAutomaticContentInsets>
+        <NativeTabs.Trigger.Label>위젯</NativeTabs.Trigger.Label>
+        <NativeTabs.Trigger.Icon
+          sf={{ default: 'square.grid.2x2', selected: 'square.grid.2x2.fill' }}
+          md="widgets"
+        />
+      </NativeTabs.Trigger>
+      <NativeTabs.Trigger name="feedback" disableAutomaticContentInsets>
         <NativeTabs.Trigger.Label>의견 보내기</NativeTabs.Trigger.Label>
         <NativeTabs.Trigger.Icon
           sf={{ default: 'bubble.left', selected: 'bubble.left.fill' }}

@@ -170,6 +170,9 @@ export function useSubwayAlertScreen(
           setBusy(true);
           void remove
             .mutateAsync(alert.id)
+            .then(() => {
+              setDraft((current) => (current?.id === alert.id ? null : current));
+            })
             .catch((error) => showAlertError('삭제하지 못했어요', error))
             .finally(() => {
               operation.current = false;

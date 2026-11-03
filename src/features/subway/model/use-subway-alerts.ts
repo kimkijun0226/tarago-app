@@ -34,10 +34,11 @@ export function useSubwayAlertMutations() {
     mutationFn: ({ input, id }: { input: SubwayAlertInput; id?: string }) =>
       saveSubwayAlert(input, id),
     onSuccess: async (alert) => {
-      client.setQueryData<SubwayAlert[]>(['subway-alerts'], (current) => [
-        alert,
-        ...(current ?? []).filter((a) => a.id !== alert.id),
-      ]);
+      client.setQueryData<SubwayAlert[]>(['subway-alerts'], (current = []) =>
+        current.some((a) => a.id === alert.id)
+          ? current.map((a) => a.id === alert.id ? alert : a)
+          : [alert, ...current],
+      );
       await cacheSubwayAlerts(client.getQueryData<SubwayAlert[]>(['subway-alerts']) ?? []);
       await client.invalidateQueries({ queryKey: ['subway-alerts'] });
     },

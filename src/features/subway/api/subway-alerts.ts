@@ -1,3 +1,5 @@
+import { clearAlertNotifications } from '@/features/bus-alert/model/notification-cleanup';
+import { supportsBundledNotificationVoice } from '@/features/bus-alert/model/notification-voice';
 /** @fileoverview 기기 인증을 붙여 지하철 도착 알림 예약을 조회·생성·수정·삭제한다. */
 
 import { apiClient } from '@/shared/api/client';
@@ -26,7 +28,14 @@ export async function getSubwayAlerts(signal?: AbortSignal): Promise<SubwayAlert
  */
 export async function saveSubwayAlert(input: SubwayAlertInput, id?: string): Promise<SubwayAlert> {
   /** 버스 알림과 공유하는 기기 인증 헤더를 저장 요청 전에 준비한다. */
-  const config = await alertAuth();
+  const auth = await alertAuth();
+  const config = {
+    ...auth,
+    headers: {
+      ...auth.headers,
+      ...(supportsBundledNotificationVoice ? { 'X-TaraGo-Voice-Bundle': '1' } : {}),
+    },
+  };
 
   /** HTTP 응답 래퍼에서 화면에 전달할 서버 본문만 꺼낸다. */
   const { data } = id
@@ -42,4 +51,8 @@ export async function saveSubwayAlert(input: SubwayAlertInput, id?: string): Pro
  */
 export async function deleteSubwayAlert(id: string) {
   await apiClient.delete(`/subway/alerts/${id}`, await alertAuth());
+  await clearAlertNotifications(id).catch(() => {
+    // 서버 삭제는 완료됐으므로 기기 표시 정리 실패로 삭제 실패를 보고하지 않는다.
+    console.warn('삭제한 예약의 기기 알림을 정리하지 못했습니다.');
+  });
 }

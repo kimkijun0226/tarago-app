@@ -53,7 +53,9 @@ const styles = StyleSheet.create({
   toolbar: {
     flexDirection: 'row',
     paddingHorizontal: 16,
-    paddingVertical: 6,
+    paddingTop: 0,
+    paddingBottom: 8,
+    alignItems: 'center',
   },
   header: { flex: 1, minWidth: 0 },
   actions: {

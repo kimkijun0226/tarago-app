@@ -101,7 +101,8 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: 16,
-    paddingVertical: 4,
+    paddingTop: 0,
+    paddingBottom: 8,
   },
   titleArea: { flex: 1, gap: 4 },
   title: { fontSize: 17, fontWeight: '600', color: mapUi.text },
@@ -121,8 +122,8 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 12,
-    minHeight: 64,
-    paddingVertical: 16,
+    minHeight: 56,
+    paddingVertical: 12,
   },
   number: {
     color: mapUi.secondaryText,
@@ -135,5 +136,5 @@ const styles = StyleSheet.create({
   name: { flexShrink: 1, color: mapUi.text, fontSize: 16, fontWeight: '600' },
   action: { minWidth: 36, minHeight: 44, alignItems: 'center', justifyContent: 'center' },
   pressed: { backgroundColor: mapUi.blueSurface, transform: [] },
-  empty: { padding: 24, color: mapUi.secondaryText, textAlign: 'center' },
+  empty: { padding: 16, color: mapUi.secondaryText, textAlign: 'center' },
 });

@@ -48,24 +48,24 @@ export function PlaceDetail({ place, onSheetHeight, onClose, onSubway }: Props) 
         right: 12,
         backgroundColor: colors.surface,
         borderRadius: 16,
-        paddingHorizontal: 24,
-        paddingTop: 12,
+        paddingHorizontal: 16,
+        paddingTop: 8,
         paddingBottom: 16,
         gap: 4,
       }}
     >
       <View
         style={{
-          width: 42,
-          height: 5,
+          width: 44,
+          height: 4,
           borderRadius: 12,
-          backgroundColor: colors.tertiaryText,
+          backgroundColor: colors.borderStrong,
           alignSelf: 'center',
           marginBottom: 8,
         }}
       />
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
-        <Text style={{ color: colors.text, fontSize: 23, fontWeight: '600', flex: 1 }}>
+        <Text style={{ color: colors.text, fontSize: 20, lineHeight: 28, fontWeight: '600', flex: 1 }}>
           {place.name.replace(/\[.*?\]/g, '')}
         </Text>
         <Pressable
@@ -75,7 +75,6 @@ export function PlaceDetail({ place, onSheetHeight, onClose, onSubway }: Props) 
             width: 44,
             height: 44,
             borderRadius: 12,
-            backgroundColor: colors.secondarySurface,
             alignItems: 'center',
             justifyContent: 'center',
           }}

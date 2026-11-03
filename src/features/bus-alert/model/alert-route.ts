@@ -63,6 +63,7 @@ function schedule() {
     thresholdMinutes: 5,
     notificationStages: [5, 3, 2, 1, 0],
     enabled: true,
+    voiceEnabled: false,
   };
 }
 export function busDraftFromRoute(params: AlertRouteParams, _openedAt: number): AlertDraft | null {
@@ -89,7 +90,7 @@ export function busDraftFromRoute(params: AlertRouteParams, _openedAt: number): 
     proximityEnabled: kind === 'location',
     radius: 200,
     ...(kind === 'location' ? { repeatMinutes: 5 } : {}),
-    showVehicleNumber: true,
+    showVehicleNumber: false,
   };
 }
 export function subwayDraftFromRoute(

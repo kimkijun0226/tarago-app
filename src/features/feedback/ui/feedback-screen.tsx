@@ -5,8 +5,6 @@ import {
   Alert,
   Image,
   Keyboard,
-  KeyboardAvoidingView,
-  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -14,7 +12,7 @@ import {
   TextInput,
   View,
 } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { SafeAreaView } from 'react-native-screens/experimental';
 import { SymbolView } from 'expo-symbols';
 import type { ImagePickerAsset } from 'expo-image-picker';
 import { requireOptionalNativeModule } from 'expo';
@@ -25,7 +23,6 @@ import { sendFeedback } from '../api/send-feedback';
 
 /** 제목만으로도 보낼 수 있는 의견 작성 화면. 실패하면 작성 내용과 사진을 유지한다. */
 export function FeedbackScreen() {
-  const insets = useSafeAreaInsets();
   const [title, setTitle] = useState('');
   const [content, setContent] = useState('');
   const [image, setImage] = useState<ImagePickerAsset | null>(null);
@@ -73,14 +70,14 @@ export function FeedbackScreen() {
     }
   }
   return (
-    <KeyboardAvoidingView style={s.screen} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
+    <SafeAreaView style={s.screen} edges={{ top: true, bottom: true, left: true, right: true }}>
       <ScrollView
+        style={{ flex: 1 }}
+        contentInsetAdjustmentBehavior="never"
+        automaticallyAdjustKeyboardInsets
         keyboardShouldPersistTaps="handled"
         keyboardDismissMode="on-drag"
-        contentContainerStyle={[
-          s.body,
-          { paddingTop: insets.top + 18, paddingBottom: insets.bottom + 96 },
-        ]}
+        contentContainerStyle={[s.body, { paddingTop: 4, paddingBottom: 16 }]}
       >
         <AppHeader title="의견 보내기" large />
         <View style={s.field}>
@@ -168,12 +165,12 @@ export function FeedbackScreen() {
           )}
         </Pressable>
       </ScrollView>
-    </KeyboardAvoidingView>
+    </SafeAreaView>
   );
 }
 const s = StyleSheet.create({
   screen: { flex: 1, backgroundColor: c.background },
-  body: { paddingHorizontal: 20, gap: 24 },
+  body: { paddingHorizontal: 16, gap: 16 },
   field: { gap: 8 },
   label: { fontSize: 14, fontWeight: '600', color: c.text },
   required: { color: c.accent },

@@ -52,8 +52,8 @@ export function BusStopSheetHeader({
 }
 
 const styles = StyleSheet.create({
-  header: { paddingVertical: 4 },
+  header: { paddingVertical: 0 },
   expand: { minHeight: 44, justifyContent: 'center', gap: 4 },
-  title: { fontSize: 22, fontWeight: '600' },
+  title: { fontSize: 20, lineHeight: 28, fontWeight: '600' },
   subtitle: { fontSize: 12 },
 });

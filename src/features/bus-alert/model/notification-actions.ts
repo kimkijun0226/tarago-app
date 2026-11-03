@@ -8,6 +8,7 @@ import { API_STORAGE_SCOPE } from '@/shared/api/config';
 import { alertStorage } from './alert-storage';
 
 export const RIDE_DONE = 'TARAGO_RIDE_DONE';
+export const PAUSE_TODAY = 'TARAGO_PAUSE_TODAY';
 export const SNOOZE_FIVE = 'TARAGO_SNOOZE_FIVE';
 const TASK = 'tarago-notification-actions';
 const PREFIX = `tarago-action-${API_STORAGE_SCOPE}-`;
@@ -54,11 +55,16 @@ export async function retryNotificationActions() {
         action: string;
         expiresAt: string;
         notificationId: string;
+        requestedAt?: number;
       };
       let remove = Date.parse(input.expiresAt) <= Date.now();
       if (!remove) {
         try {
-          await apiClient.post('/alerts/actions', { token: input.token, action: input.action });
+          await apiClient.post('/alerts/actions', {
+            token: input.token,
+            action: input.action,
+            requestedAt: input.requestedAt,
+          });
           remove = true;
           await Notifications.dismissNotificationAsync(input.notificationId);
         } catch (error) {
@@ -84,12 +90,16 @@ export async function retryNotificationActions() {
 
 export async function handleNotificationAction(response: Notifications.NotificationResponse) {
   const action =
-    response.actionIdentifier === RIDE_DONE
-      ? 'rideDone'
-      : response.actionIdentifier === SNOOZE_FIVE
-        ? 'snoozeFive'
-        : undefined;
+    response.actionIdentifier === PAUSE_TODAY
+      ? 'pauseToday'
+      : response.actionIdentifier === RIDE_DONE
+        ? 'rideDone'
+        : response.actionIdentifier === SNOOZE_FIVE
+          ? 'snoozeFive'
+          : undefined;
   if (!action) return false;
+  // iOS forwards this response after its native request; sending twice can replay an old pause.
+  if (Platform.OS === 'ios') return true;
   const data = response.notification.request.content.data;
   if (!data || typeof data.actionToken !== 'string' || typeof data.actionExpiresAt !== 'string')
     throw new Error('이 알림에서는 빠른 동작을 사용할 수 없어요.');
@@ -103,6 +113,7 @@ export async function handleNotificationAction(response: Notifications.Notificat
       action,
       expiresAt: data.actionExpiresAt,
       notificationId: response.notification.request.identifier,
+      requestedAt: Date.now(),
     }),
     { keychainAccessible: SecureStore.AFTER_FIRST_UNLOCK_THIS_DEVICE_ONLY },
   );
@@ -134,9 +145,18 @@ if (!TaskManager.isTaskDefined(TASK)) {
 
 export async function registerNotificationActions() {
   await Notifications.setNotificationCategoryAsync('taragoArrival', [
+    ...(Platform.OS === 'ios'
+      ? []
+      : [
+          {
+            identifier: PAUSE_TODAY,
+            buttonTitle: '오늘은 쉬어요',
+            options: { opensAppToForeground: false },
+          },
+        ]),
     {
       identifier: RIDE_DONE,
-      buttonTitle: '탔어요 · 오늘은 그만',
+      buttonTitle: '탔어요',
       options: { opensAppToForeground: false },
     },
     {

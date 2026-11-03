@@ -110,6 +110,9 @@ export function PlaceSearchResults({
         </Text>
       ) : null}
       <FlatList
+        style={{ flex: 1 }}
+        contentContainerStyle={{ paddingBottom: 24 }}
+        automaticallyAdjustKeyboardInsets
         data={rows}
         keyExtractor={(place) => place.id}
         keyboardShouldPersistTaps="handled"

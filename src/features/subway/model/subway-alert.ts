@@ -2,6 +2,8 @@
 
 /** 서버에 저장하는 반복 감시 설정. days는 일요일 0부터 토요일 6까지이며 시각은 한국 시간 HH:mm이다. */
 export interface SubwayAlertInput {
+  voiceEnabled?: boolean;
+  voiceProfile?: import('@/features/bus-alert/model/notification-voice').VoiceProfile;
   stationName: string;
   lineId: string;
   lineName?: string;
@@ -31,6 +33,7 @@ export interface SubwayAlertInput {
 }
 /** 서버가 예약 ID를 부여한 저장 결과. */
 export interface SubwayAlert extends SubwayAlertInput {
+  notificationVoice?: import('@/features/bus-alert/model/notification-voice').NotificationVoice;
   notificationControl?: import('@/features/bus-alert/model/notification-actions').NotificationControl;
   id: string;
 }

@@ -116,92 +116,99 @@ export function useCurrentLocation() {
   );
 
   /**
-   * foreground 권한과 기기 위치 서비스 상태를 확인한 뒤 현재 좌표를 조회한다.
+   * 자동 조회는 허용된 권한만 사용하고, 사용자가 내 위치를 요청할 때만 권한을 묻는다.
    *
    * 5초 이내의 정확한 좌표만 재사용하고 새 GPS 측정은 High 정확도로 기다린다. 실패 이유는
    * 콘솔에 남기고 사용자에게는 위치 설정 확인 안내를 보여 준다.
    * 초기 위치 준비 effect에서 호출하므로 참조를 유지하기 위해 useCallback을 쓴다.
    * @returns 조회한 WGS84 좌표. 권한 거부·서비스 비활성화·조회 오류·중복 요청이면 `null`.
    */
-  const getCurrentLocation = useCallback(async (): Promise<Coordinate | null> => {
-    /** 첫 화면 조회와 버튼 탭이 겹쳐도 위치 요청은 한 번만 실행한다. */
-    if (requestingRef.current) return null;
+  const getCurrentLocation = useCallback(
+    async (requestPermission = false): Promise<Coordinate | null> => {
+      /** 첫 화면 조회와 버튼 탭이 겹쳐도 위치 요청은 한 번만 실행한다. */
+      if (requestingRef.current) return null;
 
-    requestingRef.current = true;
-    setLoading(true);
+      requestingRef.current = true;
+      setLoading(true);
 
-    try {
-      /** 기기의 현재 foreground 위치 권한과 다시 요청할 수 있는지 여부다. */
-      let permission = await Location.getForegroundPermissionsAsync();
-      if (!permission.granted && permission.canAskAgain)
-        permission = await Location.requestForegroundPermissionsAsync();
+      try {
+        /** 기기의 현재 foreground 위치 권한과 다시 요청할 수 있는지 여부다. */
+        let permission = await Location.getForegroundPermissionsAsync();
+        if (requestPermission && !permission.granted && permission.canAskAgain)
+          permission = await Location.requestForegroundPermissionsAsync();
 
-      if (!permission.granted) {
-        Alert.alert(
-          '위치 권한이 필요해요',
-          permission.canAskAgain
-            ? '위치 권한을 허용하면 내 위치로 이동할 수 있어요.'
-            : '기기 설정에서 TaraGo의 위치 권한을 허용해주세요.',
-        );
-        return null;
-      }
+        if (!permission.granted) {
+          if (!requestPermission) return null;
+          Alert.alert(
+            '위치 권한이 필요해요',
+            permission.canAskAgain
+              ? '위치 권한을 허용하면 내 위치로 이동할 수 있어요.'
+              : '기기 설정에서 TaraGo의 위치 권한을 허용해주세요.',
+          );
+          return null;
+        }
 
-      if (permission.ios?.accuracy === 'reduced' || permission.android?.accuracy === 'coarse') {
-        Alert.alert(
-          '정확한 위치를 켜주세요',
-          '기기 설정에서 TaraGo의 정확한 위치를 허용해주세요.',
-          [
-            { text: '취소', style: 'cancel' },
-            {
-              text: '설정 열기',
-              onPress: () => {
-                void Linking.openSettings().catch(() =>
-                  Alert.alert('기기 설정에서 위치 권한을 확인해주세요.'),
-                );
+        if (permission.ios?.accuracy === 'reduced' || permission.android?.accuracy === 'coarse') {
+          if (!requestPermission) return null;
+          Alert.alert(
+            '정확한 위치를 켜주세요',
+            '기기 설정에서 TaraGo의 정확한 위치를 허용해주세요.',
+            [
+              { text: '취소', style: 'cancel' },
+              {
+                text: '설정 열기',
+                onPress: () => {
+                  void Linking.openSettings().catch(() =>
+                    Alert.alert('기기 설정에서 위치 권한을 확인해주세요.'),
+                  );
+                },
               },
-            },
-          ],
-        );
+            ],
+          );
+          return null;
+        }
+
+        if (!(await Location.hasServicesEnabledAsync())) {
+          if (requestPermission)
+            Alert.alert('위치 서비스가 꺼져 있어요', '기기의 위치 서비스를 켜주세요.');
+          return null;
+        }
+
+        /** 최근 5초·허용 정확도 조건을 만족하는 위치 측정값이다. 없으면 새 GPS 구독을 기다린다. */
+        const location =
+          recent.current &&
+          Date.now() - recent.current.timestamp < 5_000 &&
+          recent.current.coords.accuracy != null &&
+          recent.current.coords.accuracy >= 0 &&
+          recent.current.coords.accuracy <= 50
+            ? recent.current
+            : await Location.getLastKnownPositionAsync({ maxAge: 5_000, requiredAccuracy: 50 });
+        if (!location) return await refresh();
+
+        /** 지도에서 사용할 위도·경도만 원본 위치 객체에서 추출한 값이다. */
+        const coordinate = {
+          latitude: location.coords.latitude,
+          longitude: location.coords.longitude,
+        };
+
+        setPosition(coordinate);
+        recent.current = location;
+        return coordinate;
+      } catch (error) {
+        console.warn('현재 위치 조회 실패:', error);
+        if (requestPermission)
+          Alert.alert(
+            '위치를 찾지 못했어요',
+            '기기 설정에서 정확한 위치를 켜고 내 위치 버튼을 다시 눌러주세요.',
+          );
         return null;
+      } finally {
+        requestingRef.current = false;
+        if (mounted.current) setLoading(false);
       }
-
-      if (!(await Location.hasServicesEnabledAsync())) {
-        Alert.alert('위치 서비스가 꺼져 있어요', '기기의 위치 서비스를 켜주세요.');
-        return null;
-      }
-
-      /** 최근 5초·허용 정확도 조건을 만족하는 위치 측정값이다. 없으면 새 GPS 구독을 기다린다. */
-      const location =
-        recent.current &&
-        Date.now() - recent.current.timestamp < 5_000 &&
-        recent.current.coords.accuracy != null &&
-        recent.current.coords.accuracy >= 0 &&
-        recent.current.coords.accuracy <= 50
-          ? recent.current
-          : await Location.getLastKnownPositionAsync({ maxAge: 5_000, requiredAccuracy: 50 });
-      if (!location) return await refresh();
-
-      /** 지도에서 사용할 위도·경도만 원본 위치 객체에서 추출한 값이다. */
-      const coordinate = {
-        latitude: location.coords.latitude,
-        longitude: location.coords.longitude,
-      };
-
-      setPosition(coordinate);
-      recent.current = location;
-      return coordinate;
-    } catch (error) {
-      console.warn('현재 위치 조회 실패:', error);
-      Alert.alert(
-        '위치를 찾지 못했어요',
-        '기기 설정에서 정확한 위치를 켜고 내 위치 버튼을 다시 눌러주세요.',
-      );
-      return null;
-    } finally {
-      requestingRef.current = false;
-      if (mounted.current) setLoading(false);
-    }
-  }, [refresh]);
+    },
+    [refresh],
+  );
 
   return { getCurrentLocation, loading, position };
 }

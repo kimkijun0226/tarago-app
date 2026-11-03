@@ -1,16 +1,15 @@
+import { TransportSelector } from '@/shared/ui/transport-selector';
 import { AlertKindSelector } from './alert-kind-selector';
 import { BrandLogo } from '@/shared/ui/brand-logo';
 import { AppHeader } from '@/shared/ui/app-header';
 import { SymbolView } from 'expo-symbols';
-import { openAlertTarget } from '@/features/bus-alert/model/open-alert-target';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { router, useFocusEffect } from 'expo-router';
 import { useAppStore } from '@/shared/model/app-store';
 import {
   ActivityIndicator,
   BackHandler,
   Image,
-  Linking,
   Pressable,
   ScrollView,
   Text,
@@ -21,9 +20,9 @@ import {
   useSubwayAlertScreen,
   type SubwayAlertDraft,
 } from '@/features/subway/model/use-subway-alert-screen';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView } from 'react-native-screens/experimental';
 import { WEEKDAYS, type AlertDraft, type AlertKind } from '../model/alert-form';
-import { AlertArrivalTimes } from './alert-arrival-times';
+import { AlertArrivalTimes, AlertTodayControl } from './alert-arrival-times';
 import { useAlertScreen } from '../model/use-alert-screen';
 import { AlertEditorForm } from './alert-editor-form';
 import { createStyles } from './alert-screen-styles';
@@ -57,6 +56,8 @@ export function AlertsScreenContent({
   initialSubwayDraft?: SubwayAlertDraft | null;
 }) {
   const [adding, setAdding] = useState(false);
+  const editorScroll = useRef<ScrollView>(null);
+  const editorContent = useRef({ editing: false, height: 0 });
   const menu = useAppStore((s) => s.alertMenu);
   const setMenu = useAppStore((s) => s.setAlertMenu);
   const [transport, setTransport] = useState(initialTransport ?? menu.transport);
@@ -150,14 +151,21 @@ export function AlertsScreenContent({
   const editing = transport === 'bus' ? !!bus.draft : !!subway.draft;
   const busy = bus.busy || subway.busy;
   const hasAlerts =
-    bus.alerts.some((alert) => !alert.monitoringSourceId) || (subway.list.data?.length ?? 0) > 0;
+    transport === 'bus'
+      ? bus.alerts.some((alert) => !alert.monitoringSourceId)
+      : (subway.list.data?.length ?? 0) > 0;
+  const listPending = transport === 'bus' ? bus.isPending : subway.list.isPending;
+  const listError = transport === 'bus' ? bus.isError : subway.list.isError;
   if (!adding && !editing)
     return (
-      <SafeAreaView style={styles.page} edges={['top', 'left', 'right']}>
+      <SafeAreaView
+        style={styles.page}
+        edges={{ top: true, left: true, right: true, bottom: true }}
+      >
         <View
           style={{
-            paddingHorizontal: 20,
-            paddingTop: 20,
+            paddingHorizontal: 16,
+            paddingTop: 0,
           }}
         >
           <AppHeader
@@ -167,7 +175,7 @@ export function AlertsScreenContent({
               hasAlerts ? (
                 <Pressable
                   accessibilityRole="button"
-                  accessibilityLabel="예약 추가"
+                  accessibilityLabel={`${transport === 'bus' ? '버스' : '지하철'} 알림 생성`}
                   disabled={busy}
                   onPress={() => setAdding(true)}
                   style={{ width: 44, height: 44, alignItems: 'center', justifyContent: 'center' }}
@@ -182,11 +190,28 @@ export function AlertsScreenContent({
             }
           />
         </View>
-        <ScrollView contentContainerStyle={styles.content}>
-          {!hasAlerts && (
+        <ScrollView
+          style={styles.flex}
+          contentInsetAdjustmentBehavior="never"
+          contentContainerStyle={styles.content}
+          keyboardShouldPersistTaps="handled"
+          keyboardDismissMode="on-drag"
+        >
+          <TransportSelector value={transport} onChange={setTransport} disabled={busy} />
+          {listError && (
             <Pressable
               accessibilityRole="button"
-              accessibilityLabel="버스 및 지하철 알림 추가"
+              onPress={() => void (transport === 'bus' ? bus.refetch() : subway.list.refetch())}
+            >
+              <Text style={{ color: colors.danger, lineHeight: 22 }}>
+                알림 목록을 불러오지 못했어요. 눌러서 다시 시도해주세요.
+              </Text>
+            </Pressable>
+          )}
+          {!hasAlerts && !listPending && !listError && (
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel={`${transport === 'bus' ? '버스' : '지하철'} 알림 생성`}
               onPress={() => setAdding(true)}
               style={({ pressed }) => ({
                 minHeight: 112,
@@ -199,17 +224,20 @@ export function AlertsScreenContent({
                 alignItems: 'center',
                 justifyContent: 'space-between',
                 gap: 16,
-                paddingHorizontal: 20,
+                paddingHorizontal: 16,
                 paddingVertical: 16,
               })}
             >
               <Image
                 source={require('@/assets/brand/tarago-mark.png')}
                 accessible={false}
-                style={{ width: 72, height: 72 }}
+                style={{ width: 48, height: 48 }}
                 resizeMode="contain"
               />
               <Text
+                numberOfLines={1}
+                adjustsFontSizeToFit
+                minimumFontScale={0.65}
                 style={{
                   flex: 1,
                   fontSize: 16,
@@ -219,7 +247,7 @@ export function AlertsScreenContent({
                   textAlign: 'left',
                 }}
               >
-                {'버스 및 지하철 알림을\n추가해주세요'}
+                {`${transport === 'bus' ? '버스' : '지하철'} 알림을 추가해주세요`}
               </Text>
               <SymbolView
                 name={{ ios: 'plus', android: 'add' }}
@@ -228,63 +256,85 @@ export function AlertsScreenContent({
               />
             </Pressable>
           )}
-          <BusAlertsPanel
-            state={{
-              ...bus,
-              edit: (alert) => {
-                setTransport('bus');
-                bus.edit(alert);
-              },
-            }}
-            all
-          />
-          <SubwayAlertsPanel
-            state={{
-              ...subway,
-              edit: (alert) => {
-                setTransport('subway');
-                subway.edit(alert);
-              },
-            }}
-            all
-          />
+          {transport === 'bus' ? (
+            <BusAlertsPanel
+              state={{
+                ...bus,
+                edit: (alert) => {
+                  setTransport('bus');
+                  bus.edit(alert);
+                },
+              }}
+              all
+            />
+          ) : (
+            <SubwayAlertsPanel
+              state={{
+                ...subway,
+                edit: (alert) => {
+                  setTransport('subway');
+                  subway.edit(alert);
+                },
+              }}
+              all
+            />
+          )}
         </ScrollView>
       </SafeAreaView>
     );
   return (
-    <SafeAreaView style={styles.page} edges={['top', 'left', 'right']}>
-      <View style={{ paddingHorizontal: 20, paddingTop: 20 }}>
+    <SafeAreaView style={styles.page} edges={{ top: true, left: true, right: true, bottom: true }}>
+      <View style={{ paddingHorizontal: 16, paddingTop: 0 }}>
         <AlertPageHeader
           transport={transport}
           kind={kind}
-          onTransportChange={setTransport}
           editing={editing}
           busy={busy}
           onBack={closeEditor}
+          onDelete={
+            transport === 'bus'
+              ? bus.draft?.id
+                ? () => {
+                    const alert = bus.alerts.find((item) => item.id === bus.draft?.id);
+                    if (alert) bus.removeAlert(alert);
+                  }
+                : undefined
+              : subway.draft?.id
+                ? () => {
+                    const alert = subway.list.data?.find((item) => item.id === subway.draft?.id);
+                    if (alert) subway.deleteAlert(alert);
+                  }
+                : undefined
+          }
         />
       </View>
       <ScrollView
-        contentContainerStyle={styles.content}
+        ref={editorScroll}
+        onContentSizeChange={(_, height) => {
+          const previous = editorContent.current;
+          editorContent.current = { editing, height };
+          // 새 질문이 추가될 때만 이동하고 입력·선택 스타일 변경은 스크롤을 건드리지 않는다.
+          if (editing && previous.editing && height > previous.height + 48) {
+            requestAnimationFrame(() => editorScroll.current?.scrollToEnd({ animated: true }));
+          }
+        }}
+        style={styles.flex}
+        contentInsetAdjustmentBehavior="never"
+        contentContainerStyle={[styles.content, !editing && { flexGrow: 1 }]}
         automaticallyAdjustKeyboardInsets
         keyboardShouldPersistTaps="handled"
         keyboardDismissMode="on-drag"
       >
-        {!editing && (
+        {!editing ? (
           <AlertKindSelector
-            value={kind}
+            transport={transport}
             disabled={busy}
             onChange={(value) => {
               if (transport === 'bus') bus.selectKind(value);
               else subway.selectKind(value);
             }}
           />
-        )}
-        {bus.runtimeError && (
-          <AlertNotice action="기기 설정 열기" onAction={() => void Linking.openSettings()}>
-            {bus.runtimeError}
-          </AlertNotice>
-        )}
-        {transport === 'bus' ? (
+        ) : transport === 'bus' ? (
           <BusAlertsPanel state={bus} />
         ) : (
           <SubwayAlertsPanel state={subway} />
@@ -306,19 +356,21 @@ function BusAlertsPanel({
   const visibleAlerts = all
     ? state.alerts.filter((alert) => !alert.monitoringSourceId)
     : state.visibleAlerts;
-  const warning =
-    state.pushWarning ??
-    (state.alerts.some((a) => a.enabled && (a.scheduledEnabled || a.proximityEnabled)) &&
-    state.pushStatus?.ready === false
-      ? '알림을 받으려면 알림 연결을 확인해주세요.'
-      : null);
+  const hasActiveAlerts = state.alerts.some(
+    (a) => a.enabled && (a.scheduledEnabled || a.proximityEnabled),
+  );
+  const warning = hasActiveAlerts
+    ? (state.pushWarning ??
+      (state.pushStatus?.ready === false ? '알림을 받으려면 알림 연결을 확인해주세요.' : null))
+    : null;
   return (
     <>
-      {warning && (all || draft) && (
+      {(all || draft) && (
         <AlertNotice
+          source="bus-push"
           action="알림 다시 연결"
           disabled={busy}
-          onAction={() => void state.reconnect()}
+          onAction={() => state.reconnect()}
         >
           {warning}
         </AlertNotice>
@@ -332,11 +384,13 @@ function BusAlertsPanel({
             threshold={state.threshold}
             setThreshold={state.setThreshold}
             disabled={busy}
-          />
-          <AlertPrimaryButton
-            title={draft.id ? '변경 사항 저장' : '알림 저장'}
-            busy={busy}
-            onPress={() => void state.submit()}
+            footer={
+              <AlertPrimaryButton
+                title={draft.id ? '변경 사항 저장' : '알림 저장'}
+                busy={busy}
+                onPress={() => void state.submit()}
+              />
+            }
           />
         </>
       ) : !all ? (
@@ -352,6 +406,11 @@ function BusAlertsPanel({
                 <SavedAlertCard
                   key={alert.id}
                   compact={all}
+                  transport="bus"
+                  mode={alert.scheduledEnabled && alert.proximityEnabled ? 'both' : kind}
+                  todayControl={
+                    <AlertTodayControl transport="bus" alert={alert} kind={kind} busy={busy} />
+                  }
                   title={`${alert.busNumber}번 버스`}
                   subtitle={alert.stop.name}
                   arrivals={<AlertArrivalTimes transport="bus" alert={alert} kind={kind} />}
@@ -364,9 +423,6 @@ function BusAlertsPanel({
                   enabled={alert.enabled}
                   busy={busy}
                   onToggle={(value) => void state.toggle(alert, value)}
-                  onOpen={() =>
-                    void openAlertTarget('bus', alert.id, `saved:${alert.id}:${Date.now()}`)
-                  }
                   onEdit={() => state.edit(alert)}
                   onDelete={() => state.removeAlert(alert)}
                 />

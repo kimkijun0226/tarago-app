@@ -33,7 +33,8 @@ export function AlertTimeRange({
         mode="time"
         display={Platform.OS === 'ios' ? 'spinner' : 'default'}
         presentation={Platform.OS === 'android' ? 'dialog' : 'inline'}
-        locale="ko_KR"
+        // iOS는 is24Hour를 사용하지 않아 24시간제 locale을 직접 지정한다.
+        locale={Platform.OS === 'ios' ? 'en_GB' : 'ko_KR'}
         timeZoneName="Asia/Seoul"
         is24Hour
         themeVariant="light"

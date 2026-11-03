@@ -19,7 +19,7 @@ export const WEEKDAY_ORDER = [1, 2, 3, 4, 5, 6, 0];
 const TIME = /^([01]\d|2[0-3]):[0-5]\d$/;
 
 export function defaultStages(minutes: number) {
-  return [...new Set([minutes, 3, 2, 1, 0])].filter(
+  return [...new Set([minutes, 10, 5, 3, 2, 1, 0])].filter(
     (s) => Number.isInteger(s) && s >= 0 && s <= minutes,
   );
 }
@@ -109,6 +109,7 @@ export function buildBusAlertInput(
     : locationSchedule(draft);
   return {
     ...draft,
+    voiceProfile: draft.voiceProfile ?? 'clear-young',
     ...schedule,
     scheduledEnabled,
     proximityEnabled,

@@ -9,6 +9,7 @@ private final class TaraGoNotificationActions: NSObject, UNUserNotificationCente
     let action: String
     let expiresAt: String
     let notificationId: String
+    let requestedAt: Int64?
     var key: String { token + ":" + action }
   }
 
@@ -25,7 +26,7 @@ private final class TaraGoNotificationActions: NSObject, UNUserNotificationCente
     retained = handler
     center.delegate = handler
     let category = UNNotificationCategory(identifier: "taragoArrival", actions: [
-      UNNotificationAction(identifier: "TARAGO_RIDE_DONE", title: "탔어요 · 오늘은 그만", options: []),
+      UNNotificationAction(identifier: "TARAGO_RIDE_DONE", title: "탔어요", options: []),
       UNNotificationAction(identifier: "TARAGO_SNOOZE_FIVE", title: "5분 뒤 다시 알림", options: [])
     ], intentIdentifiers: [], options: [])
     center.getNotificationCategories { categories in
@@ -49,6 +50,7 @@ private final class TaraGoNotificationActions: NSObject, UNUserNotificationCente
     let action: String
     switch response.actionIdentifier {
     case "TARAGO_RIDE_DONE": action = "rideDone"
+    case "TARAGO_PAUSE_TODAY": action = "pauseToday"
     case "TARAGO_SNOOZE_FIVE": action = "snoozeFive"
     default:
       if original.responds(to: #selector(UNUserNotificationCenterDelegate.userNotificationCenter(_:didReceive:withCompletionHandler:))) {
@@ -61,13 +63,14 @@ private final class TaraGoNotificationActions: NSObject, UNUserNotificationCente
     let payload = data["body"] as? [AnyHashable: Any] ?? data
     guard let token = payload["actionToken"] as? String, token.count <= 2048,
           let expiresAt = payload["actionExpiresAt"] as? String else { completionHandler(); return }
-    let job = Job(token: token, action: action, expiresAt: expiresAt, notificationId: response.notification.request.identifier)
+    let job = Job(token: token, action: action, expiresAt: expiresAt, notificationId: response.notification.request.identifier, requestedAt: Int64(Date().timeIntervalSince1970 * 1000))
     DispatchQueue.main.async {
       do {
         var jobs = try self.readJobs()
-        if !jobs.contains(where: { $0.key == job.key }) { jobs.append(job) }
+        jobs.removeAll(where: { $0.key == job.key })
+        jobs.append(job)
         try self.saveJobs(jobs)
-        self.send(job) {
+        self.send(job, notifyFailure: true) {
           // Let Expo update an already-running UI after the native request finishes.
           self.original.userNotificationCenter?(center, didReceive: response, withCompletionHandler: {})
           completionHandler()
@@ -81,16 +84,24 @@ private final class TaraGoNotificationActions: NSObject, UNUserNotificationCente
 
   @objc private func resume() {
     DispatchQueue.main.async {
+      UNUserNotificationCenter.current().removeDeliveredNotifications(withIdentifiers: ["tarago-action-retry"])
       do { for job in try self.readJobs() { self.send(job, completion: {}) } }
-      catch { self.reportFailure() }
+      catch { self.reportFailure(false) }
     }
   }
 
   private func endpoint() -> URL? {
 #if DEBUG
-    guard let bundle = RCTBundleURLProvider.sharedSettings().jsBundleURL(forBundleRoot: ".expo/.virtual-metro-entry"),
-          var parts = URLComponents(url: bundle, resolvingAgainstBaseURL: false) else { return nil }
-    parts.port = 3000
+    var parts: URLComponents
+    if let origin = Bundle.main.object(forInfoDictionaryKey: "TaraGoNotificationDevelopmentAPIOrigin") as? String,
+       let configured = URLComponents(string: origin), ["http", "https"].contains(configured.scheme ?? ""), configured.host != nil {
+      parts = configured
+    } else {
+      guard let bundle = RCTBundleURLProvider.sharedSettings().jsBundleURL(forBundleRoot: ".expo/.virtual-metro-entry"),
+            let bundleParts = URLComponents(url: bundle, resolvingAgainstBaseURL: false) else { return nil }
+      parts = bundleParts
+      parts.port = 3000
+    }
     parts.path = "/alerts/actions"
     parts.query = nil
     parts.fragment = nil
@@ -105,7 +116,7 @@ private final class TaraGoNotificationActions: NSObject, UNUserNotificationCente
 #endif
   }
 
-  private func send(_ job: Job, completion: @escaping () -> Void) {
+  private func send(_ job: Job, notifyFailure: Bool = false, completion: @escaping () -> Void) {
     guard !active.contains(job.key) else { completion(); return }
     let formatter = ISO8601DateFormatter()
     formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
@@ -114,7 +125,7 @@ private final class TaraGoNotificationActions: NSObject, UNUserNotificationCente
       completion()
       return
     }
-    guard let url = endpoint() else { reportFailure(); completion(); return }
+    guard let url = endpoint() else { reportFailure(notifyFailure); completion(); return }
     active.insert(job.key)
     var background = UIBackgroundTaskIdentifier.invalid
     var finished = false
@@ -125,16 +136,24 @@ private final class TaraGoNotificationActions: NSObject, UNUserNotificationCente
       self.active.remove(job.key)
       if background != .invalid { UIApplication.shared.endBackgroundTask(background); background = .invalid }
       completion()
+      // An older in-flight request must not discard a newer tap saved under the same action key.
+      do {
+        if let newer = try self.readJobs().first(where: { $0.key == job.key && $0.requestedAt != job.requestedAt }) {
+          self.send(newer, completion: {})
+        }
+      } catch { self.reportFailure(false) }
     }
     background = UIApplication.shared.beginBackgroundTask(withName: "TaraGo notification action") {
       task?.cancel()
-      self.reportFailure()
+      self.reportFailure(notifyFailure)
       finish()
     }
     var request = URLRequest(url: url, timeoutInterval: 8)
     request.httpMethod = "POST"
     request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-    request.httpBody = try? JSONSerialization.data(withJSONObject: ["token": job.token, "action": job.action])
+    var input: [String: Any] = ["token": job.token, "action": job.action]
+    if let requestedAt = job.requestedAt { input["requestedAt"] = requestedAt }
+    request.httpBody = try? JSONSerialization.data(withJSONObject: input)
     task = URLSession.shared.dataTask(with: request) { _, response, _ in
       DispatchQueue.main.async {
         guard !finished else { return }
@@ -142,7 +161,7 @@ private final class TaraGoNotificationActions: NSObject, UNUserNotificationCente
         if (200..<300).contains(status) || [400, 401, 404, 410].contains(status) {
           self.remove(job)
           UNUserNotificationCenter.current().removeDeliveredNotifications(withIdentifiers: [job.notificationId])
-        } else { self.reportFailure() }
+        } else { self.reportFailure(notifyFailure) }
         finish()
       }
     }
@@ -177,11 +196,15 @@ private final class TaraGoNotificationActions: NSObject, UNUserNotificationCente
   }
 
   private func remove(_ job: Job) {
-    do { try saveJobs(readJobs().filter { $0.key != job.key }) }
-    catch { reportFailure() }
+    do { try saveJobs(readJobs().filter { $0.key != job.key || $0.requestedAt != job.requestedAt }) }
+    catch { reportFailure(false) }
   }
 
-  private func reportFailure() {
+  private func reportFailure(_ notify: Bool = true) {
+    guard notify else {
+      NSLog("TaraGo notification action retry is pending")
+      return
+    }
     let content = UNMutableNotificationContent()
     content.title = "알림 변경을 확인해주세요"
     content.body = "변경을 전송하지 못했어요. 앱을 열면 다시 시도해요."

@@ -72,7 +72,7 @@ export function SubwayDirectionCard({
 
 /** 이 파일의 지하철 표시 요소가 사용하는 고정 스타일을 모듈 범위에서 한 번 만든다. */
 const s = StyleSheet.create({
-  serviceStatus: { color: GRAY, fontSize: 15, textAlign: 'center', marginTop: 18 },
+  serviceStatus: { color: GRAY, fontSize: 15, textAlign: 'center', marginTop: 8 },
   directionCard: {
     flex: 1,
     minHeight: 96,
@@ -81,7 +81,7 @@ const s = StyleSheet.create({
     borderBottomWidth: 1,
     borderRadius: 14,
     backgroundColor: mapUi.background,
-    paddingHorizontal: 14,
+    paddingHorizontal: 12,
     paddingTop: 8,
     paddingBottom: 8,
   },
@@ -91,7 +91,7 @@ const s = StyleSheet.create({
     justifyContent: 'space-between',
     gap: 8,
     minHeight: 44,
-    paddingVertical: 8,
+    paddingVertical: 6,
     borderRadius: 14,
   },
   trainDestination: { flexShrink: 0, fontSize: 15, fontWeight: '500', color: mapUi.text },

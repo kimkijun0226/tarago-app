@@ -1,20 +1,29 @@
-import { AppHeader } from '@/shared/ui/app-header';
+import { AlertToggle } from './alert-toggle';
+import Animated, {
+  Easing,
+  ReduceMotion,
+  useAnimatedStyle,
+  useSharedValue,
+  withTiming,
+} from 'react-native-reanimated';
+import { SetupHeader } from '@/shared/ui/setup-header';
+import { useRecoveryStore } from '@/shared/model/recovery-store';
+import Swipeable from 'react-native-gesture-handler/ReanimatedSwipeable';
 import { AlertSetupPreview } from './alert-setup-preview';
 import { TransportIcon } from '@/shared/ui/transport-icon';
-import { useCallback, useRef, useState, type ComponentProps, type ReactNode } from 'react';
-import { useQuery } from '@tanstack/react-query';
-import * as Location from 'expo-location';
+import { useEffect, useRef, useState, type ComponentProps, type ReactNode } from 'react';
 import { ensureProximityPermission } from '../model/alert-runtime';
 import { showAlertError } from '../model/alert-error-dialog';
 import { SymbolView } from 'expo-symbols';
-import { ActivityIndicator, AppState, Pressable, Switch, Text, View } from 'react-native';
-import { router, useFocusEffect } from 'expo-router';
+import { ActivityIndicator, Pressable, Text, View } from 'react-native';
+import { router } from 'expo-router';
 import { useAppStore } from '@/shared/model/app-store';
 import { WEEKDAYS, WEEKDAY_ORDER } from '../model/alert-form';
 import { alertColors as colors } from './alert-design';
 import { createStyles } from './alert-screen-styles';
 
 const styles = createStyles(colors);
+const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
 
 /** 글자 없이 표시하되 스크린 리더에는 동작 이름을 제공한다. */
 export function AlertIconButton({
@@ -66,33 +75,30 @@ export function EmptyAlertCard({
   transport,
   kind,
   disabled,
-  compact = false,
+  onStart,
 }: {
   transport: 'bus' | 'subway';
   kind: 'time' | 'location';
-  compact?: boolean;
+  onStart?: () => void;
   disabled?: boolean;
 }) {
   const startSelection = useAppStore((s) => s.startAlertSelection);
   const [preparing, setPreparing] = useState(false);
   const operation = useRef(false);
-  const permission = useQuery({
-    queryKey: ['permissions', 'location', 'background'],
-    queryFn: () => Location.getBackgroundPermissionsAsync(),
-    enabled: kind === 'location',
-    retry: false,
-  });
-  const refetchPermission = permission.refetch;
-  useFocusEffect(
-    useCallback(() => {
-      if (kind !== 'location') return;
-      void refetchPermission();
-      const subscription = AppState.addEventListener('change', (state) => {
-        if (state === 'active') void refetchPermission();
-      });
-      return () => subscription.remove();
-    }, [kind, refetchPermission]),
-  );
+  const scale = useSharedValue(1);
+  const pressStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: scale.value }],
+    backgroundColor: colors.surface,
+  }));
+  const animatePress = (value: number) => {
+    scale.set(
+      withTiming(value, {
+        duration: 140,
+        easing: Easing.out(Easing.cubic),
+        reduceMotion: ReduceMotion.System,
+      }),
+    );
+  };
   const beginSelection = async () => {
     if (disabled || operation.current) return;
     operation.current = true;
@@ -100,8 +106,8 @@ export function EmptyAlertCard({
     try {
       if (kind === 'location') {
         await ensureProximityPermission();
-        await refetchPermission();
       }
+      onStart?.();
       startSelection({ transport, kind, requestId: String(Date.now()) });
       router.navigate('/');
     } catch (error) {
@@ -112,37 +118,36 @@ export function EmptyAlertCard({
     }
   };
   return (
-    <Pressable
+    <AnimatedPressable
       accessibilityRole="button"
-      accessibilityLabel={`${transport === 'bus' ? '버스' : '지하철'} 알림 추가`}
-      accessibilityHint="필요한 권한을 확인한 뒤 지도에서 알림 대상을 선택합니다"
-      accessibilityState={{ disabled: disabled || preparing, busy: preparing }}
+      accessibilityLabel={`${transport === 'bus' ? '버스' : '지하철'} ${kind === 'time' ? '예약' : '위치'} 알림 설정하기`}
+      accessibilityHint="지도에서 알림 대상을 선택합니다"
+      accessibilityState={{ disabled: !!disabled || preparing, busy: preparing }}
       disabled={disabled || preparing}
       onPress={() => void beginSelection()}
-      style={({ pressed }) => [
+      onPressIn={() => animatePress(0.985)}
+      onPressOut={() => animatePress(1)}
+      style={[
         styles.card,
-        styles.savedCard,
         {
-          borderStyle: 'solid',
+          flex: 1,
+          minHeight: 160,
+          padding: 20,
           borderWidth: 1,
           borderColor: colors.separator,
-          justifyContent: 'center',
-          alignItems: 'center',
-          gap: 12,
-          minHeight: compact ? 200 : 220,
-          paddingHorizontal: 20,
-          opacity: disabled ? 0.4 : pressed ? 0.7 : 1,
+          borderRadius: 18,
+          shadowColor: '#203550',
+          shadowOffset: { width: 0, height: 2 },
+          shadowOpacity: 0.04,
+          shadowRadius: 8,
+          elevation: 1,
+          opacity: disabled ? 0.4 : 1,
         },
+        pressStyle,
       ]}
     >
-      <AlertSetupPreview
-        transport={transport}
-        kind={kind}
-        needsLocationPermission={kind === 'location' && permission.data?.granted !== true}
-        locationPermissionError={kind === 'location' && permission.isError}
-        preparing={preparing}
-      />
-    </Pressable>
+      <AlertSetupPreview transport={transport} kind={kind} preparing={preparing} />
+    </AnimatedPressable>
   );
 }
 
@@ -187,71 +192,47 @@ export function AlertPageHeader({
   editing,
   busy,
   onBack,
-  onTransportChange,
+  onDelete,
   kind,
 }: {
   transport: 'bus' | 'subway';
   kind: 'time' | 'location';
-  onTransportChange: (transport: 'bus' | 'subway') => void;
+  onDelete?: () => void;
   editing: boolean;
   busy: boolean;
   onBack: () => void;
 }) {
   return (
     <View style={{ gap: 20 }}>
-      <AppHeader
+      <SetupHeader
+        current={editing ? 2 : 0}
+        labels={['알림 종류', '지도 선택', '알림 설정']}
+        headerTitle={'알림 추가'}
         title={
           editing
-            ? `${transport === 'bus' ? '버스' : '지하철'} ${kind === 'time' ? '예약' : '위치'} 알림`
-            : '예약 추가'
+            ? `${transport === 'bus' ? '버스' : '지하철'} 알림을 ${kind === 'time' ? '언제' : '어디에서'} 받을까요?`
+            : '어떤 알림을 받을까요?'
         }
         onBack={onBack}
-        backLabel="알림 목록으로 돌아가기"
+        right={
+          onDelete ? (
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="알림 삭제"
+              disabled={busy}
+              onPress={onDelete}
+              style={{ width: 44, height: 44, alignItems: 'center', justifyContent: 'center' }}
+            >
+              <SymbolView
+                name={{ ios: 'trash', android: 'delete_outline' }}
+                size={22}
+                tintColor="#E5484D"
+              />
+            </Pressable>
+          ) : undefined
+        }
         disabled={busy}
       />
-      {!editing && (
-        <View style={styles.heading}>
-          {(['bus', 'subway'] as const).map((value) => (
-            <Pressable
-              key={value}
-              accessibilityRole="button"
-              accessibilityState={{ selected: transport === value }}
-              disabled={busy}
-              onPress={() => onTransportChange(value)}
-              style={({ pressed }) => ({
-                flex: 1,
-                minHeight: 80,
-                gap: 12,
-                padding: 14,
-                flexDirection: 'row',
-                alignItems: 'center',
-                justifyContent: 'center',
-                borderRadius: 14,
-                borderWidth: 1,
-                borderBottomWidth: 1,
-                borderColor: transport === value ? colors.accent : colors.borderStrong,
-                backgroundColor: transport === value ? colors.accent : colors.surface,
-                opacity: busy ? 0.5 : pressed ? 0.85 : 1,
-              })}
-            >
-              <TransportIcon
-                transport={value}
-                size={28}
-                tintColor={transport === value ? colors.onAccent : colors.bodyText}
-              />
-              <Text
-                style={{
-                  fontSize: 15,
-                  fontWeight: '600',
-                  color: transport === value ? colors.onAccent : colors.bodyText,
-                }}
-              >
-                {value === 'bus' ? '버스' : '지하철'}
-              </Text>
-            </Pressable>
-          ))}
-        </View>
-      )}
     </View>
   );
 }
@@ -324,147 +305,198 @@ export function AlertWeekdays({
   );
 }
 
+/** 활성 알림에 영향을 주는 오류를 공통 토스트와 동기화한다. */
 export function AlertNotice({
+  source,
   children,
   action,
   onAction,
-  disabled,
 }: {
-  children: ReactNode;
+  source: string;
+  children: string | null;
   action?: string;
-  onAction?: () => void;
+  onAction?: () => void | Promise<unknown>;
   disabled?: boolean;
 }) {
-  return (
-    <View style={styles.warning}>
-      <Text style={styles.warningText}>{children}</Text>
-      {action && (
-        <Pressable accessibilityRole="button" disabled={disabled} onPress={onAction}>
-          <Text style={styles.link}>{action}</Text>
-        </Pressable>
-      )}
-    </View>
-  );
+  const actionRef = useRef(onAction);
+  useEffect(() => {
+    actionRef.current = onAction;
+  }, [onAction]);
+  useEffect(() => {
+    const store = useRecoveryStore.getState();
+    if (!children) {
+      store.clear(source);
+      return;
+    }
+    store.show({
+      source,
+      message: children,
+      retry: async () => {
+        await actionRef.current?.();
+      },
+      action,
+    });
+  }, [source, children, action]);
+  return null;
 }
 
 /** 버스·지하철 목록이 공유하는 카드. 실제 저장과 삭제는 각 도메인 훅이 수행한다. */
 export function SavedAlertCard({
-  compact = false,
   title,
   subtitle,
   summary,
   detail,
   arrivals,
+  todayControl,
+  mode,
+  transport,
   enabled,
   busy,
   onToggle,
-  onOpen,
   onEdit,
   onDelete,
 }: {
   compact?: boolean;
+  transport: 'bus' | 'subway';
   title: string;
   subtitle: string;
   summary: string;
   detail: string;
   arrivals: ReactNode;
+  todayControl: ReactNode;
+  mode: 'time' | 'location' | 'both';
   enabled: boolean;
   busy: boolean;
   onToggle: (enabled: boolean) => void;
-  onOpen: () => void;
   onEdit: () => void;
   onDelete: () => void;
 }) {
   return (
-    <View
-      style={[
-        styles.card,
-        styles.savedCard,
-        compact && { minHeight: 0, padding: 16, gap: 10 },
-        !enabled && styles.dim,
-      ]}
-    >
-      <View style={styles.heading}>
+    <View style={{ borderRadius: 16, backgroundColor: colors.surface, shadowColor: "#203550", shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.045, shadowRadius: 5, elevation: 1 }}>
+    <Swipeable
+      enabled={!busy}
+      friction={1.5}
+      rightThreshold={44}
+      overshootRight={false}
+      containerStyle={{ borderRadius: 16, overflow: 'hidden', backgroundColor: '#E5484D' }}
+      renderRightActions={() => (
         <Pressable
           accessibilityRole="button"
-          accessibilityLabel={`${title} 대상으로 이동`}
-          onPress={onOpen}
-          style={{ flex: 1, gap: 4 }}
+          accessibilityLabel={`${title} 알림 삭제`}
+          disabled={busy}
+          onPress={onDelete}
+          style={{
+            width: 88,
+            alignItems: 'center',
+            justifyContent: 'center',
+            gap: 8,
+            backgroundColor: '#E5484D',
+          }}
         >
-          <Text style={[styles.stationName, compact && { fontSize: 17 }]}>{title}</Text>
-          <Text
-            numberOfLines={compact ? 1 : undefined}
-            style={[styles.help, compact && { fontSize: 13, lineHeight: 18 }]}
-          >
-            {subtitle}
-          </Text>
+          <SymbolView
+            name={{ ios: 'trash', android: 'delete_outline' }}
+            size={22}
+            tintColor="#FFFFFF"
+          />
+          <Text style={{ color: '#FFFFFF', fontSize: 14, fontWeight: '600' }}>삭제</Text>
         </Pressable>
-        <View style={{ alignItems: 'flex-end', gap: 6 }}>
-          <Switch
-            accessibilityLabel={`${title} ${subtitle} 알림 사용`}
+      )}
+    >
+      <View style={[styles.card, styles.savedCard, { padding: 16, gap: 14 }]}>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={`${title} 알림 수정`}
+            onPress={onEdit}
+            style={{ flex: 1, flexDirection: 'row', alignItems: 'center', gap: 12 }}
+          >
+            <View style={{ width: 42, height: 42, borderRadius: 12, backgroundColor: colors.secondarySurface, alignItems: 'center', justifyContent: 'center' }}>
+              <TransportIcon transport={transport} size={26} tintColor={colors.accent} />
+            </View>
+            <View style={{ flex: 1, gap: 4 }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 7 }}>
+                <Text
+                  numberOfLines={1}
+                  adjustsFontSizeToFit
+                  minimumFontScale={0.8}
+                  style={{ flexShrink: 1, fontSize: 18, fontWeight: '600', color: colors.text }}
+                >
+                  {title} {mode === 'both' ? '예약·위치 알림' : mode === 'time' ? '예약 알림' : '위치 알림'}
+                </Text>
+                {mode !== 'location' && <SymbolView name={{ ios: 'clock', android: 'schedule' }} size={20} tintColor={colors.accent} />}
+                {mode !== 'time' && <SymbolView name={{ ios: 'location', android: 'near_me' }} size={20} tintColor={colors.accent} />}
+              </View>
+              <Text style={{ fontSize: 13, lineHeight: 18, color: colors.secondaryText }}>
+                {subtitle}
+              </Text>
+            </View>
+          </Pressable>
+          <AlertToggle
+            label={`${title} ${subtitle} 전체 알림 활성화`}
             disabled={busy}
             value={enabled}
-            onValueChange={onToggle}
-            trackColor={{ false: colors.borderStrong, true: colors.brand }}
+            onChange={onToggle}
+            color={colors.brand}
           />
         </View>
-      </View>
-      <Text
-        style={{
-          fontSize: compact ? 16 : 24,
-          fontWeight: '600',
-          color: colors.text,
-          fontVariant: ['tabular-nums'],
-        }}
-      >
-        {summary}
-      </Text>
-      <Text
-        numberOfLines={compact ? 1 : undefined}
-        style={[styles.detail, compact && { fontSize: 12, lineHeight: 18 }]}
-      >
-        {detail}
-      </Text>
-      {!enabled && (
-        <View style={styles.statusPill}>
-          <Text style={styles.statusText}>일시정지</Text>
-        </View>
-      )}
-      <View
-        style={{
-          flexDirection: 'row',
-          alignItems: 'center',
-          gap: 16,
-          borderTopWidth: 1,
-          borderTopColor: colors.separator,
-          paddingTop: 10,
-        }}
-      >
         <Pressable
           accessibilityRole="button"
-          accessibilityLabel={`${title} 도착정보 열기`}
-          onPress={onOpen}
-          style={{ flex: 1, minWidth: 0 }}
+          accessibilityLabel={`${title} 알림 수정`}
+          onPress={onEdit}
+          style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}
         >
-          {arrivals}
+          <View style={{ flex: 1, gap: 5 }}>
+          <Text
+            style={{
+              fontSize: 15,
+              lineHeight: 21,
+              fontWeight: '500',
+              color: colors.text,
+              fontVariant: ['tabular-nums'],
+            }}
+          >
+            {summary}
+          </Text>
+          <Text style={{ fontSize: 12, lineHeight: 18, color: colors.secondaryText }}>
+            {detail}
+          </Text>
+          </View>
+          <View style={{ width: '43%' }}>{arrivals}</View>
         </Pressable>
-        <View style={{ flexDirection: 'row', gap: 12 }}>
-          <AlertIconButton
-            compact
-            name={{ ios: 'pencil', android: 'edit' }}
-            label={`${title} 알림 수정`}
-            disabled={busy}
-            onPress={onEdit}
-          />
-          <AlertIconButton
-            compact
-            name={{ ios: 'trash', android: 'delete_outline' }}
-            label={`${title} 알림 삭제`}
-            disabled={busy}
-            onPress={onDelete}
-          />
+        <View
+          style={{
+            flexDirection: 'row',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            borderTopWidth: 1,
+            borderTopColor: colors.separator,
+            paddingTop: 8,
+            gap: 12,
+          }}
+        >
+          {todayControl}
         </View>
       </View>
+    </Swipeable>
     </View>
+  );
+}
+
+/** 설명은 최종 설정 끝에서 한 번만 표시한다. */
+export function AlertSetupNote({
+  scheduled,
+  proximity,
+}: {
+  scheduled: boolean;
+  proximity: boolean;
+}) {
+  return (
+    <Text style={{ color: colors.secondaryText, fontSize: 13, lineHeight: 20 }}>
+      {proximity
+        ? scheduled
+          ? '정한 시간이나 선택한 장소 근처에서 도착 정보를 알려드려요.'
+          : '설정한 반경 안에서 도착 정보를 알려드려요.'
+        : '정한 시간에 도착 정보를 알려드려요.'}
+    </Text>
   );
 }

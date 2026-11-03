@@ -1,3 +1,4 @@
+import { useNotificationVoice } from './use-notification-voice';
 import {
   handleNotificationAction,
   registerNotificationActions,
@@ -13,15 +14,15 @@ import {
 import type { SubwayAlert } from '@/features/subway/model/subway-alert';
 import { AppState } from 'react-native';
 import * as Location from 'expo-location';
+import * as Device from 'expo-device';
 import * as Notifications from 'expo-notifications';
-import { useRootNavigationState } from 'expo-router';
+import { router, useRootNavigationState } from 'expo-router';
 import { useQueryClient } from '@tanstack/react-query';
 import { checkNearbyStops, preparePush, syncGeofences } from './alert-runtime';
 import { alertStorage, cacheAlerts, readCachedAlerts } from './alert-storage';
 import { useAppStore } from '@/shared/model/app-store';
 import { useAlerts } from './use-alerts';
 import type { BusAlert } from './bus-alert';
-import { openAlertTarget } from './open-alert-target';
 import { retryProximityReports } from './proximity-visits';
 
 /** 루트 런타임 컴포넌트에서 위치·알림 구독을 연결하고 효과 정리 시 각 네이티브 구독을 해제한다. */
@@ -49,6 +50,7 @@ export function useAlertRuntime() {
 
   /** 알림 오류를 표시하는 화면과 공유하는 스토어 액션이다. 탭 상태 변경에는 재구독하지 않는다. */
   const setError = useAppStore((state) => state.setAlertRuntimeError);
+  useNotificationVoice(alerts, subwayAlerts, setError);
 
   /** 런타임 시작과 해제 시 일시적 오류를 초기화한다. 스토어 액션 참조가 바뀌면 다시 등록한다. */
   useEffect(() => {
@@ -84,8 +86,15 @@ export function useAlertRuntime() {
     let checking = false;
     async function inspect(force = false) {
       if (disposed || checking || AppState.currentState !== 'active') return;
+      if (
+        ![...latest.current, ...latestSubway.current].some(
+          (alert) => alert.enabled && alert.proximityEnabled,
+        )
+      )
+        return;
       checking = true;
       try {
+        if (!(await Location.getForegroundPermissionsAsync()).granted || disposed) return;
         const position = await Location.getCurrentPositionAsync({
           accuracy: Location.Accuracy.Balanced,
         });
@@ -118,6 +127,7 @@ export function useAlertRuntime() {
         if (disposed) return;
         setError(null);
         if (![...saved, ...savedSubway].some((a) => a.enabled && a.proximityEnabled)) return;
+        if (!(await Location.getForegroundPermissionsAsync()).granted || disposed) return;
         subscription = await Location.watchPositionAsync(
           { accuracy: Location.Accuracy.Balanced, timeInterval: 10_000, distanceInterval: 30 },
           (position) => {
@@ -173,13 +183,13 @@ export function useAlertRuntime() {
           return;
         }
         setMapTabHidden(false);
-        const transport = String(data.kind).startsWith('subway-') ? 'subway' : 'bus';
-        if (await openAlertTarget(transport, data.alertId, responseKey, data)) {
-          await Notifications.clearLastNotificationResponseAsync();
-        } else handledResponse.current = undefined;
+        await queryClient.invalidateQueries({ queryKey: ['alerts'] });
+        await queryClient.invalidateQueries({ queryKey: ['subway-alerts'] });
+        router.replace({ pathname: '/alerts', params: { requestId: responseKey } });
+        await Notifications.clearLastNotificationResponseAsync();
       } catch (e) {
         handledResponse.current = undefined;
-        if (!disposed) setError(e instanceof Error ? e.message : '알림 정류장을 열지 못했어요.');
+        if (!disposed) setError(e instanceof Error ? e.message : '알림 목록을 열지 못했어요.');
       }
     }
 
@@ -196,6 +206,21 @@ export function useAlertRuntime() {
     const receivedListener = Notifications.addNotificationReceivedListener(() => {
       void queryClient.invalidateQueries({ queryKey: ['alerts', 'history'] });
     });
+    // Refresh the existing permission's token even when this credential has no saved alerts.
+    void Notifications.getPermissionsAsync()
+      .then(async (permission) => {
+        if (!disposed && Device.isDevice && permission.granted) {
+          const warning = await preparePush();
+          if (!disposed) {
+            if (warning) setError(warning);
+            else void queryClient.invalidateQueries({ queryKey: ['alerts', 'push-status'] });
+          }
+        }
+      })
+      .catch((error) => {
+        if (!disposed)
+          setError(error instanceof Error ? error.message : '푸시 연결을 확인하지 못했어요.');
+      });
     const tokenListener = Notifications.addPushTokenListener((token) => {
       void preparePush(token).then(() =>
         queryClient.invalidateQueries({ queryKey: ['alerts', 'push-status'] }),

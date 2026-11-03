@@ -114,13 +114,13 @@ export function SubwayDestinationPicker({
 const s = StyleSheet.create({
   container: { gap: 8 },
   heading: { fontSize: 14, fontWeight: '600', color: c.text, marginTop: 8 },
-  directions: { flexDirection: 'row', gap: 10 },
+  directions: { flexDirection: 'row', gap: 8 },
   direction: {
     flex: 1,
     borderWidth: 2,
     borderColor: c.separator,
     borderRadius: 14,
-    padding: 14,
+    padding: 12,
     gap: 4,
     minHeight: 80,
     justifyContent: 'center',

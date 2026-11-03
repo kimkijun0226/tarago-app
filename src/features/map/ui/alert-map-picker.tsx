@@ -1,3 +1,8 @@
+import { useMapSelection, type MapSelectionMode } from '@/features/map/model/map-selection';
+import { SetupProgress } from '@/shared/ui/setup-progress';
+import { useWidgetSelection } from '@/features/widgets/model/widget-selection';
+import type { WidgetTarget } from '@/features/widgets/model/widget-configuration';
+import { useRecoveryStore } from '@/shared/model/recovery-store';
 import { appShadows } from '@/shared/ui/theme';
 import type { SharedValue } from 'react-native-reanimated';
 import { MapBottomSheet, type MapSheetSnap } from '@/shared/ui/map-bottom-sheet';
@@ -5,7 +10,6 @@ import { ScrollView } from 'react-native-gesture-handler';
 /** @fileoverview 알림 설정으로 전달할 실제 정류장 노선 또는 역·호선·행선지를 고르는 작은 지도 패널. */
 import { useCallback, useState } from 'react';
 import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
-import { SymbolView } from 'expo-symbols';
 import { router, useFocusEffect } from 'expo-router';
 import type { BusStop } from '@/features/bus-stop/api/get-nearby-bus-stops';
 import { useBusArrivals } from '@/features/bus-stop/model/use-bus-arrivals';
@@ -16,7 +20,6 @@ import {
   useSubwayStation,
   useSubwayTimetable,
 } from '@/features/subway/model/use-subway-station';
-import { useAppStore } from '@/shared/model/app-store';
 import { SubwayDestinationPicker } from '@/features/subway/ui/subway-destination-picker';
 import type { SubwayAlertInput } from '@/features/subway/model/subway-alert';
 import { subwayAlertOptions } from '@/features/subway/model/subway-direction';
@@ -29,19 +32,20 @@ export function AlertMapPicker({
   stationName,
   initialLineName,
   stationPoint,
-  bottom,
   onHeightChange,
   animatedPosition,
+  mode = 'map',
 }: {
+  mode?: MapSelectionMode;
   busStop: BusStop | null;
   stationName: string | null;
   initialLineName?: string;
   stationPoint: Point | null;
-  bottom: number;
   onHeightChange: (height: number) => void;
   animatedPosition: SharedValue<number>;
 }) {
-  const selection = useAppStore((state) => state.alertSelection);
+  const selection = useMapSelection(mode);
+  const isWidget = mode === 'widget';
   const [opening, setOpening] = useState(false);
   useFocusEffect(
     useCallback(() => {
@@ -50,7 +54,7 @@ export function AlertMapPicker({
   );
   const bus = useBusArrivals(busStop?.id ?? '', selection?.transport === 'bus');
   const station = useSubwayStation(stationName ?? '');
-  const live = useSubwayArrivals(stationName ?? '');
+  const live = useSubwayArrivals(stationName ?? '', undefined, !isWidget);
   const mapStations = useSubwayMapStations();
   const [chosenLine, setChosenLine] = useState('');
   const [target, setTarget] = useState<
@@ -71,6 +75,7 @@ export function AlertMapPicker({
     stationName ?? '',
     line?.lineId ?? '',
     weekday === 'Sat' ? 'saturday' : weekday === 'Sun' ? 'holiday' : 'weekday',
+    !isWidget,
   );
   const options = subwayAlertOptions(
     line,
@@ -86,7 +91,7 @@ export function AlertMapPicker({
     ) ?? stationPoint;
   const complete = useCallback(
     (params: Record<string, string>) => {
-      if (!selection || opening) return;
+      if (!selection || opening || isWidget) return;
       setOpening(true);
       router.push({
         pathname: '/alert-setup',
@@ -104,8 +109,25 @@ export function AlertMapPicker({
         },
       });
     },
-    [selection, opening],
+    [selection, opening, isWidget],
   );
+  const addWidget = async (item: WidgetTarget) => {
+    if (opening || useWidgetSelection.getState().busy) return;
+    setOpening(true);
+    const saved = await useWidgetSelection.getState().add(item);
+    setOpening(false);
+    if (!saved) {
+      useRecoveryStore.getState().show({
+        source: 'widget-save',
+        message:
+          useWidgetSelection.getState().storageError ?? '위젯은 최대 6개까지 추가할 수 있어요.',
+      });
+      return;
+    }
+    useRecoveryStore.getState().clear('widget-save');
+    useWidgetSelection.getState().finishMapSelection();
+    router.dismissTo('/widgets');
+  };
   const chooseSubwayDirection = (next: typeof target) => {
     if (opening || !selection || !line || !stationName || (selection.kind === 'location' && !point))
       return;
@@ -126,7 +148,7 @@ export function AlertMapPicker({
   const groups = groupBusArrivals(bus.data ?? []);
   const isBus = selection.transport === 'bus';
   const selected = isBus ? Boolean(busStop) : Boolean(stationName);
-  const steps = isBus ? ['정류소', '버스', '알림 설정'] : ['지하철역', '호선·방면', '알림 설정'];
+
   return (
     <MapBottomSheet
       compactHeight={selected ? 240 : undefined}
@@ -137,42 +159,33 @@ export function AlertMapPicker({
       surfaceStyle={s.surface}
       toolbar={
         <View style={s.toolbar}>
-          <View style={s.steps}>
-            {steps.map((step, index) => (
-              <View key={step} style={s.step}>
-                {index > 0 ? (
-                  <SymbolView
-                    name={{ ios: 'chevron.right', android: 'chevron_right' }}
-                    size={9}
-                    tintColor={mapUi.secondaryText}
-                  />
-                ) : null}
-                <Text style={[s.stepText, index === (selected ? 1 : 0) && s.currentStep]}>
-                  {index + 1} {step}
-                </Text>
-              </View>
-            ))}
-          </View>
+          <SetupProgress
+            current={isWidget && isBus && selected ? 2 : 1}
+            labels={
+              isWidget
+                ? ['교통수단', '지도 선택', '위젯 추가']
+                : ['알림 종류', '지도 선택', '알림 설정']
+            }
+            showTitle={false}
+          />
           <Text style={s.title}>
             {isBus
               ? selected
-                ? '알림 받고 싶은 버스를 선택해주세요'
+                ? isWidget
+                  ? '위젯에 넣을 버스를 선택해주세요'
+                  : '알림 받고 싶은 버스를 선택해주세요'
                 : '정류소를 선택해주세요'
               : selected
-                ? '알림 받고 싶은 방면을 선택해주세요'
+                ? isWidget
+                  ? '위젯에 넣을 호선을 선택해주세요'
+                  : '알림 받고 싶은 방면을 선택해주세요'
                 : '지하철역을 선택해주세요'}
           </Text>
-          {!selected ? (
-            <Text style={s.subtitle}>
-              {isBus
-                ? '지도에서 정류소를 선택한 뒤, 알림 받을 버스를 골라주세요.'
-                : '지도에서 역을 선택한 뒤, 알림 받을 호선과 행선지를 골라주세요.'}
-            </Text>
-          ) : null}
+
         </View>
       }
     >
-      <View style={[s.panel, { paddingBottom: bottom + 12 }]}>
+      <View style={[s.panel, { paddingBottom: 16 }]}>
         {selection.transport === 'bus' ? (
           busStop ? (
             <>
@@ -183,7 +196,25 @@ export function AlertMapPicker({
                     accessibilityRole="button"
                     key={`${group.routeId}:${group.stationSeq ?? ''}`}
                     style={({ pressed }) => [s.row, pressed && s.pressed]}
-                    onPress={() =>
+                    disabled={opening}
+                    onPress={() => {
+                      if (isWidget) {
+                        void addWidget({
+                          id: `bus:${busStop.id}:${group.routeId}:${group.stationSeq ?? ''}`,
+                          transport: 'bus',
+                          title: `${group.busNumber}번`,
+                          stationName: busStop.name,
+                          stationId: busStop.id,
+                          routeId: group.routeId,
+                          stationSeq: group.stationSeq,
+                          directionLabel:
+                            group.first.direction ||
+                            (group.first.nextStopName
+                              ? `${group.first.nextStopName} 방면`
+                              : '방면 정보 없음'),
+                        });
+                        return;
+                      }
                       complete({
                         stationId: busStop.id,
                         stationName: busStop.name,
@@ -194,8 +225,8 @@ export function AlertMapPicker({
                         ...(group.stationSeq === undefined
                           ? {}
                           : { stationSeq: String(group.stationSeq) }),
-                      })
-                    }
+                      });
+                    }}
                   >
                     <Text style={s.route}>{group.busNumber}</Text>
                     <Text style={s.detail}>
@@ -241,41 +272,56 @@ export function AlertMapPicker({
                   onPress={() => {
                     setChosenLine(item.lineName);
                     setTarget({ direction: '' });
+                    if (isWidget && stationName) {
+                      setOpening(true);
+                      router.push({
+                        pathname: '/widget-direction',
+                        params: { stationName, lineId: item.lineId, lineName: item.lineName },
+                      });
+                    }
                   }}
                 >
                   <Text style={s.route}>{item.lineName}</Text>
                 </Pressable>
               ))}
             </ScrollView>
-            <ScrollView style={s.list}>
-              <SubwayDestinationPicker
-                directionOnly
-                options={options}
-                value={target}
-                onChange={chooseSubwayDirection}
-                disabled={opening || (selection.kind === 'location' && !point)}
-              />
-              {station.isFetching || timetable.isFetching ? (
-                <ActivityIndicator />
-              ) : options.length <= 1 ? (
-                <Text style={s.message}>선택 가능한 방면 정보가 없어요.</Text>
-              ) : null}
-              {station.isError || timetable.isError || live.isError ? (
-                <Pressable
-                  accessibilityRole="button"
-                  onPress={() => {
-                    void station.refetch();
-                    void timetable.refetch();
-                    void live.refetch();
-                  }}
-                >
-                  <Text style={s.link}>방면 정보 다시 조회</Text>
-                </Pressable>
-              ) : null}
-              {selection.kind === 'location' && !point ? (
-                <Text style={s.message}>역 위치를 확인한 뒤 선택할 수 있어요.</Text>
-              ) : null}
-            </ScrollView>
+            {!isWidget ? (
+              <ScrollView style={s.list}>
+                <SubwayDestinationPicker
+                  directionOnly
+                  options={options}
+                  value={target}
+                  onChange={chooseSubwayDirection}
+                  disabled={opening || (selection.kind === 'location' && !point)}
+                />
+                {station.isFetching || timetable.isFetching ? (
+                  <ActivityIndicator />
+                ) : options.length <= 1 ? (
+                  <Text style={s.message}>선택 가능한 방면 정보가 없어요.</Text>
+                ) : null}
+                {station.isError || timetable.isError || live.isError ? (
+                  <Pressable
+                    accessibilityRole="button"
+                    onPress={() => {
+                      void station.refetch();
+                      void timetable.refetch();
+                      void live.refetch();
+                    }}
+                  >
+                    <Text style={s.link}>방면 정보 다시 조회</Text>
+                  </Pressable>
+                ) : null}
+                {selection.kind === 'location' && !point ? (
+                  <Text style={s.message}>역 위치를 확인한 뒤 선택할 수 있어요.</Text>
+                ) : null}
+              </ScrollView>
+            ) : station.isPending ? (
+              <ActivityIndicator />
+            ) : station.isError ? (
+              <Pressable accessibilityRole="button" onPress={() => void station.refetch()}>
+                <Text style={s.link}>호선 다시 조회</Text>
+              </Pressable>
+            ) : null}
           </>
         ) : null}
       </View>
@@ -290,15 +336,11 @@ const s = StyleSheet.create({
     borderTopRightRadius: 16,
     boxShadow: appShadows.floating,
   },
-  toolbar: { paddingHorizontal: 20, paddingBottom: 20, gap: 12 },
-  panel: { flex: 1, minHeight: 0, paddingHorizontal: 20, gap: 8 },
-  steps: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 4 },
-  step: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  stepText: { fontSize: 12, lineHeight: 18, color: mapUi.secondaryText },
-  currentStep: { color: mapUi.blue, fontWeight: '600' },
+  toolbar: { paddingHorizontal: 16, paddingBottom: 12, gap: 8 },
+  panel: { flex: 1, minHeight: 0, paddingHorizontal: 16, gap: 8 },
   title: {
-    fontSize: 23,
-    lineHeight: 31,
+    fontSize: 26,
+    lineHeight: 34,
     letterSpacing: -0.6,
     fontWeight: '600',
     color: mapUi.text,

@@ -38,12 +38,26 @@ export const SoonBusArrivals = memo(function SoonBusArrivals({ groups, onSelectR
               onPress={() =>
                 onSelectRoute(group.routeId, group.stationSeq ?? 0, group.first.routeSource)
               }
-              style={({ pressed }) => [styles.touch, pressed && styles.pressed]}
+              style={({ pressed }) => [
+                styles.touch,
+                index > 0 && styles.divider,
+                pressed && styles.pressed,
+              ]}
             >
               <View style={styles.card}>
-                <Text style={[styles.number, { color: badge?.color ?? colors.text }]}>
-                  {group.busNumber}
-                </Text>
+                <View style={styles.numberRow}>
+                  {badge ? (
+                    <View
+                      style={[
+                        styles.type,
+                        { backgroundColor: badge.color, borderColor: badge.color },
+                      ]}
+                    >
+                      <Text style={[styles.typeText, { color: '#FFFFFF' }]}>{badge.label}</Text>
+                    </View>
+                  ) : null}
+                  <Text style={[styles.number, { color: colors.text }]}>{group.busNumber}</Text>
+                </View>
                 {direction ? (
                   <Text
                     numberOfLines={1}
@@ -53,7 +67,6 @@ export const SoonBusArrivals = memo(function SoonBusArrivals({ groups, onSelectR
                   </Text>
                 ) : null}
               </View>
-              {index < groups.length - 1 ? <View style={styles.itemDivider} /> : null}
             </Pressable>
           );
         })}
@@ -66,33 +79,43 @@ const styles = StyleSheet.create({
   container: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginHorizontal: 16,
-    paddingVertical: 4,
-    borderRadius: 14,
-    backgroundColor: appColors.accentSurface,
-    paddingHorizontal: 12,
+    minHeight: 44,
+    paddingVertical: 5,
+    overflow: 'hidden',
+    backgroundColor: appColors.surface,
+    boxShadow: 'inset 0px -3px 4px rgba(27, 45, 72, 0.04)',
+    zIndex: 1,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: appColors.separator,
   },
   heading: {
-    height: 30,
     justifyContent: 'center',
+    paddingLeft: 16,
     paddingRight: 12,
-    borderRightWidth: 1,
-    borderRightColor: appColors.accentBorder,
+    borderRightWidth: StyleSheet.hairlineWidth,
+    borderRightColor: appColors.borderStrong,
   },
   label: { fontSize: 12, lineHeight: 18, fontWeight: '600' },
-  list: { flex: 1 },
-  cards: { alignItems: 'center' },
-  touch: { minHeight: 48, width: 106, justifyContent: 'center' },
-  itemDivider: {
-    position: 'absolute',
-    right: 0,
-    top: 12,
-    bottom: 12,
-    width: 1,
-    backgroundColor: appColors.accentBorder,
+  list: { flex: 1, minWidth: 0, height: 34 },
+  cards: { alignItems: 'center', paddingRight: 16 },
+  touch: {
+    minHeight: 34,
+    width: 120,
+    justifyContent: 'center',
   },
-  card: { alignItems: 'flex-start', justifyContent: 'center', gap: 2, paddingHorizontal: 12 },
-  number: { fontSize: 14, lineHeight: 18, fontWeight: '600' },
-  direction: { fontSize: 10, lineHeight: 14, maxWidth: 82 },
+  divider: { borderLeftWidth: StyleSheet.hairlineWidth, borderLeftColor: appColors.separator },
+  numberRow: { flexDirection: 'row', alignItems: 'center', gap: 5 },
+  type: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 4,
+    height: 15,
+    borderRadius: 4,
+    borderWidth: StyleSheet.hairlineWidth,
+  },
+  typeText: { fontSize: 9, lineHeight: 12, fontWeight: '500' },
+  card: { justifyContent: 'center', gap: 1, paddingHorizontal: 10 },
+  number: { fontSize: 13, lineHeight: 17, fontWeight: '600' },
+  direction: { fontSize: 10, lineHeight: 13 },
   pressed: { opacity: 0.6 },
 });

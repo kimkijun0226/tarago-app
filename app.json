@@ -18,7 +18,7 @@
         "ITSAppUsesNonExemptEncryption": false
       },
       "appleTeamId": "V6BDRRK4FQ",
-      "buildNumber": "5"
+      "buildNumber": "8"
     },
     "android": {
       "adaptiveIcon": {
@@ -54,9 +54,7 @@
             "usePrecompiledModules": false
           },
           "android": {
-            "extraMavenRepos": [
-              "https://repository.map.naver.com/archive/maven"
-            ]
+            "extraMavenRepos": ["https://repository.map.naver.com/archive/maven"]
           }
         }
       ],
@@ -82,7 +80,10 @@
       ],
       "./plugins/with-naver-map",
       "./plugins/with-tarago-launch-screen",
-      "./plugins/with-notification-actions"
+      "./plugins/with-notification-actions",
+      "./plugins/with-notification-content",
+      "./plugins/with-transit-widget",
+      "./plugins/with-notification-sound"
     ],
     "experiments": {
       "typedRoutes": true,
@@ -95,9 +96,6 @@
       }
     },
     "owner": "kimkijun",
-    "platforms": [
-      "ios",
-      "android"
-    ]
+    "platforms": ["ios", "android"]
   }
 }

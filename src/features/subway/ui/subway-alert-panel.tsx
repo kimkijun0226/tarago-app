@@ -1,5 +1,4 @@
-import { openAlertTarget } from '@/features/bus-alert/model/open-alert-target';
-import { AlertArrivalTimes } from '@/features/bus-alert/ui/alert-arrival-times';
+import { AlertArrivalTimes, AlertTodayControl } from '@/features/bus-alert/ui/alert-arrival-times';
 import { ActivityIndicator } from 'react-native';
 import {
   AlertNotice,
@@ -30,19 +29,21 @@ export function SubwayAlertsPanel({
   const { draft, busy, list, kind: selectedKind } = state;
   const kind = selectedKind;
   const visibleAlerts = all ? (list.data ?? []) : state.visibleAlerts;
-  const warning =
-    state.warning ??
-    (list.data?.some((a) => a.enabled && (a.scheduledEnabled !== false || a.proximityEnabled)) &&
-    state.pushStatus?.ready === false
-      ? '알림을 받으려면 알림 연결을 확인해주세요.'
-      : null);
+  const hasActiveAlerts = list.data?.some(
+    (a) => a.enabled && (a.scheduledEnabled !== false || a.proximityEnabled),
+  );
+  const warning = hasActiveAlerts
+    ? (state.warning ??
+      (state.pushStatus?.ready === false ? '알림을 받으려면 알림 연결을 확인해주세요.' : null))
+    : null;
   return (
     <>
-      {warning && (all || draft) && (
+      {(all || draft) && (
         <AlertNotice
+          source="subway-push"
           action="알림 다시 연결"
           disabled={busy}
-          onAction={() => void state.reconnect()}
+          onAction={() => state.reconnect()}
         >
           {warning}
         </AlertNotice>
@@ -55,11 +56,13 @@ export function SubwayAlertsPanel({
             threshold={state.threshold}
             setThreshold={state.setThreshold}
             disabled={busy}
-          />
-          <AlertPrimaryButton
-            title={draft.id ? '변경 사항 저장' : '알림 저장'}
-            busy={busy}
-            onPress={state.submit}
+            footer={
+              <AlertPrimaryButton
+                title={draft.id ? '변경 사항 저장' : '알림 저장'}
+                busy={busy}
+                onPress={state.submit}
+              />
+            }
           />
         </>
       ) : !all ? (
@@ -91,9 +94,6 @@ export function SubwayAlertsPanel({
                   enabled={alert.enabled}
                   busy={busy}
                   onToggle={(enabled) => void state.persist({ ...alert, enabled })}
-                  onOpen={() =>
-                    void openAlertTarget('subway', alert.id, `saved:${alert.id}:${Date.now()}`)
-                  }
                   onEdit={() => state.edit(alert)}
                   onDelete={() => state.deleteAlert(alert)}
                 />
@@ -111,12 +111,17 @@ function SubwaySavedCard({
   ...props
 }: { alert: SubwayAlert; kind: 'time' | 'location' } & Omit<
   ComponentProps<typeof SavedAlertCard>,
-  'subtitle' | 'arrivals'
+  'subtitle' | 'arrivals' | 'transport' | 'todayControl' | 'mode'
 >) {
   const presentation = useSubwayAlertPresentation(alert);
   return (
     <SavedAlertCard
       {...props}
+      transport="subway"
+      mode={alert.scheduledEnabled && alert.proximityEnabled ? 'both' : kind}
+      todayControl={
+        <AlertTodayControl transport="subway" alert={alert} kind={kind} busy={props.busy} />
+      }
       subtitle={subwayAlertSubtitle(presentation)}
       arrivals={<AlertArrivalTimes transport="subway" alert={alert} kind={kind} />}
     />

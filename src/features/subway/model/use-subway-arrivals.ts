@@ -13,6 +13,7 @@ import { getSubwayArrivals } from '@/features/subway/api/get-subway-arrivals';
 export function useSubwayArrivals(
   stationName: string,
   target?: { lineId: string; direction: string; destination?: string; destinations?: string[] },
+  enabled = true,
 ) {
   /** 현재 Router 화면의 포커스 여부다. 화면이 보일 때만 도착 Query를 활성화한다. */
   const [focused, setFocused] = useState(false);
@@ -36,7 +37,7 @@ export function useSubwayArrivals(
         ]
       : ['subway', stationName, 'arrivals'],
     queryFn: ({ signal }) => getSubwayArrivals(stationName, signal, target),
-    enabled: focused && Boolean(stationName),
+    enabled: enabled && focused && Boolean(stationName),
     staleTime: 15_000,
     retry: false,
     refetchInterval: 15_000,

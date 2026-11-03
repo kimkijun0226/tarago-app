@@ -10,6 +10,8 @@ export type AlertStop = {
   longitude: number;
 };
 export type BusAlertInput = {
+  voiceEnabled?: boolean;
+  voiceProfile?: import('@/features/bus-alert/model/notification-voice').VoiceProfile;
   stationId: string;
   routeId: string;
   stationSeq?: number;
@@ -33,6 +35,7 @@ export type BusAlert = BusAlertInput & {
   id: string;
   stop: AlertStop;
   busNumber: string;
+  notificationVoice?: import('./notification-voice').NotificationVoice;
   notificationControl?: import('./notification-actions').NotificationControl;
 };
 

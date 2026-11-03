@@ -95,15 +95,17 @@ export function groupBusArrivals(arrivals: BusArrival[]): BusArrivalGroup[] {
   );
 }
 
-/** 공급자가 반환한 노선 유형만 배지로 변환한다. 알 수 없는 코드는 일반버스로 단정하지 않는다. */
+/** 카카오맵 공개 버스 뱃지 원본의 RGB 색상. 공급자가 반환한 유형만 사용한다. */
 export function getBusRouteBadge(routeType: string): { label: string; color: string } | null {
-  if (routeType.includes('직행좌석')) return { label: '직행좌석', color: '#EB4335' };
-  if (routeType.includes('광역') || routeType === '6') return { label: '광역', color: '#EB4335' };
-  if (routeType.includes('급행')) return { label: '급행', color: '#EB4335' };
-  if (routeType === '3' || routeType.includes('간선')) return { label: '간선', color: '#386DE8' };
-  if (routeType === '4' || routeType.includes('지선')) return { label: '지선', color: '#38BE40' };
-  if (routeType === '2' || routeType.includes('마을')) return { label: '마을', color: '#87C600' };
-  if (routeType.includes('일반')) return { label: '일반', color: '#386DE8' };
-  if (routeType.includes('좌석')) return { label: '좌석', color: '#386DE8' };
+  if (routeType === '1' || routeType.includes('공항')) return { label: '공항', color: '#896B57' };
+  if (routeType.includes('직행좌석')) return { label: '직행좌석', color: '#FF451E' };
+  if (routeType.includes('광역') || routeType === '6') return { label: '광역', color: '#FF451E' };
+  if (routeType.includes('급행')) return { label: '급행', color: '#FF451E' };
+  if (routeType === '3' || routeType.includes('간선')) return { label: '간선', color: '#6175F5' };
+  if (routeType === '4' || routeType.includes('지선')) return { label: '지선', color: '#47AF1B' };
+  if (routeType === '2' || routeType.includes('마을')) return { label: '마을', color: '#47AF1B' };
+  if (routeType === '5' || routeType.includes('순환')) return { label: '순환', color: '#E5A900' };
+  if (routeType.includes('일반')) return { label: '일반', color: '#00AFBD' };
+  if (routeType.includes('좌석')) return { label: '좌석', color: '#2391EE' };
   return null;
 }

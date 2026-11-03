@@ -36,6 +36,7 @@ export function buildSubwayAlertInput(draft: SubwayAlertDraft, kind: AlertKind, 
     : locationSchedule(draft);
   return {
     ...draft,
+    voiceProfile: draft.voiceProfile ?? 'clear-young',
     ...schedule,
     scheduledEnabled,
     proximityEnabled,

@@ -49,7 +49,8 @@ export function useInitialMapPosition(
 
       /** 권한 확인을 거쳐 현재 위치 훅이 반환한 GPS 좌표다. */
       const coordinate = await getCurrentLocation();
-      if (coordinate) setInitialPosition(coordinate);
+      // 위치 권한 없이도 지도를 검색하고 알림 대상을 고를 수 있어야 한다.
+      setInitialPosition(coordinate ?? { latitude: 37.5665, longitude: 126.978 });
     } finally {
       setPreparingLocation(false);
     }

@@ -150,6 +150,9 @@ export function useAlertScreen(
             operation.current = true;
             setBusy(true);
             void removeAsync(alert.id)
+              .then(() => {
+                setDraft((current) => (current?.id === alert.id ? null : current));
+              })
               .catch((error) => showAlertError('삭제하지 못했어요', error))
               .finally(() => {
                 operation.current = false;

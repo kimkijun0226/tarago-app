@@ -1,20 +1,14 @@
+import { useState, type ReactNode, type Dispatch, type SetStateAction } from 'react';
+import { AlertSetupNote } from '@/features/bus-alert/ui/alert-components';
+import { RevealSection } from '@/shared/ui/reveal-section';
+import { AlertVoiceField } from '@/features/bus-alert/ui/alert-voice-field';
 import { SubwayAlertDirectionFields } from './subway-alert-direction-fields';
 import { AlertTargetSummary } from '@/features/bus-alert/ui/alert-target-summary';
-import type { Dispatch, SetStateAction } from 'react';
-import { ActivityIndicator, Text, View } from 'react-native';
 import { AlertLocationFields } from '@/features/bus-alert/ui/alert-location-fields';
 import { AlertScheduleFields } from '@/features/bus-alert/ui/alert-schedule-fields';
-import { alertColors as colors } from '@/features/bus-alert/ui/alert-design';
-import { createStyles } from '@/features/bus-alert/ui/alert-screen-styles';
-import { useSubwayArrivals } from '../model/use-subway-arrivals';
 import { useSubwayAlertPresentation } from '../model/use-subway-alert-presentation';
-import {
-  subwayAlertSubtitle,
-  destinationLabel,
-  matchesSubwayDestination,
-} from '../model/subway-direction';
+import { subwayAlertSubtitle } from '../model/subway-direction';
 import type { SubwayAlertDraft } from '../model/use-subway-alert-screen';
-const styles = createStyles(colors);
 
 export function SubwayAlertEditor({
   draft,
@@ -22,63 +16,37 @@ export function SubwayAlertEditor({
   threshold,
   setThreshold,
   disabled,
+  footer,
 }: {
   draft: SubwayAlertDraft;
   setDraft: Dispatch<SetStateAction<SubwayAlertDraft | null>>;
   threshold: string;
   setThreshold: (value: string) => void;
   disabled: boolean;
+  footer?: ReactNode;
 }) {
   const presentation = useSubwayAlertPresentation(draft);
+  const [scheduleComplete, setScheduleComplete] = useState(Boolean(draft.id));
   const showSchedule = draft.scheduledEnabled !== false;
   const showLocation = Boolean(draft.proximityEnabled);
-  const live = useSubwayArrivals(showSchedule ? draft.stationName : '', draft);
-  const arrivals =
-    live.data?.arrivals.filter(
-      (a) =>
-        a.lineId === draft.lineId &&
-        (draft.direction === 'all' || a.direction === draft.direction) &&
-        matchesSubwayDestination(draft, a.destination),
-    ) ?? [];
   return (
     <>
-      <AlertTargetSummary
-        transport="subway"
-        title={draft.stationName}
-        subtitle={subwayAlertSubtitle(presentation)}
-      >
-        {showSchedule && (
-          <View
-            style={{
-              borderTopWidth: 1,
-              borderTopColor: colors.separator,
-              paddingTop: 10,
-              gap: 6,
-            }}
-          >
-            <Text style={styles.sectionTitle}>도착정보</Text>
-            {live.isError ? (
-              <Text style={styles.warningText}>도착정보를 불러오지 못했어요.</Text>
-            ) : live.isPending ? (
-              <ActivityIndicator color={colors.accent} />
-            ) : !arrivals.length ? (
-              <Text style={styles.help}>도착정보 없음</Text>
-            ) : (
-              arrivals.slice(0, 2).map((a, i) => (
-                <Text key={`${a.trainId}:${i}`} style={styles.help}>
-                  {a.etaSource === 'schedule' ? '시간표 기준 · ' : ''}
-                  {destinationLabel(a.destination)} · {a.arrivalMessage || '시간 확인 중'}
-                </Text>
-              ))
-            )}
-          </View>
-        )}
-      </AlertTargetSummary>
+      <RevealSection order={0}>
+        <AlertTargetSummary
+          transport="subway"
+          title={draft.stationName}
+          subtitle={subwayAlertSubtitle(presentation)}
+        />
+      </RevealSection>
 
-      <SubwayAlertDirectionFields draft={draft} setDraft={setDraft} disabled={disabled} />
+      <RevealSection order={1}>
+        <SubwayAlertDirectionFields draft={draft} setDraft={setDraft} disabled={disabled} />
+      </RevealSection>
       {showSchedule && (
         <AlertScheduleFields
           value={draft}
+          onComplete={() => setScheduleComplete(true)}
+          order={2}
           disabled={disabled}
           threshold={threshold}
           onThresholdChange={setThreshold}
@@ -95,16 +63,37 @@ export function SubwayAlertEditor({
         />
       )}
       {showLocation && (
-        <AlertLocationFields
-          days={draft.days}
-          radius={draft.radius ?? 200}
-          disabled={disabled}
-          showDays={!showSchedule}
-          repeatMinutes={draft.repeatMinutes ?? 5}
-          onRepeatMinutesChange={(repeatMinutes) => setDraft({ ...draft, repeatMinutes })}
-          onDaysChange={(days) => setDraft({ ...draft, days })}
-          onRadiusChange={(radius) => setDraft({ ...draft, radius })}
-        />
+        <RevealSection order={showSchedule ? 5 : 2}>
+          <AlertLocationFields
+            days={draft.days}
+            radius={draft.radius ?? 200}
+            disabled={disabled}
+            showDays={!showSchedule}
+            repeatMinutes={draft.repeatMinutes ?? 5}
+            onRepeatMinutesChange={(repeatMinutes) => setDraft({ ...draft, repeatMinutes })}
+            onDaysChange={(days) => setDraft({ ...draft, days })}
+            onRadiusChange={(radius) => setDraft({ ...draft, radius })}
+          />
+        </RevealSection>
+      )}
+      {(!showSchedule || scheduleComplete) && (
+        <>
+          <RevealSection order={6}>
+            <AlertVoiceField
+              profile={draft.voiceProfile ?? 'clear-young'}
+              onProfileChange={(voiceProfile) =>
+                setDraft((current) => current && { ...current, voiceProfile })
+              }
+              enabled={draft.voiceEnabled ?? Boolean(draft.id)}
+              disabled={disabled}
+              onChange={(voiceEnabled) =>
+                setDraft((current) => current && { ...current, voiceEnabled })
+              }
+            />
+          </RevealSection>
+          <AlertSetupNote scheduled={showSchedule} proximity={showLocation} />
+          {footer}
+        </>
       )}
     </>
   );

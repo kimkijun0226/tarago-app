@@ -1,3 +1,4 @@
+import { WidgetSync } from '@/features/widgets/ui/widget-sync';
 /** @fileoverview 앱 전체의 Provider와 최상위 Router를 연결하는 조립 지점. Query·알림 런타임·제스처를 한 번 설치한다. */
 import { focusManager, QueryClientProvider } from '@tanstack/react-query';
 import { DefaultTheme, Stack, ThemeProvider } from 'expo-router';
@@ -7,6 +8,7 @@ import { AppState } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 
 import { AnimatedSplashOverlay } from '@/components/animated-icon';
+import { RecoveryOverlay } from '@/shared/ui/recovery-overlay';
 import { AlertRuntime } from '@/features/bus-alert/ui/alert-runtime';
 import { appColors } from '@/shared/ui/theme';
 import { queryClient } from '@/shared/lib/query-client';
@@ -46,12 +48,24 @@ export default function RootLayout() {
         <ThemeProvider value={navigationTheme}>
           <AnimatedSplashOverlay />
           <AlertRuntime />
-          <Stack screenOptions={{ headerShown: false, animation: 'default', gestureEnabled: true }}>
+          <WidgetSync />
+          <Stack
+            screenOptions={{
+              headerShown: false,
+              animation: 'default',
+              gestureEnabled: true,
+              fullScreenGestureEnabled: true,
+            }}
+          >
             <Stack.Screen name="(tabs)" />
             <Stack.Screen name="subway-alerts" />
             <Stack.Screen name="alert-setup" options={{ animation: 'default' }} />
             <Stack.Screen name="notification-history" />
+            <Stack.Screen name="widget-add" />
+            <Stack.Screen name="widget-direction" />
+            <Stack.Screen name="widget-map" />
           </Stack>
+          <RecoveryOverlay />
         </ThemeProvider>
       </QueryClientProvider>
     </GestureHandlerRootView>
