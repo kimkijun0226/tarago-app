@@ -1,3 +1,4 @@
+import { normalizeBusStopNumber } from './bus-stop-number';
 /** @fileoverview 노선 시트 높이 전환과 왕복 경유 정류장 식별에 필요한 순수 화면 계산을 제공한다. */
 
 type RouteStopCoordinate = {
@@ -43,12 +44,12 @@ export function isBoardingRouteStop(stop: { name: string; mobileNo?: string | nu
 export function isRouteBusStop(marker: RouteStopCoordinate, routeStops: RouteStopCoordinate[]) {
   return routeStops.some((stop) => {
     /** 지도 정류장의 공백을 제거한 이용자용 번호다. */
-    const arsId = marker.arsId?.trim();
+    const arsId = normalizeBusStopNumber(marker.arsId);
 
     /** 노선 경유 정류장의 공백을 제거한 이용자용 번호다. */
-    const mobileNo = stop.mobileNo?.trim();
-    if (arsId && mobileNo && arsId !== '0' && mobileNo !== '0')
-      return arsId === mobileNo || Boolean(marker.arsIds?.includes(mobileNo));
+    const mobileNo = normalizeBusStopNumber(stop.mobileNo);
+    if (arsId && mobileNo)
+      return arsId === mobileNo || Boolean(marker.arsIds?.some((number) => normalizeBusStopNumber(number) === mobileNo));
 
     return [marker, ...(marker.sourcePositions ?? [])].some((point) => {
       const north = (point.latitude - stop.latitude) * 111_320;

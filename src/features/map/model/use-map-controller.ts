@@ -1,3 +1,4 @@
+import { normalizeBusStopNumber } from '@/features/bus-stop/model/bus-stop-number';
 import { getMapSelection, useMapSelection, type MapSelectionMode } from './map-selection';
 import { useWidgetSelection } from '@/features/widgets/model/widget-selection';
 /**
@@ -1003,7 +1004,7 @@ export function useMapController(mode: MapSelectionMode = 'map') {
           staleTime: 30 * 60_000,
         });
         if (request !== selectionRequest.current) return;
-        const number = symbol.caption.match(/(?:^|\D)(\d{5})(?:\D|$)/)?.[1];
+        const number = normalizeBusStopNumber(symbol.caption.match(/(?:^|\D)(\d{4,5})(?:\D|$)/)?.[1]);
         // 같은 화면의 심벌을 함께 배정해야 여러 마커가 최근접 정류장 하나로 몰리지 않는다.
         const peers = (symbol.peers ?? [])
           .filter((peer) => distanceToSymbol(peer) <= 150)
@@ -1013,7 +1014,7 @@ export function useMapController(mode: MapSelectionMode = 'map') {
         const linked = matchBusStopSymbols(symbols, nearby).get(busSymbolKey(point));
         const matches = number
           ? nearby
-              .filter((stop) => [stop.arsId, ...(stop.arsIds ?? [])].includes(number))
+              .filter((stop) => [stop.arsId, ...(stop.arsIds ?? [])].some((ars) => normalizeBusStopNumber(ars) === number))
               .sort((a, b) => distanceToSymbol(a) - distanceToSymbol(b))
           : linked
             ? [linked]
@@ -1028,7 +1029,7 @@ export function useMapController(mode: MapSelectionMode = 'map') {
               point.latitude,
               point.longitude,
             ],
-            queryFn: ({ signal }) => searchBusStops(number ?? name, point, signal),
+            queryFn: ({ signal }) => searchBusStops(number ? String(Number(number)) : name, point, signal),
             staleTime: 30 * 60_000,
           });
           if (request !== selectionRequest.current) return;
@@ -1037,7 +1038,7 @@ export function useMapController(mode: MapSelectionMode = 'map') {
               ...searched
                 .filter(
                   (stop) =>
-                    [stop.arsId, ...(stop.arsIds ?? [])].includes(number) &&
+                    [stop.arsId, ...(stop.arsIds ?? [])].some((ars) => normalizeBusStopNumber(ars) === number) &&
                     distanceToSymbol(stop) <= 500,
                 )
                 .sort((a, b) => distanceToSymbol(a) - distanceToSymbol(b)),
