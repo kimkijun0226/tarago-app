@@ -1,3 +1,5 @@
+import { LINE_COLORS } from '@/features/subway/model/subway-line-colors';
+import { getBusRouteBadge } from '@/features/bus-stop/model/bus-arrival';
 import { useCallback, useEffect, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { getBusArrivals } from '@/features/bus-stop/api/get-bus-arrivals';
@@ -20,9 +22,9 @@ export function useWidgetArrival(item: WidgetTarget, live = true) {
   );
   useEffect(() => {
     if (!focused) return;
-    const timer = setInterval(() => setNow(Date.now()), 15_000);
+    const timer = setInterval(() => setNow(Date.now()), live ? 15_000 : 1_000);
     return () => clearInterval(timer);
-  }, [focused]);
+  }, [focused, live]);
   const liveBus = useBusArrivals(
     live && item.transport === 'bus' ? item.stationId : '',
     live && focused && item.transport === 'bus',
@@ -41,10 +43,14 @@ export function useWidgetArrival(item: WidgetTarget, live = true) {
     live,
   );
   const query = item.transport === 'bus' ? bus : subway;
+  let color =
+    item.color ?? (item.transport === 'subway' ? LINE_COLORS[item.title] : undefined) ?? '#2869DB';
   let direction = item.directionLabel;
   let time = query.isPending ? '조회 중' : query.isError ? '재조회 필요' : '정보 없음';
+  let remainingSeconds: number | null = null;
   const eta = (seconds: number, fetchedAt: number, qualifier = '') => {
     const left = seconds - Math.max(0, now - fetchedAt) / 1000;
+    if (now - fetchedAt < 90_000 && left >= -15) remainingSeconds = Math.max(0, left);
     return now - fetchedAt >= 90_000
       ? '갱신 필요'
       : left < -15
@@ -62,6 +68,7 @@ export function useWidgetArrival(item: WidgetTarget, live = true) {
       )
       .sort((a, b) => (a.etaSeconds ?? Infinity) - (b.etaSeconds ?? Infinity))[0];
     if (first) {
+      color = getBusRouteBadge(first.routeType)?.color ?? color;
       direction =
         first.direction || (first.nextStopName ? `${first.nextStopName} 방면` : direction);
       if (first.etaSeconds !== null)
@@ -99,5 +106,5 @@ export function useWidgetArrival(item: WidgetTarget, live = true) {
         );
     }
   }
-  return { direction, time };
+  return { direction, time, color, remainingSeconds };
 }

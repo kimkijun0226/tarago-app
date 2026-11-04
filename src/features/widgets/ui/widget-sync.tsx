@@ -1,3 +1,4 @@
+import { LINE_COLORS } from '@/features/subway/model/subway-line-colors';
 import { useEffect, useRef, useState } from 'react';
 import { AppState, Platform } from 'react-native';
 import { API_BASE_URL } from '@/shared/api/config';
@@ -17,7 +18,13 @@ export function WidgetSync() {
     });
     return () => subscription.remove();
   }, []);
-  const configuration = JSON.stringify({ apiBaseURL: API_BASE_URL, items: selected });
+  const configuration = JSON.stringify({
+    apiBaseURL: API_BASE_URL,
+    items: selected.map((item) => ({
+      ...item,
+      color: item.color ?? (item.transport === 'subway' ? LINE_COLORS[item.title] : undefined),
+    })),
+  });
   useEffect(() => {
     if (Platform.OS !== 'ios' || !widgetNative || !hydrated || busy) return;
     const key = `${activation}:${configuration}`;

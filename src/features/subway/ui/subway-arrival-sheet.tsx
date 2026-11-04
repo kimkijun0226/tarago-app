@@ -1,3 +1,4 @@
+import { LINE_COLORS } from '../model/subway-line-colors';
 import { TransportIcon } from '@/shared/ui/transport-icon';
 /** @fileoverview 선택 역의 도착정보·시간표·시설·노선도와 지도 및 알림 화면으로의 이동을 연결한다. */
 import type { SharedValue } from 'react-native-reanimated';
@@ -29,23 +30,6 @@ import { mapUi } from '@/shared/ui/map-design-tokens';
 const BLUE = mapUi.blue,
   INK = mapUi.text,
   GRAY = mapUi.secondaryText;
-
-/** 주요 지하철 노선의 표시색이다. 목록에 없는 노선은 서버 색 또는 기본 파란색을 사용한다. */
-const LINE_COLORS: Record<string, string> = {
-  '1호선': '#2D3D98',
-  '2호선': '#00A84D',
-  '3호선': '#EF7C1C',
-  '4호선': '#00A5DE',
-  '5호선': '#996CAC',
-  '6호선': '#CD7C2F',
-  '7호선': '#697512',
-  '8호선': '#E6186C',
-  '9호선': '#BDB092',
-  신분당선: '#D4003B',
-  경의중앙선: '#77C4A3',
-  수인분당선: '#F5A200',
-  공항철도: '#0090D2',
-};
 
 /**
  * 실시간 정보와 공식 역 정보를 결합해 선택 역 상세를 표시한다. 정보 부재만으로 운행 상태를 단정하지 않는다.

@@ -5,7 +5,7 @@ import { create } from 'zustand';
 import { API_STORAGE_SCOPE } from '@/shared/api/config';
 import type { WidgetTarget } from './widget-configuration';
 
-export const MAX_WIDGET_ITEMS = 6;
+export const MAX_WIDGET_ITEMS = 12;
 const STORAGE_KEY = `tarago-widget-targets-v2-${API_STORAGE_SCOPE}`;
 export const widgetNative =
   Platform.OS === 'ios'
@@ -35,6 +35,11 @@ type WidgetState = {
 export function isWidgetTarget(item: unknown): item is WidgetTarget {
   if (!item || typeof item !== 'object') return false;
   const value = item as Record<string, unknown>;
+  if (
+    value.color !== undefined &&
+    (typeof value.color !== 'string' || !/^#[0-9a-f]{6}$/i.test(value.color))
+  )
+    return false;
   if (
     ['id', 'title', 'stationName', 'directionLabel'].some((key) => typeof value[key] !== 'string')
   )

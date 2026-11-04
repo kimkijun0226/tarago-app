@@ -13,7 +13,7 @@ import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-nati
 import { router, useFocusEffect } from 'expo-router';
 import type { BusStop } from '@/features/bus-stop/api/get-nearby-bus-stops';
 import { useBusArrivals } from '@/features/bus-stop/model/use-bus-arrivals';
-import { groupBusArrivals } from '@/features/bus-stop/model/bus-arrival';
+import { getBusRouteBadge, groupBusArrivals } from '@/features/bus-stop/model/bus-arrival';
 import { useSubwayArrivals } from '@/features/subway/model/use-subway-arrivals';
 import {
   useSubwayMapStations,
@@ -120,7 +120,7 @@ export function AlertMapPicker({
       useRecoveryStore.getState().show({
         source: 'widget-save',
         message:
-          useWidgetSelection.getState().storageError ?? '위젯은 최대 6개까지 추가할 수 있어요.',
+          useWidgetSelection.getState().storageError ?? '위젯은 최대 12개까지 추가할 수 있어요.',
       });
       return;
     }
@@ -203,6 +203,7 @@ export function AlertMapPicker({
                           id: `bus:${busStop.id}:${group.routeId}:${group.stationSeq ?? ''}`,
                           transport: 'bus',
                           title: `${group.busNumber}번`,
+                          color: getBusRouteBadge(group.routeType)?.color,
                           stationName: busStop.name,
                           stationId: busStop.id,
                           routeId: group.routeId,

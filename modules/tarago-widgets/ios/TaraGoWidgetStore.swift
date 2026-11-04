@@ -1,6 +1,7 @@
 import Foundation
 
 struct TaraGoWidgetTarget: Codable, Equatable {
+  let color: String?
   let id: String
   let transport: String
   let title: String
@@ -45,7 +46,7 @@ enum TaraGoWidgetStore {
     guard let base = URLComponents(string: value.apiBaseURL),
           let host = base.host, base.user == nil, base.password == nil,
           base.query == nil, base.fragment == nil,
-          value.items.count <= 6,
+          value.items.count <= 12,
           Set(value.items.map(\.id)).count == value.items.count else { return false }
     let origins = Bundle.main.object(forInfoDictionaryKey: "TaraGoWidgetAPIOrigins") as? [String] ?? []
     let allowed = origins.compactMap { URLComponents(string: $0) }
@@ -57,6 +58,7 @@ enum TaraGoWidgetStore {
     #endif
     guard (base.scheme == "https" && allowed) || local else { return false }
     return value.items.allSatisfy { item in
+      if let color = item.color, color.range(of: "^#[0-9a-fA-F]{6}$", options: .regularExpression) == nil { return false }
       guard !item.id.isEmpty, !item.title.isEmpty, !item.stationName.isEmpty else { return false }
       if item.transport == "bus" { return item.stationId?.isEmpty == false && item.routeId?.isEmpty == false }
       return item.transport == "subway" && item.lineId?.isEmpty == false && item.direction != nil

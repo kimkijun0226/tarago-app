@@ -10,6 +10,7 @@ import { useSubwayStation, useSubwayTimetable } from '@/features/subway/model/us
 import { useSubwayArrivals } from '@/features/subway/model/use-subway-arrivals';
 import { subwayAlertOptions } from '@/features/subway/model/subway-direction';
 import { SubwayDestinationPicker } from '@/features/subway/ui/subway-destination-picker';
+import { LINE_COLORS } from '@/features/subway/model/subway-line-colors';
 import { useWidgetSelection } from '../model/widget-selection';
 
 type Direction = Parameters<typeof SubwayDestinationPicker>[0]['value'];
@@ -46,6 +47,7 @@ export function WidgetDirectionScreen() {
         id: `subway:${stationName}:${line.lineId}:${next.direction}${next.destinations ? `:${encodeURIComponent(JSON.stringify([...next.destinations].sort()))}` : ''}`,
         transport: 'subway',
         title: line.lineName,
+        color: LINE_COLORS[line.lineName] ?? line.color,
         stationName,
         lineId: line.lineId,
         direction: next.direction,
@@ -59,7 +61,7 @@ export function WidgetDirectionScreen() {
         useRecoveryStore.getState().show({
           source: 'widget-save',
           message:
-            useWidgetSelection.getState().storageError ?? '위젯은 최대 6개까지 추가할 수 있어요.',
+            useWidgetSelection.getState().storageError ?? '위젯은 최대 12개까지 추가할 수 있어요.',
         });
         return;
       }
