@@ -1,7 +1,7 @@
 {
   "name": "tarago",
   "main": "expo-router/entry",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "dependencies": {
     "@expo/ui": "~57.0.19",
     "@gorhom/bottom-sheet": "^5.2.14",
