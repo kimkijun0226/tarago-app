@@ -98,6 +98,8 @@ export async function getSubwayTimetable(
   const { data } = await apiClient.get<SubwayTimetable>('/subway/timetable', {
     params: { stationName, lineId, dayType },
     signal,
+    // 최초 조회는 기존 운영사와 통합 시간표의 순차 보완 시간을 허용한다.
+    timeout: 20_000,
   });
   return data;
 }
