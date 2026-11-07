@@ -18,7 +18,7 @@
         "ITSAppUsesNonExemptEncryption": false
       },
       "appleTeamId": "V6BDRRK4FQ",
-      "buildNumber": "9"
+      "buildNumber": "10"
     },
     "android": {
       "adaptiveIcon": {
@@ -82,8 +82,9 @@
       "./plugins/with-tarago-launch-screen",
       "./plugins/with-notification-actions",
       "./plugins/with-notification-content",
-      "./plugins/with-transit-widget",
-      "./plugins/with-notification-sound"
+      "./plugins/with-removed-transit-widget",
+      "./plugins/with-notification-sound",
+      "./plugins/with-ios-versions"
     ],
     "experiments": {
       "typedRoutes": true,

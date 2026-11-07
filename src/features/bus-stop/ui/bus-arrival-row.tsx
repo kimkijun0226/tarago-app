@@ -45,7 +45,7 @@ export const BusArrivalRow = memo(function BusArrivalRow({ group, onSelectRoute 
         {group.second ? (
           <>
             <View style={styles.timeDivider} />
-            <ArrivalTime arrival={group.second} />
+            <ArrivalTime arrival={group.second} next />
           </>
         ) : null}
       </View>
@@ -54,18 +54,30 @@ export const BusArrivalRow = memo(function BusArrivalRow({ group, onSelectRoute 
 });
 
 /** 분 단위 원본의 정밀도를 보존하면서 두 차량을 한 줄에 표시한다. 작은 문자열 변환은 캐시하지 않는다. */
-function ArrivalTime({ arrival }: { arrival: BusArrivalGroup['first'] }) {
+function ArrivalTime({
+  arrival,
+  next = false,
+}: {
+  arrival: BusArrivalGroup['first'];
+  next?: boolean;
+}) {
   return (
     <View style={styles.arrivalTime}>
+      {next && <Text style={styles.nextLabel}>다음</Text>}
       <Text
         numberOfLines={1}
-        style={[styles.eta, arrival.etaSeconds === null ? styles.secondary : styles.red]}
+        style={[
+          styles.eta,
+          next && styles.nextEta,
+          arrival.etaSeconds === null && styles.secondary,
+        ]}
       >
         {formatEta(
           arrival.etaSeconds,
           arrival.serviceStatus,
           arrival.etaPrecision,
           arrival.etaSource,
+          arrival,
         )}
       </Text>
       {arrival.remainingStops !== null && arrival.remainingStops > 0 ? (
@@ -85,7 +97,7 @@ const styles = StyleSheet.create({
     paddingBottom: 9,
     borderBottomWidth: 1,
     borderBottomColor: mapUi.separator,
-    gap: 2,
+    gap: 4,
     marginHorizontal: 16,
     marginVertical: 0,
     backgroundColor: '#FFFFFF',
@@ -99,22 +111,29 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   badgeText: { fontSize: 10, lineHeight: 13, fontWeight: '500', includeFontPadding: false },
-  heading: { flexDirection: 'row', alignItems: 'center', gap: 7, minWidth: 0 },
+  heading: { flexDirection: 'row', alignItems: 'center', gap: 6, minWidth: 0 },
   direction: { color: mapUi.secondaryText, fontSize: 12, lineHeight: 17, flexShrink: 1 },
-  number: { fontSize: 18, lineHeight: 24, fontWeight: '600', color: mapUi.text },
-  times: { minWidth: 0, flexDirection: 'row', alignItems: 'center', gap: 10 },
-  timeDivider: { width: StyleSheet.hairlineWidth, height: 12, backgroundColor: mapUi.border },
+  number: { fontSize: 16, lineHeight: 22, fontWeight: '600', color: mapUi.text },
+  times: { minWidth: 0, flexDirection: 'row', alignItems: 'baseline', gap: 8 },
+  timeDivider: {
+    width: StyleSheet.hairlineWidth,
+    height: 12,
+    alignSelf: 'center',
+    backgroundColor: mapUi.border,
+  },
   arrivalTime: {
     flexShrink: 1,
     minWidth: 0,
     flexDirection: 'row',
-    alignItems: 'center',
+    alignItems: 'baseline',
     gap: 4,
   },
   eta: {
     flexShrink: 1,
-    fontSize: 15,
-    lineHeight: 22,
+    color: '#E5484D',
+    fontSize: 18,
+    lineHeight: 24,
+    fontWeight: '600',
     includeFontPadding: false,
     textAlignVertical: 'center',
     fontVariant: ['tabular-nums'],
@@ -123,10 +142,11 @@ const styles = StyleSheet.create({
     flexShrink: 1,
     color: mapUi.secondaryText,
     fontSize: 11,
-    lineHeight: 22,
+    lineHeight: 16,
     includeFontPadding: false,
     textAlignVertical: 'center',
   },
-  red: { color: '#E5484D', fontWeight: '500' },
-  secondary: { color: mapUi.secondaryText, fontSize: 11, fontWeight: '400' },
+  nextLabel: { color: mapUi.secondaryText, fontSize: 11, lineHeight: 16 },
+  nextEta: { color: mapUi.secondaryText, fontSize: 13, lineHeight: 18, fontWeight: '400' },
+  secondary: { color: mapUi.secondaryText, fontSize: 11, lineHeight: 16, fontWeight: '400' },
 });

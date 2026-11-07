@@ -1,5 +1,6 @@
+import { ListSkeleton } from '@/shared/ui/loading-skeleton';
 import { useRef, useState } from 'react';
-import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router, useLocalSearchParams } from 'expo-router';
 import { SetupHeader } from '@/shared/ui/setup-header';
@@ -15,7 +16,7 @@ import { useWidgetSelection } from '../model/widget-selection';
 
 type Direction = Parameters<typeof SubwayDestinationPicker>[0]['value'];
 
-/** 지도에서 고른 호선의 방면과 행선지를 선택한 뒤 위젯만 저장한다. 뒤로가기는 지도 선택을 유지한다. */
+/** 지도에서 고른 호선의 방면과 행선지를 선택한 뒤 즐겨찾기만 저장한다. 뒤로가기는 지도 선택을 유지한다. */
 export function WidgetDirectionScreen() {
   const params = useLocalSearchParams<{
     stationName?: string;
@@ -40,7 +41,15 @@ export function WidgetDirectionScreen() {
   const operation = useRef(false);
   const choose = async () => {
     const next = direction;
-    if (!line || !next.direction || next.destinations?.length === 0 || operation.current || busy || !hydrated) return;
+    if (
+      !line ||
+      !next.direction ||
+      next.destinations?.length === 0 ||
+      operation.current ||
+      busy ||
+      !hydrated
+    )
+      return;
     operation.current = true;
     try {
       const saved = await useWidgetSelection.getState().add({
@@ -61,7 +70,8 @@ export function WidgetDirectionScreen() {
         useRecoveryStore.getState().show({
           source: 'widget-save',
           message:
-            useWidgetSelection.getState().storageError ?? '위젯은 최대 12개까지 추가할 수 있어요.',
+            useWidgetSelection.getState().storageError ??
+            '즐겨찾기를 저장하지 못했어요. 다시 시도해주세요.',
         });
         return;
       }
@@ -78,8 +88,8 @@ export function WidgetDirectionScreen() {
         <SetupHeader
           current={2}
           labels={['교통수단', '지도 선택', '방면·행선지']}
-          headerTitle={'위젯 추가'}
-          title={direction.direction ? "어디행 열차를 볼까요?" : "어느 방면을 추가할까요?"}
+          headerTitle={'즐겨찾기 추가'}
+          title={direction.direction ? '어디행 열차를 볼까요?' : '어느 방면을 추가할까요?'}
           onBack={() => router.back()}
           disabled={busy}
         />
@@ -90,10 +100,10 @@ export function WidgetDirectionScreen() {
           <Text style={s.name}>{stationName.replace(/역$/, '')}역</Text>
           <Text style={s.line}>{line?.lineName ?? params.lineName}</Text>
         </View>
-        {station.isPending || (options.length <= 1 && (live.isPending || timetable.isPending)) ? (
-          <ActivityIndicator color={c.accent} />
+        {station.isLoading || (options.length <= 1 && (live.isLoading || timetable.isLoading)) ? (
+          <ListSkeleton rows={3} />
         ) : null}
-        {line && (
+        {line && !(options.length <= 1 && (live.isLoading || timetable.isLoading)) && (
           <SubwayDestinationPicker
             options={options}
             value={direction}
@@ -120,12 +130,26 @@ export function WidgetDirectionScreen() {
       <View style={s.footer}>
         <Pressable
           accessibilityRole="button"
-          accessibilityLabel="선택한 행선지 위젯 추가"
-          disabled={!line || !direction.direction || direction.destinations?.length === 0 || busy || !hydrated}
+          accessibilityLabel="선택한 행선지 즐겨찾기 추가"
+          disabled={
+            !line ||
+            !direction.direction ||
+            direction.destinations?.length === 0 ||
+            busy ||
+            !hydrated
+          }
           onPress={() => void choose()}
-          style={[s.add, (!line || !direction.direction || direction.destinations?.length === 0 || busy || !hydrated) && s.inactive]}
+          style={[
+            s.add,
+            (!line ||
+              !direction.direction ||
+              direction.destinations?.length === 0 ||
+              busy ||
+              !hydrated) &&
+              s.inactive,
+          ]}
         >
-          <Text style={s.addText}>{busy ? '추가 중' : '위젯 추가'}</Text>
+          <Text style={s.addText}>{busy ? '추가 중' : '즐겨찾기 추가'}</Text>
         </Pressable>
       </View>
     </SafeAreaView>
@@ -136,7 +160,13 @@ const s = StyleSheet.create({
   header: { paddingHorizontal: 16, paddingTop: 4 },
   content: { paddingHorizontal: 16, paddingTop: 16, paddingBottom: 16, gap: 16 },
   footer: { paddingHorizontal: 16, paddingVertical: 10 },
-  add: { backgroundColor: c.accent, borderRadius: 14, minHeight: 50, alignItems: 'center', justifyContent: 'center' },
+  add: {
+    backgroundColor: c.accent,
+    borderRadius: 14,
+    minHeight: 50,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   inactive: { opacity: 0.4 },
   addText: { color: '#FFFFFF', fontSize: 16, fontWeight: '600' },
   station: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 12 },

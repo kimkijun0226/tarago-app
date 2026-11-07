@@ -44,6 +44,7 @@ export function SubwayAlertEditor({
       </RevealSection>
       {showSchedule && (
         <AlertScheduleFields
+          transport="subway"
           value={draft}
           onComplete={() => setScheduleComplete(true)}
           order={2}

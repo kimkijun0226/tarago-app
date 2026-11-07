@@ -11,7 +11,13 @@ import { BUS_ARRIVALS_REFRESH_INTERVAL } from '@/features/bus-stop/model/use-bus
 import { getBusArrivals } from '@/features/bus-stop/api/get-bus-arrivals';
 import { formatEta, groupBusArrivals } from '@/features/bus-stop/model/bus-arrival';
 import { useSubwayArrivals } from '@/features/subway/model/use-subway-arrivals';
-import { matchesSubwayDestination } from '@/features/subway/model/subway-direction';
+import { useSubwayStation, useSubwayTimetable } from '@/features/subway/model/use-subway-station';
+import { getServiceStatus } from '@/features/subway/model/subway-arrival-display';
+import {
+  matchesSubwayDestination,
+  normalizeSubwayDirections,
+  normalizeSubwayDirection,
+} from '@/features/subway/model/subway-direction';
 import type { SubwayAlert } from '@/features/subway/model/subway-alert';
 import type { BusAlert } from '../model/bus-alert';
 import { alertColors as colors } from './alert-design';
@@ -55,13 +61,37 @@ function ActiveAlertArrivalTimes(props: Props & { active: boolean }) {
     props.transport === 'subway' ? props.alert : undefined,
     props.active,
   );
-  const busKey = props.transport === 'bus' ? `${props.alert.stationId}:${props.alert.routeId}:${props.alert.stationSeq ?? ''}` : '';
-  const [recentBus, setRecentBus] = useState<{ key: string; at: number; data: NonNullable<typeof bus.data> }>();
-  if (props.transport === 'bus' && bus.data && (recentBus?.key !== busKey || recentBus.at !== bus.dataUpdatedAt)) {
+  const subwayStationName =
+    props.transport === 'subway' && props.active && focused ? props.alert.stationName : '';
+  const station = useSubwayStation(subwayStationName);
+  const day = new Date(now + 6 * 3_600_000).getUTCDay();
+  const timetable = useSubwayTimetable(
+    subwayStationName,
+    props.transport === 'subway' ? props.alert.lineId : '',
+    day === 0 ? 'holiday' : day === 6 ? 'saturday' : 'weekday',
+    props.active && focused,
+  );
+  const busKey =
+    props.transport === 'bus'
+      ? `${props.alert.stationId}:${props.alert.routeId}:${props.alert.stationSeq ?? ''}`
+      : '';
+  const [recentBus, setRecentBus] = useState<{
+    key: string;
+    at: number;
+    data: NonNullable<typeof bus.data>;
+  }>();
+  if (
+    props.transport === 'bus' &&
+    bus.data &&
+    (recentBus?.key !== busKey || recentBus.at !== bus.dataUpdatedAt)
+  ) {
     const { alert } = props;
-    const hasTime = bus.data.some((arrival) => arrival.routeId === alert.routeId
-      && (alert.stationSeq === undefined || arrival.stationSeq === alert.stationSeq)
-      && arrival.etaSeconds !== null);
+    const hasTime = bus.data.some(
+      (arrival) =>
+        arrival.routeId === alert.routeId &&
+        (alert.stationSeq === undefined || arrival.stationSeq === alert.stationSeq) &&
+        arrival.etaSeconds !== null,
+    );
     if (hasTime) setRecentBus({ key: busKey, at: bus.dataUpdatedAt, data: bus.data });
   }
   const query = props.transport === 'bus' ? bus : subway;
@@ -69,12 +99,17 @@ function ActiveAlertArrivalTimes(props: Props & { active: boolean }) {
   if (props.transport === 'bus') {
     const { alert } = props;
     const seen = new Set<string>();
-    const matches = (arrival: NonNullable<typeof bus.data>[number]) => arrival.routeId === alert.routeId
-      && (alert.stationSeq === undefined || arrival.stationSeq === alert.stationSeq);
-    const hasCurrent = bus.data?.some((arrival) => matches(arrival) && arrival.etaSeconds !== null);
+    const matches = (arrival: NonNullable<typeof bus.data>[number]) =>
+      arrival.routeId === alert.routeId &&
+      (alert.stationSeq === undefined || arrival.stationSeq === alert.stationSeq);
+    const hasCurrent = bus.data?.some(
+      (arrival) =>
+        matches(arrival) &&
+        (arrival.etaSeconds !== null || arrival.serviceEnded || arrival.recheckingArrival),
+    );
     const recent = recentBus?.key === busKey && now - recentBus.at < 90_000 ? recentBus : undefined;
-    const data = hasCurrent ? bus.data : recent?.data ?? bus.data;
-    const observedAt = hasCurrent ? bus.dataUpdatedAt : recent?.at ?? bus.dataUpdatedAt;
+    const data = hasCurrent ? bus.data : (recent?.data ?? bus.data);
+    const observedAt = hasCurrent ? bus.dataUpdatedAt : (recent?.at ?? bus.dataUpdatedAt);
     const selected = (data ?? []).filter((arrival) => {
       if (
         arrival.routeId !== alert.routeId ||
@@ -86,7 +121,16 @@ function ActiveAlertArrivalTimes(props: Props & { active: boolean }) {
       seen.add(arrival.vehicleId);
       return true;
     });
-    const group = now - observedAt < 90_000 ? groupBusArrivals(selected.filter((arrival) => arrival.etaSeconds === null || arrival.etaSeconds - Math.max(0, now - observedAt) / 1000 >= -15))[0] : undefined;
+    const group =
+      now - observedAt < 90_000
+        ? groupBusArrivals(
+            selected.filter(
+              (arrival) =>
+                arrival.etaSeconds === null ||
+                arrival.etaSeconds - Math.max(0, now - observedAt) / 1000 >= -15,
+            ),
+          )[0]
+        : undefined;
     times = [group?.first, group?.second]
       .filter((arrival) => !!arrival)
       .map((arrival) =>
@@ -97,21 +141,41 @@ function ActiveAlertArrivalTimes(props: Props & { active: boolean }) {
           arrival.serviceStatus,
           arrival.etaPrecision,
           arrival.etaSource,
+          arrival,
         ),
       );
+    const hasUpcomingBus = selected.some(
+      (arrival) =>
+        arrival.etaSeconds !== null &&
+        arrival.etaSeconds - Math.max(0, now - observedAt) / 1000 >= -15,
+    );
+    if (
+      times.includes('운행 종료') &&
+      !hasUpcomingBus &&
+      !selected.some((arrival) => arrival.realtimeError)
+    ) {
+      times = ['운행 종료', '운행 종료'];
+    }
   } else {
     const { alert } = props;
+    const line = station.data?.lines.find((line) => line.lineId === alert.lineId) ?? {
+      lineId: alert.lineId,
+      stationNumber: '',
+    };
+    const source = subway.data?.arrivals ?? [];
+    const normalized = normalizeSubwayDirections(line, source, timetable.data?.directions);
+    const direction = normalizeSubwayDirection(line, alert.direction, source);
     const fetched = Date.parse(subway.data?.fetchedAt ?? '');
     if (Number.isFinite(fetched) && now - fetched < 90_000 && fetched - now < 30_000) {
-      times = (subway.data?.arrivals ?? [])
+      times = normalized.arrivals
         .filter(
           (train) =>
             train.lineId === alert.lineId &&
-            (alert.direction === 'all' || train.direction === alert.direction) &&
+            (direction === 'all' || train.direction === direction) &&
             matchesSubwayDestination(alert, train.destination) &&
             train.arrivalCode !== '2' &&
             train.etaSeconds !== null &&
-            train.etaSeconds >= 0,
+            train.etaSeconds - Math.max(0, now - fetched) / 1000 >= -15,
         )
         .sort((a, b) => a.etaSeconds! - b.etaSeconds!)
         .filter(
@@ -124,6 +188,33 @@ function ActiveAlertArrivalTimes(props: Props & { active: boolean }) {
           (train) =>
             `${train.etaSource === 'schedule' ? '시간표 기준 · ' : train.etaSource === 'estimated' ? '예상 ' : ''}${formatEta(Math.max(0, train.etaSeconds! - Math.max(0, now - fetched) / 1000))}${train.destination ? ` · ${train.destination.replace(/행$/, '')}행` : ''}`,
         );
+    }
+    if (!times.length && !subway.isPending && !subway.isError && !timetable.isError) {
+      const schedules = normalized.scheduled
+        .filter((entry) => direction === 'all' || entry.direction === direction)
+        .map((entry) => {
+          const trains = entry.trains.filter((train) =>
+            matchesSubwayDestination(alert, train.destination),
+          );
+          return {
+            ...entry,
+            trains,
+            firstTrain: trains[0] ?? null,
+            lastTrain: trains.at(-1) ?? null,
+          };
+        })
+        .filter((entry) => entry.trains.length > 0);
+      const local = new Date(now + 9 * 3_600_000);
+      const hour = local.getUTCHours();
+      const serviceMinute = (hour < 3 ? hour + 24 : hour) * 60 + local.getUTCMinutes();
+      if (
+        schedules.length &&
+        schedules.every(
+          (entry) => getServiceStatus(entry.direction, schedules, serviceMinute) === '운행종료',
+        )
+      ) {
+        times = ['운행 종료', '운행 종료'];
+      }
     }
   }
   return (

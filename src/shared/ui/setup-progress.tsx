@@ -7,7 +7,7 @@ export function SetupProgress({
   title,
   showTitle = true,
   compact = false,
-  labels = ['교통수단 선택', '지도에서 선택', '위젯에 추가'],
+  labels = ['교통수단 선택', '지도에서 선택', '즐겨찾기에 추가'],
 }: {
   current: 0 | 1 | 2;
   title?: string;

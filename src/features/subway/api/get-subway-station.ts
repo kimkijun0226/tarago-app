@@ -1,3 +1,4 @@
+import { normalizeSubwayLineName } from '../model/subway-symbol-caption';
 /** @fileoverview 역·노선 메타데이터, 영업일 시간표, 공개 시설정보의 서버 계약과 요청을 정의한다. */
 
 import { apiClient } from '@/shared/api/client';
@@ -39,6 +40,8 @@ export interface SubwayScheduledTrain {
 }
 /** 역·노선·영업일별 방면 시간표와 같은 자료에서 계산한 첫차·막차. */
 export interface SubwayTimetable {
+  fetchedAt?: string;
+  stale?: boolean;
   stationName: string;
   lineId: string;
   lineName: string;
@@ -68,7 +71,13 @@ export async function getSubwayStation(
     params: { stationName },
     signal,
   });
-  return data;
+  return {
+    ...data,
+    lines: data.lines.map((line) => ({
+      ...line,
+      lineName: normalizeSubwayLineName(line.lineName),
+    })),
+  };
 }
 
 /**
@@ -130,5 +139,7 @@ export type SubwayMapStation = {
 };
 
 export async function getSubwayMapStations(signal?: AbortSignal): Promise<SubwayMapStation[]> {
-  return (await apiClient.get<SubwayMapStation[]>('/subway/map-stations', { signal })).data;
+  return (await apiClient.get<SubwayMapStation[]>('/subway/map-stations', { signal })).data.map(
+    (station) => ({ ...station, lineName: normalizeSubwayLineName(station.lineName) }),
+  );
 }

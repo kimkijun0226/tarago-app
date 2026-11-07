@@ -51,11 +51,8 @@ export default function TabsLayout() {
         />
       </NativeTabs.Trigger>
       <NativeTabs.Trigger name="widgets" disableAutomaticContentInsets>
-        <NativeTabs.Trigger.Label>위젯</NativeTabs.Trigger.Label>
-        <NativeTabs.Trigger.Icon
-          sf={{ default: 'square.grid.2x2', selected: 'square.grid.2x2.fill' }}
-          md="widgets"
-        />
+        <NativeTabs.Trigger.Label>즐겨찾기</NativeTabs.Trigger.Label>
+        <NativeTabs.Trigger.Icon sf={{ default: 'star', selected: 'star.fill' }} md="star" />
       </NativeTabs.Trigger>
       <NativeTabs.Trigger name="feedback" disableAutomaticContentInsets>
         <NativeTabs.Trigger.Label>의견 보내기</NativeTabs.Trigger.Label>

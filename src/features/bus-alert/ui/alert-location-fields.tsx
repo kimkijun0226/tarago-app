@@ -44,10 +44,10 @@ export function AlertLocationFields({
       </View>
       <Text style={styles.sectionTitle}>재알림 간격</Text>
       <View style={styles.chips}>
-        {[1, 3, 5, 10].map((minutes) => (
+        {[0, 1, 3, 5, 10].map((minutes) => (
           <AlertChoice
             key={minutes}
-            label={`${minutes}분`}
+            label={minutes === 0 ? '한 번만' : `${minutes}분`}
             selected={repeatMinutes === minutes}
             disabled={disabled}
             onPress={() => onRepeatMinutesChange(minutes)}

@@ -25,6 +25,7 @@ export function BusStopSheetHeader({
     <SheetToolbar
       onClose={onClose}
       closeLabel="정류장 정보 닫기"
+      style={styles.toolbar}
       header={
         <View style={styles.header}>
           <Pressable
@@ -52,8 +53,9 @@ export function BusStopSheetHeader({
 }
 
 const styles = StyleSheet.create({
+  toolbar: { paddingBottom: 2 },
   header: { paddingVertical: 0 },
   expand: { minHeight: 44, justifyContent: 'center', gap: 4 },
   title: { fontSize: 20, lineHeight: 28, fontWeight: '600' },
-  subtitle: { fontSize: 12 },
+  subtitle: { fontSize: 11, lineHeight: 16 },
 });

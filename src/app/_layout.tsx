@@ -1,4 +1,4 @@
-import { WidgetSync } from '@/features/widgets/ui/widget-sync';
+import { useWidgetSelection } from '@/features/widgets/model/widget-selection';
 /** @fileoverview 앱 전체의 Provider와 최상위 Router를 연결하는 조립 지점. Query·알림 런타임·제스처를 한 번 설치한다. */
 import { focusManager, QueryClientProvider } from '@tanstack/react-query';
 import { DefaultTheme, Stack, ThemeProvider } from 'expo-router';
@@ -32,6 +32,7 @@ const navigationTheme = {
 export default function RootLayout() {
   /** 앱 활성 상태를 Query에 연결해 백그라운드 폴링을 제어한다. 최초 한 번 등록하고 루트 해제 시 AppState 구독을 제거한다. */
   useEffect(() => {
+    void useWidgetSelection.getState().initialize();
     focusManager.setFocused(AppState.currentState === 'active');
 
     /** 앱의 활성·백그라운드 전환을 Query focusManager에 전달하는 구독이다. 레이아웃 해제 시 제거한다. */
@@ -48,7 +49,6 @@ export default function RootLayout() {
         <ThemeProvider value={navigationTheme}>
           <AnimatedSplashOverlay />
           <AlertRuntime />
-          <WidgetSync />
           <Stack
             screenOptions={{
               headerShown: false,

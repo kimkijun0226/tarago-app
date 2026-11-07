@@ -12,6 +12,46 @@ export const destinationLabel = (name: string) => {
   return !value ? '행선지 미제공' : value.endsWith('행') ? value : `${value}행`;
 };
 
+/** 2호선 본선의 상·하행 별칭만 내·외선으로 맞추고 지선의 방면은 유지한다. */
+export function normalizeSubwayDirection(
+  line: Pick<SubwayStationLine, 'lineId' | 'stationNumber'> | undefined,
+  direction: string,
+  arrivals: SubwayArrival[] = [],
+) {
+  const circular =
+    line?.lineId === '1002' &&
+    (/^0?2\d{2}$/.test(line.stationNumber) ||
+      arrivals.some(
+        (train) => train.lineId === line.lineId && ['내선', '외선'].includes(train.direction),
+      ));
+  return circular
+    ? direction === '상행'
+      ? '내선'
+      : direction === '하행'
+        ? '외선'
+        : direction
+    : direction;
+}
+
+/** 시간표와 실시간 응답을 같은 방면 기준으로 결합한다. */
+export function normalizeSubwayDirections(
+  line: Pick<SubwayStationLine, 'lineId' | 'stationNumber'> | undefined,
+  arrivals: SubwayArrival[],
+  scheduled: SubwayTimetable['directions'] = [],
+) {
+  return {
+    arrivals: arrivals.map((train) =>
+      train.lineId === line?.lineId
+        ? { ...train, direction: normalizeSubwayDirection(line, train.direction, arrivals) }
+        : train,
+    ),
+    scheduled: scheduled.map((entry) => ({
+      ...entry,
+      direction: normalizeSubwayDirection(line, entry.direction, arrivals),
+    })),
+  };
+}
+
 /** 실제 방면 정보와 인접역을 대조한다. 순환·지선의 다음 역을 종착역으로 추측하지 않는다. */
 export function subwayDirectionPresentation(
   line: Pick<SubwayStationLine, 'lineId' | 'previousStation' | 'nextStation'> | undefined,
@@ -111,9 +151,25 @@ export function subwayAlertOptions(
     { key: 'all', direction: 'all', title: '상관없음', subtitle: '이 호선의 모든 행선지' },
   ];
   if (!line) return options;
+  ({ arrivals, scheduled } = normalizeSubwayDirections(line, arrivals, scheduled));
+  if (
+    existing &&
+    line.lineId === '1002' &&
+    scheduled.some((entry) => ['내선', '외선'].includes(entry.direction))
+  ) {
+    existing = {
+      ...existing,
+      direction:
+        existing.direction === '상행'
+          ? '내선'
+          : existing.direction === '하행'
+            ? '외선'
+            : existing.direction,
+    };
+  }
   const directions = [
     ...new Set([
-      ...scheduled.map((item) => item.direction),
+      ...scheduled.filter((item) => item.trains.length > 0).map((item) => item.direction),
       ...arrivals.filter((item) => item.lineId === line.lineId).map((item) => item.direction),
       ...(existing?.direction && existing.direction !== 'all' ? [existing.direction] : []),
     ]),

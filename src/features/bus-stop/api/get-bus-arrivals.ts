@@ -18,7 +18,14 @@ export type BusArrival = {
   routeEndName?: string;
   etaSeconds: number | null;
   etaPrecision?: 'minutes';
-  etaSource?: 'turnaround_estimate';
+  etaSource?: 'turnaround_estimate' | 'schedule_estimate';
+  nextDepartureAt?: string;
+  departureStopName?: string;
+  serviceEnded?: boolean;
+  scheduleError?: boolean;
+  realtimeError?: boolean;
+  recheckingArrival?: boolean;
+  serviceEndAt?: string;
   remainingStops: number | null;
   vehicleType: string;
   vehicleId?: string;

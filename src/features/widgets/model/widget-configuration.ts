@@ -1,4 +1,4 @@
-/** 사용자가 위젯에 직접 추가한 조회 대상. 예약 ID나 알림 조건에 의존하지 않는다. */
+/** 사용자가 즐겨찾기에 직접 추가한 조회 대상. 예약 ID나 알림 조건에 의존하지 않는다. */
 export type WidgetTarget = {
   color?: string;
   id: string;
@@ -6,7 +6,14 @@ export type WidgetTarget = {
   stationName: string;
   directionLabel: string;
 } & (
-  | { transport: 'bus'; stationId: string; routeId: string; stationSeq?: number }
+  | {
+      transport: 'bus';
+      stationId: string;
+      routeId: string;
+      stationSeq?: number;
+      latitude?: number;
+      longitude?: number;
+    }
   | {
       transport: 'subway';
       lineId: string;

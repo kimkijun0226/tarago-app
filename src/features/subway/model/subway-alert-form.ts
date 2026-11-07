@@ -29,7 +29,7 @@ export function buildSubwayAlertInput(draft: SubwayAlertDraft, kind: AlertKind, 
   )
     throw new Error('지도에서 역과 접근 반경을 선택해주세요.');
   const repeatMinutes = draft.repeatMinutes ?? 5;
-  if (proximityEnabled && ![1, 3, 5, 10].includes(repeatMinutes))
+  if (proximityEnabled && ![0, 1, 3, 5, 10].includes(repeatMinutes))
     throw new Error('재알림 간격을 선택해주세요.');
   const schedule = scheduledEnabled
     ? validateSchedule(draft, threshold, draft.notificationStages)

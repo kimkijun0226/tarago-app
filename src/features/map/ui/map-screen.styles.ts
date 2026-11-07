@@ -19,7 +19,7 @@ export const styles = StyleSheet.create({
     borderColor: mapUi.border,
     zIndex: 25,
     elevation: 0,
-    boxShadow: appShadows.floating,
+    boxShadow: '0px 3px 12px rgba(27, 45, 72, 0.12)',
     alignItems: 'center',
     justifyContent: 'center',
   },

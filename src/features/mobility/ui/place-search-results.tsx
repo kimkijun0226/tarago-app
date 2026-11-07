@@ -1,15 +1,8 @@
+import { ListSkeleton } from '@/shared/ui/loading-skeleton';
 /** @fileoverview 정류장·지하철역 검색 결과와 최근 검색을 표시한다. */
 import { SearchPlaceKind } from './search-place-kind';
 import { useState } from 'react';
-import {
-  Keyboard,
-  ActivityIndicator,
-  FlatList,
-  Pressable,
-  StyleSheet,
-  Text,
-  View,
-} from 'react-native';
+import { Keyboard, FlatList, Pressable, StyleSheet, Text, View } from 'react-native';
 import type { Place } from '../api/mobility';
 import { isBusStopPlace, matchesSearchFilter, type SearchResultFilter } from '../model/place-kind';
 import { mapUi } from '@/shared/ui/map-design-tokens';
@@ -103,7 +96,6 @@ export function PlaceSearchResults({
           ) : null}
         </View>
       )}
-      {fetching ? <ActivityIndicator style={styles.loading} color={mapUi.blue} /> : null}
       {error ? (
         <Text accessibilityRole="alert" style={styles.error}>
           {error}
@@ -119,7 +111,9 @@ export function PlaceSearchResults({
         keyboardDismissMode="on-drag"
         renderItem={({ item }) => <PlaceSearchRow place={item} onChoose={onChoose} />}
         ListEmptyComponent={
-          !fetching && query.length >= 2 ? (
+          fetching && query.length >= 2 ? (
+            <ListSkeleton rows={5} inset={16} />
+          ) : query.length >= 2 ? (
             <Text style={styles.empty}>검색 결과가 없습니다.</Text>
           ) : null
         }

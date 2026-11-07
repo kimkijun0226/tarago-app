@@ -31,11 +31,10 @@ export function ArrivalRefreshButton({ updatedAt, fetching, onRefresh }: Props) 
   );
 
   return (
-    <View style={styles.container}>
-      <Text style={styles.updatedAt}>{updatedAt ? `${remaining}초 후 갱신` : '조회 중'}</Text>
+    <View pointerEvents="box-none" style={styles.container}>
       <Pressable
         accessibilityRole="button"
-        accessibilityLabel="버스 도착정보 새로고침"
+        accessibilityLabel={`버스 도착정보 새로고침${updatedAt ? `, ${remaining}초 후 자동 갱신` : ''}`}
         accessibilityState={{ busy: fetching, disabled: fetching }}
         disabled={fetching}
         onPress={onRefresh}
@@ -46,37 +45,42 @@ export function ArrivalRefreshButton({ updatedAt, fetching, onRefresh }: Props) 
         ) : (
           <SymbolView
             name={{ ios: 'arrow.clockwise', android: 'refresh' }}
-            size={16}
+            size={20}
             tintColor={mapUi.blue}
           />
         )}
-        <Text style={styles.buttonText}>새로고침</Text>
+        <Text style={styles.updatedAt}>
+          {fetching ? '조회 중' : updatedAt ? `${remaining}초` : '—'}
+        </Text>
       </Pressable>
     </View>
   );
 }
 
-/** 목록과 겹치지 않는 시트 하단 갱신 행이다. */
+/** 스크롤과 별도로 시트 오른쪽 아래에 고정한다. */
 const styles = StyleSheet.create({
   container: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 16,
-    minHeight: 44,
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: mapUi.separator,
-    backgroundColor: mapUi.background,
+    position: 'absolute',
+    right: 18,
+    bottom: 18,
   },
   button: {
-    minWidth: 44,
-    minHeight: 44,
-    flexDirection: 'row',
-    gap: 6,
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    gap: 1,
     alignItems: 'center',
     justifyContent: 'center',
+    backgroundColor: mapUi.background,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: mapUi.separator,
+    boxShadow: '0px 4px 12px rgba(27, 45, 72, 0.18)',
   },
-  buttonText: { fontSize: 13, fontWeight: '500', color: mapUi.blue },
-  updatedAt: { color: mapUi.secondaryText, fontSize: 12 },
+  updatedAt: {
+    color: mapUi.secondaryText,
+    fontSize: 9,
+    lineHeight: 11,
+    fontVariant: ['tabular-nums'],
+  },
   pressed: { opacity: 0.65 },
 });

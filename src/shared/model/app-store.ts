@@ -27,6 +27,8 @@ type AppState = {
   switchAlertTransport: (transport: AlertMenu['transport']) => void;
 
   /** 지도 검색·상세 시트가 열렸을 때 하단 탭을 숨기는 상태. */
+  mapSheetCollapseRequest: number;
+  collapseMapSheets: () => void;
   isMapTabHidden: boolean;
   setMapTabHidden: (hidden: boolean) => void;
 
@@ -41,7 +43,12 @@ export const useAppStore = create<AppState>()((set) => ({
   setProximityVisit: (key, inside, observedAt) =>
     set((state) => {
       const previous = state.proximityVisits[key];
-      if (previous && observedAt <= previous.observedAt) return state;
+      if (
+        previous &&
+        (observedAt < previous.observedAt ||
+          (observedAt === previous.observedAt && !(previous.inside && !inside)))
+      )
+        return state;
       return { proximityVisits: { ...state.proximityVisits, [key]: { inside, observedAt } } };
     }),
   alertMenu: { transport: 'bus', kind: 'time' },
@@ -66,6 +73,9 @@ export const useAppStore = create<AppState>()((set) => ({
           }
         : state,
     ),
+  mapSheetCollapseRequest: 0,
+  collapseMapSheets: () =>
+    set((state) => ({ mapSheetCollapseRequest: state.mapSheetCollapseRequest + 1 })),
   isMapTabHidden: false,
   setMapTabHidden: (hidden) => set({ isMapTabHidden: hidden }),
 

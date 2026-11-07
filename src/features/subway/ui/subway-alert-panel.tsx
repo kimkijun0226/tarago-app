@@ -1,13 +1,11 @@
+import { ListSkeleton } from '@/shared/ui/loading-skeleton';
 import { AlertArrivalTimes, AlertTodayControl } from '@/features/bus-alert/ui/alert-arrival-times';
-import { ActivityIndicator } from 'react-native';
 import {
   AlertNotice,
   AlertPrimaryButton,
   SavedAlertCard,
   EmptyAlertCard,
 } from '@/features/bus-alert/ui/alert-components';
-import { alertColors as colors } from '@/features/bus-alert/ui/alert-design';
-import { createStyles } from '@/features/bus-alert/ui/alert-screen-styles';
 import { WEEKDAYS } from '@/features/bus-alert/model/alert-form';
 import type { ComponentProps } from 'react';
 import { useSubwayAlertPresentation } from '../model/use-subway-alert-presentation';
@@ -15,8 +13,6 @@ import { subwayAlertSubtitle } from '../model/subway-direction';
 import type { SubwayAlert } from '../model/subway-alert';
 import type { useSubwayAlertScreen } from '../model/use-subway-alert-screen';
 import { SubwayAlertEditor } from './subway-alert-editor';
-
-const styles = createStyles(colors);
 
 /** 공통 알림 페이지 안에서 지하철 목록·편집 내용만 렌더한다. */
 export function SubwayAlertsPanel({
@@ -68,7 +64,7 @@ export function SubwayAlertsPanel({
       ) : !all ? (
         <EmptyAlertCard transport="subway" kind={kind} disabled={busy} />
       ) : list.isPending ? (
-        <ActivityIndicator style={styles.loading} color={colors.accent} />
+        <ListSkeleton variant="alert" />
       ) : (
         <>
           {visibleAlerts.length > 0 &&
@@ -88,7 +84,7 @@ export function SubwayAlertsPanel({
                   summary={
                     kind === 'time'
                       ? `도착 ${alert.thresholdMinutes === 60 ? '1시간' : `${alert.thresholdMinutes}분`} 전${alert.advanceRepeatMinutes ? `부터 · ${alert.advanceRepeatMinutes}분마다` : ''}`
-                      : `${alert.radius ?? 200}m · ${alert.repeatMinutes ?? 5}분마다`
+                      : `${alert.radius ?? 200}m · ${alert.repeatMinutes === 0 ? '한 번만' : `${alert.repeatMinutes ?? 5}분마다`}`
                   }
                   detail={`${alert.days.map((day) => WEEKDAYS[day]).join(' · ')}${kind === 'time' ? ` · ${alert.startTime}–${alert.endTime}${state.pushStatus?.ready === false ? ' · 알림 연결 필요' : ''}` : ''}`}
                   enabled={alert.enabled}

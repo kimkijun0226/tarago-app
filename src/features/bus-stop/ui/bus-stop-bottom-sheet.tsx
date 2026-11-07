@@ -1,3 +1,4 @@
+import { ListSkeleton } from '@/shared/ui/loading-skeleton';
 /** @fileoverview 선택 정류장의 도착 목록·새로고침·노선 및 알림 진입 UI를 구성한다. 서버 상태는 Query 훅이 소유한다. */
 import type { SharedValue } from 'react-native-reanimated';
 
@@ -7,15 +8,7 @@ import { useAppTheme } from '@/shared/ui';
 import { MapBottomSheet, type MapSheetSnap } from '@/shared/ui/map-bottom-sheet';
 import { isAxiosError } from 'axios';
 import { memo, useCallback, useEffect, useMemo, useState } from 'react';
-import {
-  ActivityIndicator,
-  Alert,
-  FlatList,
-  Pressable,
-  StyleSheet,
-  Text,
-  View,
-} from 'react-native';
+import { Alert, FlatList, Pressable, StyleSheet, Text, View } from 'react-native';
 import { ArrivalRefreshButton } from './arrival-refresh-button';
 
 import type { BusStop } from '@/features/bus-stop/api/get-nearby-bus-stops';
@@ -137,15 +130,12 @@ export const BusStopBottomSheet = memo(function BusStopBottomSheet({
   );
 
   /** 현재 로딩·오류·빈 응답 또는 축소 상태를 안내하는 목록 대체 요소다. */
-  const empty = (
+  const empty = isPending ? (
+    <ListSkeleton variant="arrival" rows={4} inset={16} />
+  ) : (
     <View style={styles.stateContainer}>
-      {isPending ? <ActivityIndicator color={colors.accent} /> : null}
       <Text style={styles.stateText}>
-        {isPending
-          ? '도착정보를 불러오고 있습니다.'
-          : isError
-            ? errorMessage
-            : '현재 도착 예정인 버스가 없습니다.'}
+        {isError ? errorMessage : '현재 도착 예정인 버스가 없습니다.'}
       </Text>
       {isError ? (
         <Pressable onPress={() => void refetch()}>
@@ -183,38 +173,40 @@ export const BusStopBottomSheet = memo(function BusStopBottomSheet({
               {errorMessage}
             </Text>
           ) : null}
-          <FlatList<BusArrivalGroup>
-            style={styles.list}
-            data={arrivalGroups}
-            keyExtractor={(group) => `${group.routeId}:${group.stationSeq ?? ''}`}
-            ListEmptyComponent={empty}
-            ListFooterComponent={
-              <Text
-                style={{
-                  color: colors.secondaryText,
-                  fontSize: 11,
-                  paddingHorizontal: 16,
-                  paddingVertical: 12,
-                }}
-              >
-                {
-                  '실시간 정보는 상황에 따라 오차가 발생할 수 있습니다.\n버스정보 제공: 서울특별시 · 경기도 · 국토교통부(TAGO)'
-                }
-              </Text>
-            }
-            contentContainerStyle={styles.arrivalList}
-            showsVerticalScrollIndicator={true}
-            renderItem={({ item: group }) => (
-              <BusArrivalRow group={group} onSelectRoute={onSelectRoute} />
-            )}
-          />
-          {snap !== 'compact' ? (
-            <ArrivalRefreshButton
-              updatedAt={dataUpdatedAt}
-              fetching={isFetching}
-              onRefresh={() => void refetch()}
+          <View style={styles.list}>
+            <FlatList<BusArrivalGroup>
+              style={styles.list}
+              data={arrivalGroups}
+              keyExtractor={(group) => `${group.routeId}:${group.stationSeq ?? ''}`}
+              ListEmptyComponent={empty}
+              ListFooterComponent={
+                <Text
+                  style={{
+                    color: colors.secondaryText,
+                    fontSize: 11,
+                    paddingHorizontal: 16,
+                    paddingVertical: 12,
+                  }}
+                >
+                  {
+                    '실시간 정보는 상황에 따라 오차가 발생할 수 있습니다.\n버스정보 제공: 서울특별시 · 경기도 · 국토교통부(TAGO)'
+                  }
+                </Text>
+              }
+              contentContainerStyle={styles.arrivalList}
+              showsVerticalScrollIndicator={true}
+              renderItem={({ item: group }) => (
+                <BusArrivalRow group={group} onSelectRoute={onSelectRoute} />
+              )}
             />
-          ) : null}
+            {snap !== 'compact' ? (
+              <ArrivalRefreshButton
+                updatedAt={dataUpdatedAt}
+                fetching={isFetching}
+                onRefresh={() => void refetch()}
+              />
+            ) : null}
+          </View>
         </View>
       </MapBottomSheet>
     </>
@@ -252,7 +244,7 @@ const createStyles = (colors: ReturnType<typeof useAppTheme>['colors']) =>
       fontWeight: '600',
     },
     arrivalList: {
-      paddingBottom: 16,
+      paddingBottom: 72,
     },
     pressed: {
       opacity: 0.65,

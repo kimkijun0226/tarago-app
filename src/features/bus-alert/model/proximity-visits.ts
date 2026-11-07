@@ -5,7 +5,9 @@ import { API_STORAGE_SCOPE } from '@/shared/api/config';
 import { setAlertProximity } from '../api/alerts';
 import { alertStorage } from './alert-storage';
 
-type Visit = { inside: boolean; observedAt: string; synced: boolean };
+type Visit = { inside: boolean; observedAt: string; synced: boolean; reportedAt?: string };
+const HEARTBEAT_INTERVAL_MS = 60_000;
+export const PROXIMITY_OBSERVATION_TTL_MS = 180_000;
 const PREFIX = `tarago-proximity-visit:${API_STORAGE_SCOPE}:`;
 let queue: Promise<unknown> = Promise.resolve();
 
@@ -18,7 +20,10 @@ function serialize<T>(run: () => Promise<T>): Promise<T> {
 async function send(key: string, transport: 'bus' | 'subway', id: string, visit: Visit) {
   try {
     await setAlertProximity(transport, id, visit);
-    await alertStorage.setItem(key, JSON.stringify({ ...visit, synced: true }));
+    await alertStorage.setItem(
+      key,
+      JSON.stringify({ ...visit, synced: true, reportedAt: visit.observedAt }),
+    );
   } catch (error) {
     if (isAxiosError(error) && error.response?.status === 404) {
       await alertStorage.removeItem(key);
@@ -46,18 +51,37 @@ export function reportProximity(
   useAppStore.getState().setProximityVisit(`${transport}:${id}`, inside, observedAt);
   return serialize(async () => {
     const key = `${PREFIX}${transport}:${id}`;
+    const latest = useAppStore.getState().proximityVisits[`${transport}:${id}`];
+    if (
+      inside &&
+      (Date.now() - observedAt >= PROXIMITY_OBSERVATION_TTL_MS ||
+        (latest && (latest.observedAt > observedAt || !latest.inside)))
+    )
+      return;
     const previous = JSON.parse((await alertStorage.getItem(key)) ?? 'null') as Visit | null;
     if (previous && observedAt < Date.parse(previous.observedAt)) return;
-    if (previous && observedAt === Date.parse(previous.observedAt) && previous.inside !== inside)
-      return;
     if (
-      (previous?.inside === inside && previous.synced && !force) ||
-      (!previous && !inside && !force)
-    ) {
-      // 같은 상태도 최신 관측 시각은 남겨 늦게 도착한 반대 상태를 거부한다.
+      previous &&
+      observedAt === Date.parse(previous.observedAt) &&
+      previous.inside !== inside &&
+      inside
+    )
+      return;
+    // 전송 실패한 이탈을 먼저 확정해야 재진입을 새 방문으로 구분할 수 있다.
+    if (inside && previous && !previous.inside && !previous.synced)
+      await send(key, transport, id, previous);
+    const reportedAt = previous?.reportedAt ?? previous?.observedAt;
+    const heartbeatDue =
+      inside && (!reportedAt || observedAt - Date.parse(reportedAt) >= HEARTBEAT_INTERVAL_MS);
+    if (previous?.inside === inside && previous.synced && !force && !heartbeatDue) {
       await alertStorage.setItem(
         key,
-        JSON.stringify({ inside, observedAt: new Date(observedAt).toISOString(), synced: true }),
+        JSON.stringify({
+          inside,
+          observedAt: new Date(observedAt).toISOString(),
+          synced: true,
+          reportedAt,
+        }),
       );
       return;
     }
@@ -72,15 +96,33 @@ export function reportProximity(
   });
 }
 
+/** 백그라운드 위치 확인은 사용 중인 알림의 실제 진입 상태가 있을 때만 유지한다. */
+export async function hasInsideProximityVisits(identifiers: string[]) {
+  const visits = await Promise.all(
+    identifiers.map(async (id) => {
+      const raw = await alertStorage.getItem(`${PREFIX}${id}`);
+      return raw ? (JSON.parse(raw) as Visit) : null;
+    }),
+  );
+  return visits.some(
+    (visit, index) =>
+      useAppStore.getState().proximityVisits[identifiers[index]]?.inside ?? visit?.inside,
+  );
+}
+
 export function retryProximityReports() {
   return serialize(async () => {
+    const attempts: Promise<unknown>[] = [];
     for (const key of await alertStorage.getAllKeys()) {
       if (!key.startsWith(PREFIX)) continue;
       const visit = JSON.parse((await alertStorage.getItem(key)) ?? 'null') as Visit | null;
       if (!visit || visit.synced || visit.inside) continue;
       const [transport, id] = key.slice(PREFIX.length).split(':');
       if (transport !== 'bus' && transport !== 'subway') continue;
-      await send(key, transport, id, visit);
+      attempts.push(send(key, transport, id, visit));
     }
+    const results = await Promise.allSettled(attempts);
+    const failure = results.find((result) => result.status === 'rejected');
+    if (failure?.status === 'rejected') throw failure.reason;
   });
 }

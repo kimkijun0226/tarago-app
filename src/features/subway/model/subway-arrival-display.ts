@@ -11,13 +11,21 @@ import type { SubwayTimetable } from '../api/get-subway-station';
  * @returns 도착시간과 정보의 오래됨 여부. 예정 초가 없으면 시간 문구는 비운다.
  */
 export function getArrivalTime(arrival: SubwayArrival, now: number, elapsed: number) {
-  const receivedAt = arrival.etaSource === 'estimated' ? arrival.etaPositionReceivedAt : arrival.receivedAt;
+  if (arrival.etaSource === 'schedule' && arrival.etaSeconds !== null) {
+    const seconds = Math.max(0, Math.ceil(arrival.etaSeconds - elapsed));
+    return { text: `시간표 · ${Math.floor(seconds / 60)}분 ${seconds % 60}초`, stale: false };
+  }
+  const receivedAt =
+    arrival.etaSource === 'estimated' ? arrival.etaPositionReceivedAt : arrival.receivedAt;
   const receipt = receivedAt ? Date.parse(receivedAt) : NaN;
   const stale = !Number.isFinite(receipt) || now - receipt > 120_000;
   const state = { '0': '진입', '1': '도착', '2': '출발' }[arrival.arrivalCode];
   if (state) return { text: state, stale };
   const message = arrival.arrivalMessage?.trim();
-  if (message && (['3', '4', '5'].includes(arrival.arrivalCode) || /^전역\s*(진입|도착|출발)$/.test(message)))
+  if (
+    message &&
+    (['3', '4', '5'].includes(arrival.arrivalCode) || /^전역\s*(진입|도착|출발)$/.test(message))
+  )
     return { text: message, stale };
   if (arrival.etaSeconds === null || !Number.isFinite(arrival.etaSeconds))
     return { text: '', stale };
@@ -28,15 +36,53 @@ export function getArrivalTime(arrival: SubwayArrival, now: number, elapsed: num
   return { text: `${Math.floor(seconds / 60)}분 ${seconds % 60}초`, stale };
 }
 
+/** 현재 영업일 시간표의 아직 출발하지 않은 열차를 남은 시간 카드로 변환한다. */
+export function getScheduledArrivals(
+  directions: SubwayTimetable['directions'],
+  lineId: string,
+  lineName: string,
+  now: number,
+): SubwayArrival[] {
+  const dayStart =
+    Math.floor((now + 9 * 3_600_000 - 3 * 3_600_000) / 86_400_000) * 86_400_000 - 9 * 3_600_000;
+  return directions.flatMap((entry) =>
+    entry.trains.flatMap((train, index) => {
+      const seconds = Number(train.departureTime.split(':')[2] ?? 0);
+      const departure = dayStart + (scheduleMinute(train.departureTime) * 60 + seconds) * 1000;
+      if (!Number.isFinite(departure) || departure < now) return [];
+      return [
+        {
+          id: `schedule:${entry.direction}:${train.trainId}:${train.departureTime}:${index}`,
+          lineId,
+          lineName,
+          direction: entry.direction,
+          destination: train.destination,
+          trainId: train.trainId,
+          trainType: train.isExpress ? '급행' : '일반',
+          arrivalMessage: '',
+          locationMessage: '',
+          arrivalCode: '',
+          receivedAt: new Date(now).toISOString(),
+          etaSeconds: Math.ceil((departure - now) / 1000),
+          etaSource: 'schedule' as const,
+          isLastTrain: index === entry.trains.length - 1,
+        },
+      ];
+    }),
+  );
+}
+
 /** 같은 방면의 일반·급행 후보를 실제 도착시간, 없으면 남은 역 수 순으로 정렬한다. */
 export function getUpcomingTrains(arrivals: SubwayArrival[]) {
-  const trains = arrivals.filter(arrival => arrival.arrivalCode !== '2');
+  const trains = arrivals.filter((arrival) => arrival.arrivalCode !== '2');
   const order = (arrival: SubwayArrival) => {
-    if (arrival.etaSeconds !== null && Number.isFinite(arrival.etaSeconds)) return arrival.etaSeconds;
+    if (arrival.etaSeconds !== null && Number.isFinite(arrival.etaSeconds))
+      return arrival.etaSeconds;
     return ['0', '1', '3', '4', '5'].includes(arrival.arrivalCode) ? 0 : Infinity;
   };
   return [...trains].sort((a, b) => {
-    const first = order(a), second = order(b);
+    const first = order(a),
+      second = order(b);
     if (first !== second) return first - second;
     return (a.remainingStations ?? Infinity) - (b.remainingStations ?? Infinity);
   });

@@ -1,3 +1,8 @@
+import {
+  parseSubwaySymbolCaption,
+  normalizeSubwayLineName,
+  resolveSubwaySymbolLine,
+} from '@/features/subway/model/subway-symbol-caption';
 /** @fileoverview 검색 대상과 주변 교통시설을 함께 배정해 실제 네이버 심벌 위치만 검색 핀으로 사용한다. */
 import type { Place } from '../api/mobility';
 import type { BusStop } from '@/features/bus-stop/api/get-nearby-bus-stops';
@@ -22,12 +27,22 @@ export function matchSearchSymbols(
 ) {
   const positions = new Map<string, Point>();
   if (!results.length || !symbols.length) return positions;
-  const normalizeStation = (caption: string) => caption
-    .replace(/(?:수도권)?\d+호선/g, '').replace(/[()[\]\s]/g, '').replace(/역$/, '');
+  const lineNames = [...new Set(subways.map((station) => station.lineName))].sort(
+    (a, b) => b.length - a.length,
+  );
+  const normalizeStation = (caption: string) =>
+    parseSubwaySymbolCaption(caption, lineNames).stationName;
   const reserved = new Set<string>();
-  const searchedStationIds = new Set(results.filter((place) => place.id.startsWith('subway:')).map((place) => place.id.slice(7)));
-  const stationNames = new Set(subways.filter((station) => searchedStationIds.has(station.id)).map((station) => normalizeStation(station.name)));
-  const alignedSubways = subways.filter((station) => stationNames.has(normalizeStation(station.name)))
+  const searchedStationIds = new Set(
+    results.filter((place) => place.id.startsWith('subway:')).map((place) => place.id.slice(7)),
+  );
+  const stationNames = new Set(
+    subways
+      .filter((station) => searchedStationIds.has(station.id))
+      .map((station) => normalizeStation(station.name)),
+  );
+  const alignedSubways = subways
+    .filter((station) => stationNames.has(normalizeStation(station.name)))
     .map((station) => ({ ...station, ...knownPositions.get(`subway:${station.id}`) }));
   const symbolsByStation = new Map<string, MapSymbol[]>();
   for (const symbol of symbols) {
@@ -40,35 +55,36 @@ export function matchSearchSymbols(
   for (const name of stationNames) {
     const lines = alignedSubways.filter((station) => normalizeStation(station.name) === name);
     const peers = (symbolsByStation.get(name) ?? []).filter((symbol) =>
-      lines.some((station) => Math.hypot(
-        (station.latitude - symbol.latitude) * 111_320,
-        (station.longitude - symbol.longitude) * 111_320 * Math.cos(symbol.latitude * Math.PI / 180),
-      ) <= 200),
+      lines.some(
+        (station) =>
+          Math.hypot(
+            (station.latitude - symbol.latitude) * 111_320,
+            (station.longitude - symbol.longitude) *
+              111_320 *
+              Math.cos((symbol.latitude * Math.PI) / 180),
+          ) <= 200,
+      ),
     );
     const assigned = new Set<string>();
     for (const symbol of peers) {
-      const line = symbol.caption.match(/(?:수도권)?(\d+호선)/)?.[1];
+      const line = resolveSubwaySymbolLine(symbol, subways);
       if (!line) continue;
-      const station = lines.find((station) => station.lineName === line);
+      const station = lines.find((station) => normalizeSubwayLineName(station.lineName) === line);
       if (!station || assigned.has(station.id)) continue;
-      positions.set(`subway:${station.id}`, { latitude: symbol.latitude, longitude: symbol.longitude });
+      positions.set(`subway:${station.id}`, {
+        latitude: symbol.latitude,
+        longitude: symbol.longitude,
+      });
       assigned.add(station.id);
       reserved.add(busSymbolKey(symbol));
     }
     const remainingLines = lines.filter((station) => !assigned.has(station.id));
     const remainingSymbols = peers.filter((symbol) => !reserved.has(busSymbolKey(symbol)));
-    const matchedLines = matchBusStopSymbols(
-      remainingSymbols.map((symbol) => ({ ...symbol, caption: name })),
-      remainingLines.map((station) => ({ ...station, name })),
-      undefined,
-      200,
-    );
-    for (const symbol of remainingSymbols) {
-      const station = matchedLines.get(busSymbolKey(symbol));
-      if (!station) continue;
-      positions.set(`subway:${station.id}`, { latitude: symbol.latitude, longitude: symbol.longitude });
-      reserved.add(busSymbolKey(symbol));
+    // 호선 없는 환승역 심벌을 다른 호선 핀으로 재배정하지 않는다.
+    if (lines.length === 1 && remainingLines.length === 1 && remainingSymbols.length === 1) {
+      positions.set(`subway:${remainingLines[0].id}`, remainingSymbols[0]);
     }
+    for (const symbol of peers) reserved.add(busSymbolKey(symbol));
   }
   const busSymbols = symbols.filter((symbol) => !reserved.has(busSymbolKey(symbol)));
   const candidates: Candidate[] = stops.map((stop) => ({ ...stop, id: `station:${stop.id}` }));

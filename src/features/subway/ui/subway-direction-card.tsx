@@ -39,7 +39,8 @@ export function SubwayDirectionCard({
   /** 운행 종료가 확정된 경우 오래된 열차를 숨기고 그 외에는 서버 열차를 유지한다. */
   const trains = ended ? [] : getUpcomingTrains(arrivals);
   return (
-    <View style={s.directionCard}>
+    <View style={[s.directionCard, detailed && s.detailedCard]}>
+      <Text style={s.directionLabel}>{label}</Text>
       {(detailed ? trains : trains.slice(0, 2)).map((arrival) => {
         /** 현재 시각에 맞춰 계산한 도착 문구와 수신 지연 여부다. */
         const time = getArrivalTime(arrival, now, elapsed);
@@ -74,8 +75,10 @@ export function SubwayDirectionCard({
 const s = StyleSheet.create({
   serviceStatus: { color: GRAY, fontSize: 15, textAlign: 'center', marginTop: 8 },
   directionCard: {
-    flex: 1,
-    minHeight: 96,
+    flexGrow: 1,
+    flexBasis: '45%',
+    minWidth: 0,
+    minHeight: 120,
     borderWidth: 1,
     borderColor: mapUi.border,
     borderBottomWidth: 1,
@@ -85,21 +88,26 @@ const s = StyleSheet.create({
     paddingTop: 8,
     paddingBottom: 8,
   },
+  detailedCard: { flexBasis: '100%' },
+  directionLabel: { fontSize: 12, lineHeight: 17, color: GRAY, marginBottom: 4 },
   train: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: 8,
+    alignItems: 'flex-start',
+    gap: 4,
     minHeight: 44,
     paddingVertical: 6,
     borderRadius: 14,
   },
-  trainDestination: { flexShrink: 0, fontSize: 15, fontWeight: '500', color: mapUi.text },
+  trainDestination: {
+    maxWidth: '100%',
+    flexShrink: 1,
+    fontSize: 15,
+    fontWeight: '500',
+    color: mapUi.text,
+  },
   express: { color: mapUi.text },
   trainTime: {
-    flex: 1,
-    minWidth: 0,
-    textAlign: 'right',
+    maxWidth: '100%',
+    textAlign: 'left',
     fontSize: 14,
     fontWeight: '600',
     color: mapUi.blue,

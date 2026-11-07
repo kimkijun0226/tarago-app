@@ -1,17 +1,22 @@
-import { useCallback } from 'react';
+import { useCallback, useEffect } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { router } from 'expo-router';
+import { router, useLocalSearchParams } from 'expo-router';
 import { SymbolView } from 'expo-symbols';
 import { SetupHeader } from '@/shared/ui/setup-header';
 import { TransportIcon } from '@/shared/ui/transport-icon';
 import { appColors as c } from '@/shared/ui/theme';
-import { MAX_WIDGET_ITEMS, useWidgetSelection } from '../model/widget-selection';
+import { useWidgetSelection } from '../model/widget-selection';
 
-/** 알림과 같은 지도 선택을 사용하지만 예약 없이 위젯 조회 대상만 저장한다. */
+/** 알림과 같은 지도 선택을 사용하지만 예약 없이 즐겨찾기 조회 대상만 저장한다. */
 export function WidgetAddScreen() {
-  const { selected, busy, hydrated } = useWidgetSelection();
-  const disabled = busy || !hydrated || selected.length >= MAX_WIDGET_ITEMS;
+  const { groupId } = useLocalSearchParams<{ groupId?: string }>();
+  const { busy, hydrated, activeGroupId, activateGroup } = useWidgetSelection();
+  useEffect(() => {
+    if (hydrated && groupId && groupId !== activeGroupId) activateGroup(groupId);
+  }, [hydrated, groupId, activeGroupId, activateGroup]);
+  const disabled =
+    busy || !hydrated || !activeGroupId || Boolean(groupId && groupId !== activeGroupId);
   const begin = useCallback(
     (transport: 'bus' | 'subway') => {
       if (disabled) return;
@@ -29,7 +34,7 @@ export function WidgetAddScreen() {
         <SetupHeader
           current={0}
           labels={['교통수단', '지도 선택', '방면 선택']}
-          headerTitle={'위젯 추가'}
+          headerTitle={'즐겨찾기 추가'}
           title="어떤 교통수단을 추가할까요?"
           onBack={() => router.dismissTo('/widgets')}
         />

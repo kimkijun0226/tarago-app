@@ -1,3 +1,4 @@
+import { ListSkeleton } from '@/shared/ui/loading-skeleton';
 import { TransportSelector } from '@/shared/ui/transport-selector';
 import { AlertKindSelector } from './alert-kind-selector';
 import { BrandLogo } from '@/shared/ui/brand-logo';
@@ -6,15 +7,7 @@ import { SymbolView } from 'expo-symbols';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { router, useFocusEffect } from 'expo-router';
 import { useAppStore } from '@/shared/model/app-store';
-import {
-  ActivityIndicator,
-  BackHandler,
-  Image,
-  Pressable,
-  ScrollView,
-  Text,
-  View,
-} from 'react-native';
+import { BackHandler, Image, Pressable, ScrollView, Text, View } from 'react-native';
 import { SubwayAlertsPanel } from '@/features/subway/ui/subway-alert-panel';
 import {
   useSubwayAlertScreen,
@@ -396,7 +389,7 @@ function BusAlertsPanel({
       ) : !all ? (
         <EmptyAlertCard transport="bus" kind={kind} disabled={busy} />
       ) : state.isPending ? (
-        <ActivityIndicator style={styles.loading} color={colors.accent} />
+        <ListSkeleton variant="alert" />
       ) : (
         <>
           {visibleAlerts.length > 0 &&
@@ -417,7 +410,7 @@ function BusAlertsPanel({
                   summary={
                     kind === 'time'
                       ? `도착 ${alert.thresholdMinutes === 60 ? '1시간' : `${alert.thresholdMinutes}분`} 전${alert.advanceRepeatMinutes ? `부터 · ${alert.advanceRepeatMinutes}분마다` : ''}`
-                      : `${alert.radius}m · ${alert.repeatMinutes ?? 5}분마다`
+                      : `${alert.radius}m · ${alert.repeatMinutes === 0 ? '한 번만' : `${alert.repeatMinutes ?? 5}분마다`}`
                   }
                   detail={`${alert.days.map((day) => WEEKDAYS[day]).join(' · ')}${kind === 'time' ? ` · ${alert.startTime}–${alert.endTime}${state.pushStatus?.ready === false ? ' · 알림 연결 필요' : ''}` : ''}${alert.scheduledEnabled && alert.proximityEnabled ? ' · 시간·위치 함께 사용' : ''}`}
                   enabled={alert.enabled}

@@ -3,6 +3,7 @@ import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { RevealSection } from '@/shared/ui/reveal-section';
 import { AlertChoice, AlertWeekdays } from './alert-components';
 import { AlertTimeRange } from './alert-time-field';
+import { AlertScheduleSummary } from './alert-schedule-summary';
 import { alertColors as c } from './alert-design';
 
 type Schedule = {
@@ -30,6 +31,7 @@ export function AlertScheduleFields({
   disabled = false,
   order = 1,
   onComplete,
+  transport = 'bus',
 }: {
   value: Schedule;
   onChange: (value: Schedule) => void;
@@ -38,23 +40,25 @@ export function AlertScheduleFields({
   disabled?: boolean;
   order?: number;
   onComplete?: () => void;
+  transport?: 'bus' | 'subway';
 }) {
   const [step, setStep] = useState(value.id ? 3 : 0);
   const initialUrgent = Array.from(
     { length: Math.min(5, Number(threshold)) + 1 },
     (_, n) => n,
   ).every((n) => value.notificationStages?.includes(n));
-  const [interval, setInterval] = useState<number>(
-    () =>
-      value.advanceRepeatMinutes ??
-      [5, 10].find(
-        (n) =>
-          JSON.stringify(stagesFor(Number(threshold), n, initialUrgent)) ===
-          JSON.stringify([...(value.notificationStages ?? [])].sort((a, b) => b - a)),
-      ) ??
-      0,
+  const [interval, setInterval] = useState<number | null>(() =>
+    !value.id
+      ? null
+      : (value.advanceRepeatMinutes ??
+        [5, 10].find(
+          (n) =>
+            JSON.stringify(stagesFor(Number(threshold), n, initialUrgent)) ===
+            JSON.stringify([...(value.notificationStages ?? [])].sort((a, b) => b - a)),
+        ) ??
+        0),
   );
-  const [urgent, setUrgent] = useState(initialUrgent);
+  const [urgent, setUrgent] = useState<boolean | null>(value.id ? initialUrgent : null);
   const minutes = Number(threshold);
   const valid = Number.isInteger(minutes) && minutes >= 1 && minutes <= 60;
   const scheduleValid =
@@ -73,9 +77,10 @@ export function AlertScheduleFields({
     onThresholdChange(next);
     const number = Number(next);
     if (Number.isInteger(number) && number >= 1 && number <= 60) {
-      const nextInterval = interval >= number ? 0 : interval;
+      const nextInterval = interval !== null && interval >= number ? null : interval;
       setInterval(nextInterval);
-      update(number, nextInterval, urgent);
+      if (interval !== null && nextInterval === null) setStep(2);
+      if (nextInterval !== null && urgent !== null) update(number, nextInterval, urgent);
     }
   };
   return (
@@ -163,7 +168,7 @@ export function AlertScheduleFields({
                   disabled={disabled || !valid || (n > 0 && n >= minutes)}
                   onPress={() => {
                     setInterval(n);
-                    update(minutes, n, urgent);
+                    update(minutes, n, urgent ?? false);
                     setStep((current) => Math.max(3, current));
                   }}
                 />
@@ -182,8 +187,9 @@ export function AlertScheduleFields({
                   key={String(active)}
                   label={active ? `${Math.min(5, minutes)}분 전부터 1분마다` : '괜찮아요'}
                   selected={urgent === active}
-                  disabled={disabled || !valid}
+                  disabled={disabled || !valid || interval === null}
                   onPress={() => {
+                    if (interval === null) return;
                     setUrgent(active);
                     update(minutes, interval, active);
                     setStep(4);
@@ -192,14 +198,19 @@ export function AlertScheduleFields({
                 />
               ))}
             </View>
-            {step >= 4 && valid && (
-              <Text style={s.summary}>
-                {minutes}분 전{interval ? `부터 ${interval}분마다` : '에 한 번'}
-                {urgent ? `, 마지막 ${Math.min(5, minutes)}분은 1분마다, 곧 도착할 때도` : ''}{' '}
-                알려드려요.
-              </Text>
-            )}
           </View>
+        </RevealSection>
+      )}
+      {step >= 4 && valid && scheduleValid && interval !== null && urgent !== null && (
+        <RevealSection order={0}>
+          <AlertScheduleSummary
+            startTime={value.startTime}
+            endTime={value.endTime}
+            minutes={minutes}
+            interval={interval}
+            urgent={urgent}
+            transport={transport}
+          />
         </RevealSection>
       )}
     </>
@@ -238,12 +249,4 @@ const s = StyleSheet.create({
   disabled: { opacity: 0.4 },
   confirm: { paddingHorizontal: 12, paddingVertical: 10 },
   link: { color: c.accent, fontSize: 14, fontWeight: '600' },
-  summary: {
-    color: c.accent,
-    backgroundColor: c.accentSurface,
-    padding: 12,
-    borderRadius: 10,
-    fontSize: 13,
-    lineHeight: 20,
-  },
 });

@@ -1,17 +1,11 @@
+import { ListSkeleton } from '@/shared/ui/loading-skeleton';
 /** @fileoverview 선택 역·노선·요일의 전체 시간표 또는 첫차·막차를 가상 목록으로 표시한다. */
 
 import { useState } from 'react';
-import {
-  ActivityIndicator,
-  FlatList,
-  Modal,
-  Pressable,
-  StyleSheet,
-  Text,
-  View,
-} from 'react-native';
+import { FlatList, Modal, Pressable, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
-import type { SubwayDayType } from '@/features/subway/api/get-subway-station';
+import { normalizeSubwayDirections } from '../model/subway-direction';
+import type { SubwayDayType, SubwayStationLine } from '@/features/subway/api/get-subway-station';
 import { useSubwayTimetable } from '@/features/subway/model/use-subway-station';
 import { mapUi } from '@/shared/ui/map-design-tokens';
 
@@ -21,6 +15,7 @@ import { mapUi } from '@/shared/ui/map-design-tokens';
  * @returns FlatList로 가상화한 시간표 모달. 방면 선택은 작은 배열 조회이므로 useMemo를 두지 않는다.
  */
 export function SubwayTimetableModal({
+  line,
   stationName,
   lineId,
   lineName,
@@ -29,6 +24,7 @@ export function SubwayTimetableModal({
   onClose,
   onDayChange,
 }: {
+  line?: SubwayStationLine;
   stationName: string;
   lineId: string;
   lineName: string;
@@ -44,7 +40,9 @@ export function SubwayTimetableModal({
   const [selectedDirection, setSelectedDirection] = useState('');
 
   /** 서버가 제공한 방면별 시간표 목록이다. 응답 전에는 빈 목록으로 처리한다. */
-  const directions = query.data?.directions ?? [];
+  const directions = normalizeSubwayDirections(line, [], query.data?.directions).scheduled.filter(
+    (entry) => entry.trains.length > 0,
+  );
 
   /** 사용자 선택 방면이 없거나 유효하지 않으면 첫 방면으로 보완한 현재 시간표다. */
   const direction =
@@ -96,7 +94,7 @@ export function SubwayTimetableModal({
             ))}
           </View>
           {query.isPending && lineId && mode !== 'live' ? (
-            <ActivityIndicator color={mapUi.blue} />
+            <ListSkeleton variant="timetable" rows={5} inset={16} />
           ) : null}
           {failure ? (
             <View style={s.message}>

@@ -36,12 +36,14 @@ export function SheetToolbar({
             onPress={onClose}
             style={({ pressed }) => [styles.button, pressed && styles.pressed]}
           >
-            <SymbolView
-              name={{ ios: 'xmark', android: 'close' }}
-              weight="regular"
-              size={18}
-              tintColor={mapUi.blue}
-            />
+            <View style={styles.closeCircle}>
+              <SymbolView
+                name={{ ios: 'xmark', android: 'close' }}
+                weight="regular"
+                size={15}
+                tintColor={mapUi.secondaryText}
+              />
+            </View>
           </Pressable>
         ) : null}
       </View>
@@ -65,6 +67,14 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   pressed: { opacity: 0.6 },
+  closeCircle: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: '#F1F3F5',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   button: {
     width: 44,
     height: 44,

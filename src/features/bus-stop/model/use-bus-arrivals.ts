@@ -37,9 +37,15 @@ export function useBusArrivals(stationId: string, enabled = true) {
     refetchIntervalInBackground: false,
   });
 
-  /** 축소 상태로 전환하면 진행 중인 요청과 재시도도 중단한다. */
+  /** 다른 화면이 사용 중인 요청은 유지하고 마지막 활성 구독이 끝나면 취소한다. */
   useEffect(() => {
-    if (!enabled)
+    if (
+      !enabled &&
+      !client
+        .getQueryCache()
+        .find({ queryKey: ['bus-stops', stationId, 'arrivals'], exact: true })
+        ?.isActive()
+    )
       void client.cancelQueries({ queryKey: ['bus-stops', stationId, 'arrivals'], exact: true });
   }, [client, enabled, stationId]);
 

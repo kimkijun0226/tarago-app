@@ -16,10 +16,17 @@ import { Platform } from 'react-native';
 import { registerPushToken } from '../api/alerts';
 import { alertStorage, readCachedAlerts } from './alert-storage';
 import type { BusAlert } from './bus-alert';
-import { reportProximity, retryProximityReports } from './proximity-visits';
+import {
+  reportProximity,
+  retryProximityReports,
+  hasInsideProximityVisits,
+  PROXIMITY_OBSERVATION_TTL_MS,
+} from './proximity-visits';
 
 /** TaskManager와 지오펜스 등록이 같은 백그라운드 작업을 가리키게 하는 고정 식별자다. */
 const TASK = 'tarago-stop-proximity';
+const POSITION_TASK = 'tarago-proximity-position';
+let positionSync: Promise<void> = Promise.resolve();
 
 /** Android 버스 알림이 사용할 중요도·소리 설정 채널 식별자다. */
 const CHANNEL = 'bus-arrivals';
@@ -97,8 +104,69 @@ if (!TaskManager.isTaskDefined(TASK)) {
         '정류소 접근 알림 실패',
         error instanceof Error ? error.message : 'unknown error',
       );
+    } finally {
+      await syncProximityPositions();
     }
   });
+}
+
+if (!TaskManager.isTaskDefined(POSITION_TASK)) {
+  TaskManager.defineTask<{ locations: Location.LocationObject[] }>(
+    POSITION_TASK,
+    async ({ data, error }) => {
+      if (error) {
+        console.warn('위치 알림 재확인 실패', error.message);
+        return;
+      }
+      const position = data?.locations.reduce<Location.LocationObject | undefined>(
+        (latest, current) => (!latest || current.timestamp > latest.timestamp ? current : latest),
+        undefined,
+      );
+      if (!position) return;
+      try {
+        await checkNearbyStops(position, await readCachedAlerts(), await readCachedSubwayAlerts());
+      } catch (failure) {
+        console.warn(
+          '위치 알림 상태 전송 실패',
+          failure instanceof Error ? failure.name : 'unknown',
+        );
+      }
+    },
+  );
+}
+
+/** 진입한 알림이 있을 때만 배경 위치 확인을 유지하고 모든 반경에서 이탈하면 해제한다. */
+export function syncProximityPositions() {
+  const next = positionSync
+    .catch(() => undefined)
+    .then(async () => {
+      const regions = [
+        ...busRegions(await readCachedAlerts()),
+        ...subwayProximityRegions(await readCachedSubwayAlerts()),
+      ];
+      const running = await Location.hasStartedLocationUpdatesAsync(POSITION_TASK);
+      const permitted = (await Location.getBackgroundPermissionsAsync()).granted;
+      const inside =
+        permitted && (await hasInsideProximityVisits(regions.map((region) => region.identifier)));
+      if (!inside) {
+        if (running) await Location.stopLocationUpdatesAsync(POSITION_TASK);
+        return;
+      }
+      if (running) return;
+      await Location.startLocationUpdatesAsync(POSITION_TASK, {
+        accuracy: Location.Accuracy.Balanced,
+        timeInterval: 30_000,
+        distanceInterval: 0,
+        deferredUpdatesInterval: 30_000,
+        pausesUpdatesAutomatically: false,
+        foregroundService: {
+          notificationTitle: 'TaraGo 위치 알림',
+          notificationBody: '설정한 정류소·역의 반경을 확인하고 있어요.',
+        },
+      });
+    });
+  positionSync = next;
+  return next;
 }
 
 /** 접근 알림 동작과 Android 채널을 준비하고 알림 권한 거절을 오류로 전달한다. */
@@ -195,6 +263,7 @@ async function applyGeofences(alerts: BusAlert[], subwayAlerts?: SubwayAlert[]) 
   const background = await Location.getBackgroundPermissionsAsync();
   // 위치 알림이 없으면 백그라운드 권한 자체를 요구하지 않는다.
   if (!background.granted) {
+    await syncProximityPositions();
     if (!regions.length) return;
     throw new Error('정류소 접근 알림이 중지됐어요. 위치 권한을 항상 허용해주세요.');
   }
@@ -203,12 +272,14 @@ async function applyGeofences(alerts: BusAlert[], subwayAlerts?: SubwayAlert[]) 
   const registered = await Location.hasStartedGeofencingAsync(TASK);
   if (!regions.length) {
     if (registered) await Location.stopGeofencingAsync(TASK);
+    await syncProximityPositions();
     return;
   }
   if (regions.length > 20)
     throw new Error('접근 알림은 버스·지하철을 합쳐 최대 20개까지 설정할 수 있어요.');
   await Location.startGeofencingAsync(TASK, regions);
   await alertStorage.removeItem('tarago-proximity-error');
+  await syncProximityPositions();
 }
 
 /** 전경에서도 실제 관측 시각과 알림별 반경으로 진입·이탈을 판정한다. */
@@ -218,7 +289,22 @@ export async function checkNearbyStops(
   subwayAlerts?: SubwayAlert[],
   force = false,
 ) {
-  if (position.coords.accuracy !== null && position.coords.accuracy > 100) return;
+  const age = Date.now() - position.timestamp;
+  if (
+    !Number.isFinite(age) ||
+    age < -30_000 ||
+    age >= PROXIMITY_OBSERVATION_TTL_MS ||
+    !Number.isFinite(position.coords.latitude) ||
+    !Number.isFinite(position.coords.longitude)
+  ) {
+    try {
+      await retryProximityReports();
+    } finally {
+      await syncProximityPositions();
+    }
+    return;
+  }
+  const accuracy = position.coords.accuracy;
   const updates: Promise<unknown>[] = [];
   for (const region of [
     ...busRegions(alerts),
@@ -235,18 +321,26 @@ export async function checkNearbyStops(
 
     /** 정류소 중심과 현재 위치의 근사 거리를 설정 반경과 비교한다. */
     const distance = Math.hypot(north, east);
-    if (distance <= region.radius) {
+    if (distance <= region.radius && accuracy !== null && accuracy >= 0 && accuracy <= 100) {
       if (region.identifier.startsWith('subway:'))
         updates.push(handleSubwayEntry(region.identifier, force, position.timestamp));
       else updates.push(handleStopEntry(region.identifier, force, position.timestamp));
-    } else if (distance > region.radius) {
+    } else if (
+      accuracy !== null &&
+      accuracy >= 0 &&
+      distance > region.radius + (accuracy > 100 ? accuracy : 0)
+    ) {
       if (region.identifier.startsWith('subway:'))
         updates.push(handleSubwayExit(region.identifier, position.timestamp));
       else updates.push(handleStopExit(region.identifier, position.timestamp));
     }
   }
   const results = await Promise.allSettled(updates);
-  await retryProximityReports();
-  const failure = results.find((result) => result.status === 'rejected');
-  if (failure?.status === 'rejected') throw failure.reason;
+  try {
+    await retryProximityReports();
+    const failure = results.find((result) => result.status === 'rejected');
+    if (failure?.status === 'rejected') throw failure.reason;
+  } finally {
+    await syncProximityPositions();
+  }
 }

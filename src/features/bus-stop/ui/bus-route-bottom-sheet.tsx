@@ -1,3 +1,4 @@
+import { ListSkeleton } from '@/shared/ui/loading-skeleton';
 /** @fileoverview 노선 경유 목록과 차량 위치를 표시하고 시트 높이에 맞춰 선택 정류장의 스크롤을 조정한다. */
 import type { SharedValue } from 'react-native-reanimated';
 
@@ -5,7 +6,7 @@ import { isAxiosError } from 'axios';
 import type { BusArrival } from '../api/get-bus-arrivals';
 import { SheetToolbar, useAppTheme } from '@/shared/ui';
 import { memo, useMemo, useRef, useEffect, useCallback } from 'react';
-import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { BottomSheetFlatList, type BottomSheetFlatListMethods } from '@gorhom/bottom-sheet';
 import { MapBottomSheet } from '@/shared/ui/map-bottom-sheet';
 import type { BusRouteDetail } from '../api/get-bus-route-detail';
@@ -179,11 +180,12 @@ export const BusRouteBottomSheet = memo(function BusRouteBottomSheet({
               arriving[0].serviceStatus,
               arriving[0].etaPrecision,
               arriving[0].etaSource,
+              arriving[0],
             )
           : '도착정보 확인 중'}
       </Text>
     ) : isPending ? (
-      <ActivityIndicator color={colors.accent} />
+      <ListSkeleton variant="route" rows={5} inset={16} />
     ) : isError ? (
       <Pressable onPress={() => void refetchRoute()}>
         <Text style={styles.notice}>

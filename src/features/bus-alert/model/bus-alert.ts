@@ -106,7 +106,7 @@ export function proximityMessage(
         /** 정보 없음·30초 이내·분 단위 예상에 맞춰 구성한 사용자용 도착 시각이다. */
         const time =
           bus.etaSeconds === null
-            ? formatEta(null, bus.serviceStatus)
+            ? formatEta(null, bus.serviceStatus, bus.etaPrecision, bus.etaSource, bus)
             : !bus.etaSource && bus.etaSeconds <= 30
               ? '곧 도착'
               : `${bus.etaSource ? '예상 ' : ''}${Math.max(1, Math.ceil(bus.etaSeconds / 60))}분 후`;
@@ -133,7 +133,7 @@ export function proximityMessage(
     .slice(0, 8)
     .map(
       (group) =>
-        `${group.busNumber}번 ${formatEta(group.first.etaSeconds, group.first.serviceStatus, group.first.etaPrecision, group.first.etaSource)}`,
+        `${group.busNumber}번 ${formatEta(group.first.etaSeconds, group.first.serviceStatus, group.first.etaPrecision, group.first.etaSource, group.first)}`,
     )
     .join(' · ');
   return summary + (groups.length > 8 ? ` · 외 ${groups.length - 8}개 노선` : '');

@@ -39,3 +39,21 @@ expo-env.d.ts
 
 # Local code-graph output is generated from source, not application code
 /graphify-out/
+
+# Environment files (only templates and public build configuration are shared)
+.env
+.env.*
+!.env.example
+!.env.production
+
+# Local tooling, test reports, and build artifacts
+.codex/
+.cache/
+coverage/
+*.log
+*.ipa
+*.apk
+*.aab
+*.xcarchive/
+*.dSYM/
+credentials.json

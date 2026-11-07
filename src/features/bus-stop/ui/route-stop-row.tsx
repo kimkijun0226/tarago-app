@@ -94,6 +94,7 @@ export const RouteStopRow = memo(function RouteStopRow({
                   arrival.serviceStatus,
                   arrival.etaPrecision,
                   arrival.etaSource,
+                  arrival,
                 )}
                 {arrival.remainingStops !== null
                   ? ` · ${formatRemainingStops(arrival.remainingStops)}`

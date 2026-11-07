@@ -1,5 +1,5 @@
 /**
- * @fileoverview 지도 탭과 위젯 전용 지도가 공유하는 화면. 선택 상태와 이동 경로는 mode별로 분리한다.
+ * @fileoverview 지도 탭과 즐겨찾기 전용 지도가 공유하는 화면. 선택 상태와 이동 경로는 mode별로 분리한다.
  * 데이터 조회와 선택 전환은 useMapController에 맡겨 화면 배치와 동작 규칙을 분리한다.
  */
 import { BusRouteBottomSheet } from '@/features/bus-stop/ui/bus-route-bottom-sheet';
@@ -93,9 +93,13 @@ export default function MapScreen({ mode = 'map' }: { mode?: MapSelectionMode })
   } = useMapController(mode);
   const cancelAlertSelection = useCallback(() => {
     resetAlertMapSelection();
-    if (mode === 'widget') useWidgetSelection.getState().finishMapSelection();
-    else finishAlertSelection();
-    router.navigate(mode === 'widget' ? '/widget-add' : '/alerts');
+    if (mode === 'widget') {
+      useWidgetSelection.getState().finishMapSelection();
+      router.dismissTo('/widget-add');
+    } else {
+      finishAlertSelection();
+      router.navigate('/alerts');
+    }
   }, [resetAlertMapSelection, finishAlertSelection, mode]);
   useFocusEffect(
     useCallback(() => {
@@ -143,7 +147,7 @@ export default function MapScreen({ mode = 'map' }: { mode?: MapSelectionMode })
     <Pressable
       accessibilityRole="button"
       accessibilityLabel={
-        mode === 'widget' ? '위젯 교통수단 선택으로 돌아가기' : '알림 설정으로 돌아가기'
+        mode === 'widget' ? '즐겨찾기 교통수단 선택으로 돌아가기' : '알림 설정으로 돌아가기'
       }
       onPress={cancelAlertSelection}
       style={[styles.backButton, { top: insets.top + 12, backgroundColor: colors.surface }]}
@@ -380,11 +384,14 @@ export default function MapScreen({ mode = 'map' }: { mode?: MapSelectionMode })
       {alertSelection && !searchActive ? (
         <AlertMapPicker
           mode={mode}
-          key={`${alertSelection.requestId}:${selectedBusStop?.id ?? subwayStation ?? ''}`}
+          key={`${alertSelection.requestId}:${selectedBusStop?.id ?? subwayStation ?? ''}:${subwayLineName ?? ''}`}
           busStop={selectedBusStop}
           stationName={subwayStation}
           initialLineName={subwayLineName}
           stationPoint={selectedPlace}
+          onSelectLine={(lineName) => {
+            if (subwayStation) void selectSubwayStation(subwayStation, lineName);
+          }}
           onHeightChange={setSheetHeight}
           animatedPosition={sheetPosition}
         />

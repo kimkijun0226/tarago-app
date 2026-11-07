@@ -1,3 +1,4 @@
+import { ListSkeleton } from '@/shared/ui/loading-skeleton';
 import { AppHeader } from '@/shared/ui/app-header';
 import { TransportIcon } from '@/shared/ui/transport-icon';
 /** @fileoverview 서버가 발송한 알림을 최신순으로 모아 보여준다. */
@@ -67,7 +68,7 @@ export function NotificationHistoryScreen() {
         }}
         ListEmptyComponent={
           history.isPending ? (
-            <ActivityIndicator color={colors.accent} style={{ marginTop: 40 }} />
+            <ListSkeleton variant="history" />
           ) : (
             <View style={{ minHeight: 220, alignItems: 'center', justifyContent: 'center' }}>
               {history.isError ? (

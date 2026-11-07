@@ -1,3 +1,5 @@
+import { normalizeSubwayLineName } from '../model/subway-symbol-caption';
+import { ListSkeleton, SubwayArrivalSkeleton } from '@/shared/ui/loading-skeleton';
 import { LINE_COLORS } from '../model/subway-line-colors';
 import { TransportIcon } from '@/shared/ui/transport-icon';
 /** @fileoverview 선택 역의 도착정보·시간표·시설·노선도와 지도 및 알림 화면으로의 이동을 연결한다. */
@@ -10,9 +12,16 @@ import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from
 import { SymbolView } from 'expo-symbols';
 import { BottomSheetScrollView } from '@gorhom/bottom-sheet';
 import { isAxiosError } from 'axios';
-import { subwayDirectionPresentation, stationLabel } from '../model/subway-direction';
+import {
+  normalizeSubwayDirections,
+  subwayDirectionPresentation,
+  stationLabel,
+} from '../model/subway-direction';
 import { router } from 'expo-router';
-import { getServiceStatus } from '@/features/subway/model/subway-arrival-display';
+import {
+  getScheduledArrivals,
+  getServiceStatus,
+} from '@/features/subway/model/subway-arrival-display';
 import { useSubwayArrivals } from '@/features/subway/model/use-subway-arrivals';
 import {
   useSubwayFacilities,
@@ -53,7 +62,7 @@ export function SubwayArrivalSheet({
   animatedPosition?: SharedValue<number>;
   snap?: MapSheetSnap;
   onChangeSnap?: (snap: MapSheetSnap) => void;
-  onSelectStation?: (
+  onSelectStation: (
     name: string,
     lineName: string,
     point?: { latitude: number; longitude: number },
@@ -71,11 +80,9 @@ export function SubwayArrivalSheet({
   /** 초 단위 도착 문구와 영업 상태를 다시 계산할 현재 시각이다. */
   const [now, setNow] = useState(() => Date.now());
 
-  /** 사용자가 선택한 역·노선을 함께 기록해 다른 역의 이전 노선 선택이 적용되지 않게 한다. */
-  const [selection, setSelection] = useState({ stationName, initialLineName, lineName: '' });
-
   /** 실시간 표시와 전체 시간표·첫차/막차 모달 중 현재 모드를 선택한다. */
-  const [tab, setTab] = useState<'live' | 'timetable' | 'firstLast'>('live');
+  const [tab, setTab] = useState<'live' | 'timetable'>('live');
+  const [timetableMode, setTimetableMode] = useState<'live' | 'timetable' | 'firstLast'>('live');
 
   /** 상세 열차 목록을 펼칠 방면 이름이다. 빈 문자열이면 모든 방면의 요약을 표시한다. */
   const [detailDirection, setDetailDirection] = useState('');
@@ -121,16 +128,14 @@ export function SubwayArrivalSheet({
   ].sort((a, b) => Number(a[1]) - Number(b[1]));
 
   /** 검색에서 전달받은 초기 노선명에서 수도권 접두어를 제거한 이름이다. */
-  const initial = initialLineName?.replace(/^수도권/, '') ?? '';
-  if (initial && !lines.some(([name]) => name === initial)) lines.unshift([initial, '']);
+  const initial = normalizeSubwayLineName(initialLineName ?? '');
+  if (initial && station.isPending && !lines.some(([name]) => name === initial))
+    lines.unshift([initial, '']);
 
-  /** 현재 역에 유효한 사용자 선택을 우선하고 초기 노선·첫 노선 순으로 보완한 표시 노선이다. */
-  const lineName =
-    selection.stationName === stationName &&
-    selection.initialLineName === initialLineName &&
-    lines.some(([name]) => name === selection.lineName)
-      ? selection.lineName
-      : initial || lines[0]?.[0] || '';
+  /** 지도와 상세 카드가 같은 선택값을 사용해 이전 호선 선택이 되살아나지 않게 한다. */
+  const lineName = initial
+    ? lines.some(([name]) => name === initial) ? initial : ''
+    : station.isSuccess && lines.length === 1 ? lines[0][0] : '';
 
   /** 선택한 노선명에 해당하는 공식 역간·종착역 정보다. */
   const line = station.data?.lines.find((item) => item.lineName === lineName);
@@ -139,7 +144,6 @@ export function SubwayArrivalSheet({
   const color = LINE_COLORS[lineName] ?? line?.color ?? BLUE;
 
   /** 전체 도착 열차 중 현재 선택한 노선의 열차만 남긴 목록이다. */
-  const lineArrivals = arrivals.filter((arrival) => arrival.lineName === lineName);
 
   // 03시 이전에는 전날 영업일의 24시 이후 열차를 기준으로 첫차·막차를 비교한다.
   /** 한국 시간 새벽 3시를 경계로 계산한 영업일의 요일이다. */
@@ -162,11 +166,19 @@ export function SubwayArrivalSheet({
     serviceDayType,
   );
 
+  const normalized = normalizeSubwayDirections(line, arrivals, timetable.data?.directions);
+  const lineArrivals = normalized.arrivals.filter((arrival) => arrival.lineName === lineName);
+  const scheduled = normalized.scheduled;
+  const usingTimetable =
+    tab === 'timetable' || (!query.isPending && !query.isError && lineArrivals.length === 0);
+
   /** 현재 노선 실시간 열차에 등장한 방면 이름을 중복 제거한 목록이다. */
   const liveDirections = [...new Set(lineArrivals.map((arrival) => arrival.direction))];
 
   /** 공식 시간표에 정의된 방면 이름과 순서다. */
-  const scheduledDirections = (timetable.data?.directions ?? []).map((item) => item.direction);
+  const scheduledDirections = [
+    ...new Set(scheduled.filter((item) => item.trains.length > 0).map((item) => item.direction)),
+  ];
 
   /** 모든 실시간 방면이 시간표 방면에도 있어 같은 이름으로 결합할 수 있는지 확인한다. */
   const sameDirectionNames = liveDirections.every((direction) =>
@@ -174,12 +186,19 @@ export function SubwayArrivalSheet({
   );
 
   /** 서로 일치하는 공식 방면을 우선하고 아니면 실시간 방면을 사용한 표시 대상 목록이다. */
-  const directions =
-    scheduledDirections.length && sameDirectionNames
+  const directions = usingTimetable
+    ? scheduledDirections
+    : scheduledDirections.length && sameDirectionNames
       ? scheduledDirections
       : liveDirections.length
         ? liveDirections
         : scheduledDirections;
+
+  const shownArrivals = usingTimetable
+    ? getScheduledArrivals(scheduled, line?.lineId ?? '', lineName, now)
+    : lineArrivals;
+  const loadingArrivals = Boolean(lineName) &&
+    (station.isPending || (usingTimetable ? Boolean(line?.lineId) && timetable.isPending : query.isPending));
 
   /** 유효한 방면 상세 선택이 있으면 해당 방면 하나만 남긴 화면 목록이다. */
   const displayedDirections =
@@ -204,8 +223,10 @@ export function SubwayArrivalSheet({
    * @param direction 서버 방면 이름.
    */
   const directionLabel = (direction: string) => {
-    const info = subwayDirectionPresentation(line, direction, arrivals, timetable.data?.directions);
-    return info.nextStationName ? `${stationLabel(info.nextStationName)} 방면` : '다음 역 확인 중';
+    const info = subwayDirectionPresentation(line, direction, normalized.arrivals, scheduled);
+    return info.nextStationName
+      ? `${direction} · ${stationLabel(info.nextStationName)} 방면`
+      : `${direction} 방면`;
   };
 
   /**
@@ -213,9 +234,8 @@ export function SubwayArrivalSheet({
    * @param name 노선 이름.
    */
   const setLine = (name: string) => {
-    setSelection({ stationName, initialLineName, lineName: name });
     setDetailDirection('');
-    onSelectStation?.(stationName, name);
+    onSelectStation(stationName, name);
   };
 
   /** 공식 역 메타데이터를 우선해 복원한 선택 노선의 서버 ID다. */
@@ -239,10 +259,10 @@ export function SubwayArrivalSheet({
         lineName,
         direction,
         nextStationName:
-          subwayDirectionPresentation(line, direction, arrivals, timetable.data?.directions)
+          subwayDirectionPresentation(line, direction, normalized.arrivals, scheduled)
             .nextStationName ?? '',
         destinationNames: JSON.stringify(
-          subwayDirectionPresentation(line, direction, arrivals, timetable.data?.directions)
+          subwayDirectionPresentation(line, direction, normalized.arrivals, scheduled)
             .destinationNames,
         ),
         requestId: String(now),
@@ -304,6 +324,30 @@ export function SubwayArrivalSheet({
         )
       }
     >
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel="지하철 도착정보 새로고침"
+        accessibilityState={{
+          disabled: query.isFetching || (usingTimetable && timetable.isFetching),
+          busy: query.isFetching || (usingTimetable && timetable.isFetching),
+        }}
+        disabled={query.isFetching || (usingTimetable && timetable.isFetching)}
+        onPress={() => {
+          if (tab === 'live') void query.refetch();
+          if (usingTimetable) void timetable.refetch();
+        }}
+        style={s.refresh}
+      >
+        {query.isFetching || (usingTimetable && timetable.isFetching) ? (
+          <ActivityIndicator size="small" color={BLUE} />
+        ) : (
+          <SymbolView
+            name={{ ios: 'arrow.clockwise', android: 'refresh' }}
+            size={18}
+            tintColor={BLUE}
+          />
+        )}
+      </Pressable>
       {detailDirection && selectedLineId ? (
         <>
           {(['time', 'location'] as const).map((kind) => (
@@ -319,6 +363,29 @@ export function SubwayArrivalSheet({
     </SheetToolbar>
   );
 
+  const lineSelector = (
+    <View style={s.transferRow}>
+      <Text style={s.transferTitle}>{lineName ? '환승역' : '호선'}</Text>
+      {lines.map(([name]) => (
+        <Pressable
+          key={name}
+          onPress={() => setLine(name)}
+          accessibilityRole="button"
+          accessibilityLabel={`${name} 선택`}
+          accessibilityState={{ selected: name === lineName }}
+          style={({ pressed }) => [
+            s.badge,
+            { backgroundColor: LINE_COLORS[name] ?? BLUE },
+            name === lineName && s.selectedBadge,
+            pressed && s.pressed,
+          ]}
+        >
+          <Text style={s.badgeText}>{name.replace('호선', '')}</Text>
+        </Pressable>
+      ))}
+    </View>
+  );
+
   return (
     <>
       <MapBottomSheet
@@ -331,7 +398,8 @@ export function SubwayArrivalSheet({
         <View style={s.sheetContent}>
           <BottomSheetScrollView contentContainerStyle={s.content}>
             <View style={s.arrivalSection}>
-              {!detailDirection && (
+              {!lineName ? lineSelector : null}
+              {!detailDirection && Boolean(lineName) && (
                 <>
                   <SubwayStationRail
                     stationName={stationName}
@@ -374,75 +442,46 @@ export function SubwayArrivalSheet({
                       </Pressable>
                     </View>
                     <View style={s.refreshRow}>
-                      <Text style={s.clock}>{updatedAt}</Text>
-                      <Pressable
-                        onPress={() => void query.refetch()}
-                        disabled={query.isFetching}
-                        accessibilityRole="button"
-                        accessibilityLabel="도착정보 새로고침"
-                        style={({ pressed }) => [s.refresh, pressed && s.pressed]}
-                      >
-                        {query.isFetching ? (
-                          <ActivityIndicator size="small" color={GRAY} />
-                        ) : (
-                          <Text style={s.refreshIcon}>↻</Text>
-                        )}
-                      </Pressable>
+                      <Text style={s.clock}>{usingTimetable ? '시간표 기준' : updatedAt}</Text>
                     </View>
                   </View>
                 </>
               )}
               <>
-                {query.isError ? <Text style={s.error}>{errorMessage}</Text> : null}
-                {query.isPending ? <ActivityIndicator color={BLUE} /> : null}
+                {tab === 'live' && query.isError ? (
+                  <Text style={s.error}>{errorMessage}</Text>
+                ) : null}
+                {lineName && usingTimetable && timetable.isError ? (
+                  <Text style={s.error}>시간표를 불러오지 못했어요. 다시 조회해주세요.</Text>
+                ) : null}
+                {loadingArrivals && !shownArrivals.length ? <SubwayArrivalSkeleton /> : null}
                 <View style={s.directionCards}>
-                  {displayedDirections.map((direction) => (
+                  {(!loadingArrivals ? displayedDirections : []).map((direction) => (
                     <SubwayDirectionCard
                       key={direction}
-                      arrivals={lineArrivals.filter((arrival) => arrival.direction === direction)}
+                      arrivals={shownArrivals.filter((arrival) => arrival.direction === direction)}
                       label={directionLabel(direction)}
-                      status={getServiceStatus(
-                        direction,
-                        timetable.data?.directions ?? [],
-                        currentServiceMinute,
-                      )}
+                      status={getServiceStatus(direction, scheduled, currentServiceMinute)}
                       now={now}
-                      elapsed={elapsed}
+                      elapsed={usingTimetable ? 0 : elapsed}
                       detailed={Boolean(detailDirection)}
                       onDetail={() => setDetailDirection(direction)}
                     />
                   ))}
-                  {!query.isPending && !directions.length ? (
+                  {lineName && !loadingArrivals && !directions.length ? (
                     <View style={s.emptyCard}>
-                      <Text style={s.unavailable}>현재 제공되는 실시간 도착정보가 없습니다.</Text>
+                      <Text style={s.unavailable}>
+                        {usingTimetable
+                          ? '이 역·노선의 시간표가 제공되지 않습니다.'
+                          : '현재 제공되는 실시간 도착정보가 없습니다.'}
+                      </Text>
                     </View>
                   ) : null}
                 </View>
               </>
-              {!detailDirection && (
-                <View style={s.transferRow}>
-                  <Text style={s.transferTitle}>환승역</Text>
-                  {lines.map(([name]) => (
-                    <Pressable
-                      key={name}
-                      onPress={() => setLine(name)}
-                      accessibilityRole="button"
-                      accessibilityLabel={`${name} 선택`}
-                      accessibilityState={{ selected: name === lineName }}
-                      style={({ pressed }) => [
-                        s.badge,
-                        { backgroundColor: LINE_COLORS[name] ?? BLUE },
-                        name === lineName && s.selectedBadge,
-                        pressed && s.pressed,
-                      ]}
-                    >
-                      <Text style={s.badgeText}>{name.replace('호선', '')}</Text>
-                    </Pressable>
-                  ))}
-                </View>
-              )}
+              {!detailDirection && lineName ? lineSelector : null}
             </View>
-            {!detailDirection && (
+            {!detailDirection && Boolean(lineName) && (
               <>
                 <ScrollView
                   horizontal
@@ -451,7 +490,7 @@ export function SubwayArrivalSheet({
                 >
                   <Pressable
                     onPress={() => {
-                      setTab('timetable');
+                      setTimetableMode('timetable');
                       changeSnap('full');
                     }}
                     accessibilityRole="button"
@@ -466,7 +505,7 @@ export function SubwayArrivalSheet({
                   </Pressable>
                   <Pressable
                     onPress={() => {
-                      setTab('firstLast');
+                      setTimetableMode('firstLast');
                       changeSnap('full');
                     }}
                     accessibilityRole="button"
@@ -502,7 +541,7 @@ export function SubwayArrivalSheet({
                   <View style={s.infoRule} />
                   <Text style={s.facilityTitle}>시설정보</Text>
                   {facilities.isPending ? (
-                    <ActivityIndicator color={BLUE} />
+                    <ListSkeleton rows={2} />
                   ) : facilities.isError ? (
                     <View style={{ gap: 8 }}>
                       <Text style={s.error}>시설정보를 불러오지 못했습니다.</Text>
@@ -536,11 +575,6 @@ export function SubwayArrivalSheet({
                   ) : (
                     <Text style={s.unavailable}>공개된 시설정보가 없습니다.</Text>
                   )}
-                  {facilities.data ? (
-                    <Text style={s.attribution}>{facilities.data.attribution}</Text>
-                  ) : query.data ? (
-                    <Text style={s.attribution}>{query.data.attribution}</Text>
-                  ) : null}
                 </View>
               </>
             )}
@@ -548,12 +582,13 @@ export function SubwayArrivalSheet({
         </View>
       </MapBottomSheet>
       <SubwayTimetableModal
+        line={line}
         stationName={stationName}
         lineId={selectedLineId}
         lineName={lineName}
         dayType={dayType}
-        mode={tab}
-        onClose={() => setTab('live')}
+        mode={timetableMode}
+        onClose={() => setTimetableMode('live')}
         onDayChange={setChosenDay}
       />
       <SubwayNetworkModal
@@ -639,8 +674,7 @@ const s = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  refreshIcon: { color: GRAY, fontSize: 19, lineHeight: 22 },
-  directionCards: { flexDirection: 'row', alignItems: 'stretch', gap: 8 },
+  directionCards: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'stretch', gap: 12 },
   transferRow: {
     flexDirection: 'row',
     flexWrap: 'wrap',
@@ -669,5 +703,4 @@ const s = StyleSheet.create({
   },
   error: { fontSize: 13, color: '#D83F35', marginVertical: 8 },
   link: { fontSize: 14, color: BLUE },
-  attribution: { marginTop: 16, color: GRAY, fontSize: 11 },
 });

@@ -24,8 +24,9 @@ import Animated, {
   withTiming,
 } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { appShadows, useAppTheme } from './theme';
+import { useAppTheme } from './theme';
 import { useSingleStepSheetGesture } from './use-single-step-sheet-gesture';
+import { useAppStore } from '@/shared/model/app-store';
 
 /** 순서가 SNAPS의 네이티브 인덱스와 대응하는 세 가지 정착 높이. */
 export type MapSheetSnap = 'compact' | 'half' | 'full';
@@ -61,6 +62,8 @@ function SheetBackground({
   const bounds = useAnimatedStyle(() => ({
     height: interpolate(animatedIndex.value, [0, 1, 2], points, Extrapolation.CLAMP),
     bottom: undefined,
+    borderBottomLeftRadius: interpolate(animatedIndex.value, [1, 2], [16, 0], Extrapolation.CLAMP),
+    borderBottomRightRadius: interpolate(animatedIndex.value, [1, 2], [16, 0], Extrapolation.CLAMP),
   }));
   return <Animated.View pointerEvents="none" style={[style, bounds]} />;
 }
@@ -95,6 +98,14 @@ export function MapBottomSheet({
 
   /** 시트 인스턴스의 snapToIndex 명령을 호출한다. 인스턴스는 렌더링 데이터가 아니므로 ref다. */
   const ref = useRef<BottomSheet>(null);
+
+  // 사용자 지도 제스처만 열린 시트를 접으며, 이후 새로 열린 시트에는 적용하지 않는다.
+  useEffect(() =>
+    useAppStore.subscribe((state, previous) => {
+      if (state.mapSheetCollapseRequest !== previous.mapSheetCollapseRequest)
+        ref.current?.snapToIndex(0);
+    }),
+  []);
 
   /** 회전·창 크기 변화에 따라 갱신되는 화면 높이다. 정착 지점을 다시 계산한다. */
   const { height } = useWindowDimensions();
@@ -208,6 +219,8 @@ export function MapBottomSheet({
         interpolate(animatedIndex.value, [0, 1, 2], [0, 0, insets.bottom], Extrapolation.CLAMP),
     ),
     overflow: 'hidden',
+    borderBottomLeftRadius: interpolate(animatedIndex.value, [1, 2], [16, 0], Extrapolation.CLAMP),
+    borderBottomRightRadius: interpolate(animatedIndex.value, [1, 2], [16, 0], Extrapolation.CLAMP),
   }));
 
   /** 마지막 유효 정착 위치를 기억해 잘못된 닫힘 이벤트에서 복구한다. 중간 드래그마다 React를 다시 렌더할 값이 아니다. */
@@ -289,7 +302,7 @@ export function MapBottomSheet({
               borderRadius: 16,
               backgroundColor: colors.surface,
               borderWidth: 0,
-              boxShadow: appShadows.floating,
+              boxShadow: '0px 4px 16px rgba(27, 45, 72, 0.12)',
             },
             surfaceStyle,
           ]}

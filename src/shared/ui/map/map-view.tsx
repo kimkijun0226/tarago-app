@@ -8,6 +8,7 @@ import {
 import { forwardRef, memo, useImperativeHandle, useRef, useState } from 'react';
 import { Image, Keyboard, type ViewProps } from 'react-native';
 import type { MapSymbol, Point } from '@/shared/types/geo';
+import { useAppStore } from '@/shared/model/app-store';
 
 const DEFAULT_MARKER_IMAGE = Image.resolveAssetSource(require('../../../../assets/images/search-place-marker.png')).uri;
 
@@ -70,6 +71,7 @@ export const MapView = forwardRef<MapViewRef, Props>(function MapView(
   ref,
 ) {
   const map = useRef<NaverMapViewRef>(null);
+  const gestureActive = useRef(false);
   const [cameraZoom, setCameraZoom] = useState(initialCamera.zoom ?? 17);
   // 축소 상태에서만 확대하고 가까워지면 기본 크기로 되돌린다.
   const symbolScale = subwaySelection ? 1 + 0.3 * Math.min(1, Math.max(0, 15 - cameraZoom)) : 1;
@@ -91,7 +93,11 @@ export const MapView = forwardRef<MapViewRef, Props>(function MapView(
       initialCamera={initialCamera}
       customStyleId={subwaySelection ? subwayStyleId : undefined}
       symbolScale={symbolScale}
-      onCameraChanged={({ zoom }) => {
+      onCameraChanged={({ zoom, reason }) => {
+        if (reason === 'Gesture' && !gestureActive.current) {
+          gestureActive.current = true;
+          useAppStore.getState().collapseMapSheets();
+        }
         if (subwaySelection && zoom !== undefined && Number.isFinite(zoom)) {
           setCameraZoom(Math.round(zoom * 10) / 10);
         }
@@ -139,6 +145,7 @@ export const MapView = forwardRef<MapViewRef, Props>(function MapView(
         onSymbolPress({ latitude, longitude, caption: symbolCaption ?? '', peers });
       }}
       onCameraIdle={({ zoom, region, visibleSymbols }) => {
+        gestureActive.current = false;
         let symbols: MapSymbol[] = [];
         try {
           const parsed: unknown = JSON.parse(visibleSymbols || '[]');

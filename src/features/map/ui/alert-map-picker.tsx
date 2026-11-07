@@ -1,3 +1,5 @@
+import { normalizeSubwayLineName } from '@/features/subway/model/subway-symbol-caption';
+import { ListSkeleton } from '@/shared/ui/loading-skeleton';
 import { useMapSelection, type MapSelectionMode } from '@/features/map/model/map-selection';
 import { SetupProgress } from '@/shared/ui/setup-progress';
 import { useWidgetSelection } from '@/features/widgets/model/widget-selection';
@@ -9,7 +11,7 @@ import { MapBottomSheet, type MapSheetSnap } from '@/shared/ui/map-bottom-sheet'
 import { ScrollView } from 'react-native-gesture-handler';
 /** @fileoverview 알림 설정으로 전달할 실제 정류장 노선 또는 역·호선·행선지를 고르는 작은 지도 패널. */
 import { useCallback, useState } from 'react';
-import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { router, useFocusEffect } from 'expo-router';
 import type { BusStop } from '@/features/bus-stop/api/get-nearby-bus-stops';
 import { useBusArrivals } from '@/features/bus-stop/model/use-bus-arrivals';
@@ -31,6 +33,7 @@ export function AlertMapPicker({
   busStop,
   stationName,
   initialLineName,
+  onSelectLine,
   stationPoint,
   onHeightChange,
   animatedPosition,
@@ -40,6 +43,7 @@ export function AlertMapPicker({
   busStop: BusStop | null;
   stationName: string | null;
   initialLineName?: string;
+  onSelectLine: (lineName: string) => void;
   stationPoint: Point | null;
   onHeightChange: (height: number) => void;
   animatedPosition: SharedValue<number>;
@@ -56,7 +60,6 @@ export function AlertMapPicker({
   const station = useSubwayStation(stationName ?? '');
   const live = useSubwayArrivals(stationName ?? '', undefined, !isWidget);
   const mapStations = useSubwayMapStations();
-  const [chosenLine, setChosenLine] = useState('');
   const [target, setTarget] = useState<
     Pick<SubwayAlertInput, 'direction' | 'destinations' | 'nextStationName' | 'destinationNames'>
   >({ direction: selection?.resume?.direction ?? '' });
@@ -64,9 +67,8 @@ export function AlertMapPicker({
   const [openedAt] = useState(() => Date.now());
   const lines = station.data?.lines ?? [];
   const line =
-    lines.find((item) => item.lineName === chosenLine) ??
-    lines.find((item) => item.lineName === initialLineName) ??
-    lines[0];
+    lines.find((item) => item.lineName === normalizeSubwayLineName(initialLineName ?? '')) ??
+    (!initialLineName && lines.length === 1 ? lines[0] : undefined);
   const weekday = new Intl.DateTimeFormat('en-US', {
     timeZone: 'Asia/Seoul',
     weekday: 'short',
@@ -120,7 +122,8 @@ export function AlertMapPicker({
       useRecoveryStore.getState().show({
         source: 'widget-save',
         message:
-          useWidgetSelection.getState().storageError ?? '위젯은 최대 12개까지 추가할 수 있어요.',
+          useWidgetSelection.getState().storageError ??
+          '즐겨찾기를 저장하지 못했어요. 다시 시도해주세요.',
       });
       return;
     }
@@ -163,7 +166,7 @@ export function AlertMapPicker({
             current={isWidget && isBus && selected ? 2 : 1}
             labels={
               isWidget
-                ? ['교통수단', '지도 선택', '위젯 추가']
+                ? ['교통수단', '지도 선택', '즐겨찾기 추가']
                 : ['알림 종류', '지도 선택', '알림 설정']
             }
             showTitle={false}
@@ -172,16 +175,15 @@ export function AlertMapPicker({
             {isBus
               ? selected
                 ? isWidget
-                  ? '위젯에 넣을 버스를 선택해주세요'
+                  ? '즐겨찾기에 넣을 버스를 선택해주세요'
                   : '알림 받고 싶은 버스를 선택해주세요'
                 : '정류소를 선택해주세요'
               : selected
                 ? isWidget
-                  ? '위젯에 넣을 호선을 선택해주세요'
+                  ? '즐겨찾기에 넣을 호선을 선택해주세요'
                   : '알림 받고 싶은 방면을 선택해주세요'
                 : '지하철역을 선택해주세요'}
           </Text>
-
         </View>
       }
     >
@@ -205,6 +207,8 @@ export function AlertMapPicker({
                           title: `${group.busNumber}번`,
                           color: getBusRouteBadge(group.routeType)?.color,
                           stationName: busStop.name,
+                          latitude: busStop.latitude,
+                          longitude: busStop.longitude,
                           stationId: busStop.id,
                           routeId: group.routeId,
                           stationSeq: group.stationSeq,
@@ -236,7 +240,7 @@ export function AlertMapPicker({
                   </Pressable>
                 ))}
                 {bus.isPending ? (
-                  <ActivityIndicator />
+                  <ListSkeleton rows={3} />
                 ) : !groups.length ? (
                   <Text style={s.message}>
                     {bus.isError ? '버스 정보를 불러오지 못했어요.' : '선택 가능한 버스가 없어요.'}
@@ -271,7 +275,7 @@ export function AlertMapPicker({
                     pressed && s.pressed,
                   ]}
                   onPress={() => {
-                    setChosenLine(item.lineName);
+                    onSelectLine(item.lineName);
                     setTarget({ direction: '' });
                     if (isWidget && stationName) {
                       setOpening(true);
@@ -286,17 +290,23 @@ export function AlertMapPicker({
                 </Pressable>
               ))}
             </ScrollView>
-            {!isWidget ? (
+            {!isWidget && line ? (
               <ScrollView style={s.list}>
-                <SubwayDestinationPicker
-                  directionOnly
-                  options={options}
-                  value={target}
-                  onChange={chooseSubwayDirection}
-                  disabled={opening || (selection.kind === 'location' && !point)}
-                />
-                {station.isFetching || timetable.isFetching ? (
-                  <ActivityIndicator />
+                {!(
+                  options.length <= 1 &&
+                  (station.isLoading || timetable.isLoading || live.isLoading)
+                ) && (
+                  <SubwayDestinationPicker
+                    directionOnly
+                    options={options}
+                    value={target}
+                    onChange={chooseSubwayDirection}
+                    disabled={opening || (selection.kind === 'location' && !point)}
+                  />
+                )}
+                {options.length <= 1 &&
+                (station.isLoading || timetable.isLoading || live.isLoading) ? (
+                  <ListSkeleton rows={3} />
                 ) : options.length <= 1 ? (
                   <Text style={s.message}>선택 가능한 방면 정보가 없어요.</Text>
                 ) : null}
@@ -317,7 +327,7 @@ export function AlertMapPicker({
                 ) : null}
               </ScrollView>
             ) : station.isPending ? (
-              <ActivityIndicator />
+              <ListSkeleton rows={3} />
             ) : station.isError ? (
               <Pressable accessibilityRole="button" onPress={() => void station.refetch()}>
                 <Text style={s.link}>호선 다시 조회</Text>
