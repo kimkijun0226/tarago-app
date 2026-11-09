@@ -1,6 +1,6 @@
 import { useCallback, useMemo, useRef, useState } from 'react';
 import Sortable, { type SortableGridRenderItem } from 'react-native-sortables';
-import Animated, { LinearTransition, FadeOut, type AnimatedRef } from 'react-native-reanimated';
+import Animated, { LinearTransition, FadeOut, useSharedValue, useAnimatedStyle, withTiming, withSpring, withDelay, Easing, type SharedValue, type AnimatedRef } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
 import { Image } from 'expo-image';
 import { Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
@@ -37,6 +37,7 @@ export function FavoritesGrid({
   columns,
   editing,
   onEdit,
+  onCancelEdit,
   onAdd,
   onOpen,
   onRemove,
@@ -45,9 +46,10 @@ export function FavoritesGrid({
   scrollableRef,
 }: {
   items: WidgetTarget[];
-  columns: 2 | 4;
+  columns: 2 | 3 | 4;
   editing: boolean;
   onEdit: () => void;
+  onCancelEdit: () => void;
   onAdd: () => void;
   onOpen: (item: WidgetTarget) => void;
   onRemove: (item: WidgetTarget) => void;
@@ -63,7 +65,14 @@ export function FavoritesGrid({
   const ordered = pendingOrder?.source === items ? pendingOrder.items : items;
   const dragging = useRef(false);
   const suppressTapUntil = useRef(0);
-  const columnGap = columns === 2 ? 20 : 12;
+  const lastMoveFeedback = useRef(0);
+  const heldId = useSharedValue<string | null>(null);
+  const holdScale = useSharedValue(1);
+  const holdOrigin = useRef({ x: 0, y: 0 });
+  const resetHold = useCallback(() => {
+    holdScale.set(withSpring(1, { damping: 24, stiffness: 360, mass: 0.7, overshootClamping: true }));
+  }, [holdScale]);
+  const columnGap = columns === 2 ? 20 : columns === 3 ? 16 : 12;
   const diameter = Math.max(1, (width - columnGap * (columns - 1)) / columns);
   const cells = useMemo<Cell[]>(
     () => [
@@ -78,13 +87,30 @@ export function FavoritesGrid({
   const renderItem = useCallback<SortableGridRenderItem<Cell>>(
     ({ item }) => (
       <Animated.View
-        layout={LinearTransition.duration(280)}
         style={{ width: diameter, height: diameter }}
       >
         {item.target ? (
-          <View>
+          <View
+            onTouchStart={(event) => {
+              event.stopPropagation();
+              holdOrigin.current = { x: event.nativeEvent.pageX, y: event.nativeEvent.pageY };
+            }}
+            onTouchMove={(event) => {
+              if (!dragging.current && Math.hypot(event.nativeEvent.pageX - holdOrigin.current.x, event.nativeEvent.pageY - holdOrigin.current.y) > 10)
+                resetHold();
+            }}
+            onTouchCancel={resetHold}
+          >
             <Sortable.Handle>
               <Sortable.Touchable
+                onTouchesDown={() => {
+                  if (!disabled && !editing) {
+                    heldId.set(item.id);
+                    holdScale.set(1);
+                    holdScale.set(withDelay(80, withTiming(1.07, { duration: 320, easing: Easing.inOut(Easing.cubic) })));
+                  }
+                }}
+                onTouchesUp={resetHold}
                 onTap={() => {
                   if (
                     !disabled &&
@@ -99,7 +125,9 @@ export function FavoritesGrid({
                 accessibilityLabel={`${item.target.title} ${item.target.stationName}${editing ? ' 순서 변경' : ' 상세 보기'}`}
                 accessibilityHint="길게 누르면 수정 모드에서 순서를 바꾸고 삭제할 수 있어요"
               >
-                <Arrival item={item.target} diameter={diameter} />
+                <HoldScale id={item.id} heldId={heldId} scale={holdScale}>
+                  <Arrival item={item.target} diameter={diameter} />
+                </HoldScale>
               </Sortable.Touchable>
             </Sortable.Handle>
             {editing && (
@@ -123,10 +151,11 @@ export function FavoritesGrid({
         ) : (
           <Sortable.Handle mode="fixed-order">
             <Pressable
-              disabled={disabled || editing}
+              disabled={disabled}
               accessibilityRole="button"
-              accessibilityLabel="즐겨찾기 추가"
-              onPress={onAdd}
+              accessibilityLabel={editing ? '즐겨찾기 수정 취소' : '즐겨찾기 추가'}
+              onTouchStart={(event) => event.stopPropagation()}
+              onPress={editing ? onCancelEdit : onAdd}
               style={[s.add, { width: diameter, opacity: editing ? 0.35 : 1 }]}
             >
               <Text style={s.plus}>+</Text>
@@ -135,7 +164,7 @@ export function FavoritesGrid({
         )}
       </Animated.View>
     ),
-    [diameter, disabled, editing, onOpen, onRemove, onAdd],
+    [diameter, disabled, editing, onOpen, onRemove, onAdd, onCancelEdit, heldId, holdScale, resetHold],
   );
   return (
     <View style={s.grid} onLayout={(event) => setWidth(event.nativeEvent.layout.width)}>
@@ -149,20 +178,29 @@ export function FavoritesGrid({
         strategy="insert"
         scrollableRef={scrollableRef}
         sortEnabled={!disabled}
-        dragActivationDelay={editing ? 100 : 400}
-        activationAnimationDuration={140}
-        dropAnimationDuration={220}
-        activeItemScale={1.08}
+        dragActivationDelay={editing ? 0 : 400}
+        enableActiveItemSnap={false}
+        activationAnimationDuration={100}
+        dropAnimationDuration={160}
+        activeItemScale={1}
         inactiveItemOpacity={0.85}
         dimensionsAnimationType="worklet"
         itemsLayoutTransitionMode="all"
         itemExiting={FadeOut.duration(150)}
         onDragStart={() => {
           dragging.current = true;
+          resetHold();
+          lastMoveFeedback.current = Date.now();
           onEdit();
           feedback('lift');
         }}
-        onOrderChange={() => feedback('move')}
+        onOrderChange={() => {
+          const now = Date.now();
+          if (now - lastMoveFeedback.current >= 80) {
+            lastMoveFeedback.current = now;
+            feedback('move');
+          }
+        }}
         onActiveItemDropped={() => {
           suppressTapUntil.current = Date.now() + 400;
           feedback('drop');
@@ -171,8 +209,8 @@ export function FavoritesGrid({
           dragging.current = false;
           suppressTapUntil.current = Date.now() + 400;
           const next = data.flatMap((cell) => (cell.target ? [cell.target] : []));
-          setPendingOrder({ source: items, items: next });
           if (next.some((item, index) => item.id !== items[index]?.id)) {
+            setPendingOrder({ source: items, items: next });
             void onReorder(next.map((item) => item.id)).then((saved) => {
               if (!saved) setPendingOrder(null);
             });
@@ -181,6 +219,16 @@ export function FavoritesGrid({
       />
     </View>
   );
+}
+/** 확대 값은 그리드에서 공유해 드래그 포털로 옮겨질 때도 복귀 애니메이션을 이어간다. */
+function HoldScale({ id, heldId, scale, children }: {
+  id: string;
+  heldId: SharedValue<string | null>;
+  scale: SharedValue<number>;
+  children: React.ReactNode;
+}) {
+  const style = useAnimatedStyle(() => ({ transform: [{ scale: heldId.value === id ? scale.value : 1 }] }));
+  return <Animated.View style={style}>{children}</Animated.View>;
 }
 function Arrival({ item, diameter }: { item: WidgetTarget; diameter: number }) {
   const { direction, time, color, remainingSeconds, loading, realtimeError } = useWidgetArrival(
@@ -192,10 +240,10 @@ function Arrival({ item, diameter }: { item: WidgetTarget; diameter: number }) {
   const directionStyle = [s.direction, { fontSize: 7 * textScale, lineHeight: 9 * textScale }];
   const minutes = time.match(/\d+분/)?.[0];
   const timer =
-    remainingSeconds !== null && remainingSeconds > 0 && remainingSeconds <= 300
+    remainingSeconds !== null && remainingSeconds > 0
       ? `${Math.floor(remainingSeconds / 60)}:${String(Math.floor(remainingSeconds % 60)).padStart(2, '0')}`
       : null;
-  const label = timer ?? (minutes ? `${/시간표|예상|약/.test(time) ? '약 ' : ''}${minutes}` : time);
+  const label = timer ?? minutes ?? time;
   const statusOnly = remainingSeconds === null && !['진입', '도착'].includes(time);
   return (
     <Animated.View

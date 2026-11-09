@@ -1,5 +1,5 @@
 import { ListSkeleton } from '@/shared/ui/loading-skeleton';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
   Alert,
   KeyboardAvoidingView,
@@ -30,6 +30,7 @@ export function WidgetsScreen() {
   const { width: screenWidth, height: screenHeight } = useWindowDimensions();
   const [menu, setMenu] = useState<{ group: FavoriteGroup; x: number; y: number } | null>(null);
   const [editingItems, setEditingItems] = useState(false);
+  const backgroundTouch = useRef<{ x: number; y: number; editing: boolean } | null>(null);
   const [opening, setOpening] = useState(false);
   const [editing, setEditing] = useState<{ id?: string; title: string } | null>(null);
   useEffect(() => {
@@ -76,7 +77,25 @@ export function WidgetsScreen() {
     ]);
   };
   return (
-    <SafeAreaView style={s.page} edges={{ top: true, left: true, right: true, bottom: true }}>
+    <SafeAreaView
+      style={s.page}
+      edges={{ top: true, left: true, right: true, bottom: true }}
+      onTouchStart={(event) => {
+        backgroundTouch.current = { x: event.nativeEvent.pageX, y: event.nativeEvent.pageY, editing: editingItems };
+      }}
+      onTouchEnd={(event) => {
+        const start = backgroundTouch.current;
+        backgroundTouch.current = null;
+        if (start?.editing && Math.hypot(event.nativeEvent.pageX - start.x, event.nativeEvent.pageY - start.y) < 10)
+          setEditingItems(false);
+      }}
+      onTouchMove={(event) => {
+        const start = backgroundTouch.current;
+        if (start && Math.hypot(event.nativeEvent.pageX - start.x, event.nativeEvent.pageY - start.y) >= 10)
+          backgroundTouch.current = null;
+      }}
+      onTouchCancel={() => { backgroundTouch.current = null; }}
+    >
       <View style={s.header}>
         <AppHeader
           title="즐겨찾기"
@@ -123,19 +142,17 @@ export function WidgetsScreen() {
         {groups.map((group) => (
           <Animated.View key={group.id} layout={LinearTransition.duration(280)} style={s.group}>
             <View style={s.groupHeader}>
-              <Pressable
-                disabled={disabled}
-                onPress={() => setEditing({ id: group.id, title: group.title })}
-                accessibilityRole="button"
-                accessibilityLabel={`${group.title} 이름 변경`}
-                style={s.groupTitleButton}
-              >
+              <View style={s.groupTitleButton}>
                 <Text style={s.groupTitle}>{group.title}</Text>
-              </Pressable>
+              </View>
               <Pressable
                 disabled={disabled}
                 hitSlop={8}
                 onPress={(event) => {
+                  if (editingItems) {
+                    setEditingItems(false);
+                    return;
+                  }
                   event.currentTarget.measureInWindow((x, y, width, height) =>
                     setMenu({
                       group,
@@ -160,6 +177,7 @@ export function WidgetsScreen() {
               columns={group.columns ?? 4}
               editing={editingItems}
               onEdit={() => setEditingItems(true)}
+              onCancelEdit={() => setEditingItems(false)}
               scrollableRef={scrollRef}
               onRemove={(item) => {
                 Alert.alert(
@@ -189,7 +207,10 @@ export function WidgetsScreen() {
         {hydrated && (
           <Pressable
             disabled={disabled}
-            onPress={() => setEditing({ title: '' })}
+            onPress={() => {
+              if (editingItems) setEditingItems(false);
+              else setEditing({ title: '' });
+            }}
             style={s.addGroup}
             accessibilityRole="button"
           >
@@ -211,9 +232,8 @@ export function WidgetsScreen() {
           />
           {menu && (
             <View style={[s.dropdown, { left: menu.x, top: menu.y }]}>
-              <Text style={s.menuLabel}>한 줄에 표시</Text>
               <View style={s.columnsRow}>
-                {([2, 4] as const).map((columns) => (
+                {([2, 3, 4] as const).map((columns) => (
                   <Pressable
                     key={columns}
                     accessibilityRole="button"
@@ -239,15 +259,18 @@ export function WidgetsScreen() {
                 ))}
               </View>
               <Pressable
+                accessibilityRole="button"
                 style={s.menuItem}
                 onPress={() => {
                   setEditing({ id: menu.group.id, title: menu.group.title });
                   setMenu(null);
                 }}
               >
-                <Text style={s.menuText}>이름 변경</Text>
+                <SymbolView name={{ ios: 'pencil', android: 'edit' }} size={18} tintColor={c.accent} />
+                <Text style={s.menuText}>그룹 이름 변경</Text>
               </Pressable>
-              <Pressable style={s.menuItem} onPress={() => deleteGroup(menu.group)}>
+              <Pressable accessibilityRole="button" style={[s.menuItem, s.deleteMenuItem]} onPress={() => deleteGroup(menu.group)}>
+                <SymbolView name={{ ios: 'trash', android: 'delete' }} size={18} tintColor={c.danger} />
                 <Text style={[s.menuText, { color: c.danger }]}>그룹 삭제</Text>
               </Pressable>
             </View>
@@ -328,27 +351,29 @@ const s = StyleSheet.create({
     position: 'absolute',
     width: 208,
     padding: 8,
-    borderRadius: 14,
+    gap: 8,
+    borderRadius: 16,
     backgroundColor: c.surface,
     borderWidth: 1,
     borderColor: c.separator,
     boxShadow: '0 4px 16px rgba(0,0,0,0.12)',
   },
-  menuLabel: { color: c.secondaryText, fontSize: 12, padding: 8 },
-  columnsRow: { flexDirection: 'row', gap: 8, paddingHorizontal: 4, paddingBottom: 8 },
+  columnsRow: { flexDirection: 'row', gap: 8 },
   columnsButton: {
     flex: 1,
-    minHeight: 38,
+    minHeight: 44,
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 1,
     borderColor: c.separator,
-    borderRadius: 10,
+    borderRadius: 14,
+    backgroundColor: c.background,
   },
   columnsSelected: { backgroundColor: c.accentSurface, borderColor: c.accent },
   columnText: { color: c.text, fontSize: 14 },
   columnSelectedText: { color: c.accent },
-  menuItem: { minHeight: 44, justifyContent: 'center', paddingHorizontal: 8 },
+  menuItem: { minHeight: 48, flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 12, borderRadius: 14, backgroundColor: c.accentSurface },
+  deleteMenuItem: { backgroundColor: c.background },
   menuText: { fontSize: 14, color: c.text },
   page: { flex: 1, backgroundColor: c.background },
   editDone: {

@@ -5,7 +5,7 @@ import type { WidgetTarget } from './widget-configuration';
 
 const STORAGE_KEY = `tarago-favorite-groups-v1-${API_STORAGE_SCOPE}`;
 const LEGACY_KEY = `tarago-widget-targets-v2-${API_STORAGE_SCOPE}`;
-export type FavoriteGroup = { id: string; title: string; items: WidgetTarget[]; columns?: 2 | 4 };
+export type FavoriteGroup = { id: string; title: string; items: WidgetTarget[]; columns?: 2 | 3 | 4 };
 export type WidgetMapSelection = { transport: 'bus' | 'subway'; requestId: string };
 
 type WidgetState = {
@@ -15,7 +15,7 @@ type WidgetState = {
   activateGroup: (id: string) => boolean;
   createGroup: (title: string) => Promise<string | null>;
   renameGroup: (id: string, title: string) => Promise<boolean>;
-  setColumns: (id: string, columns: 2 | 4) => Promise<boolean>;
+  setColumns: (id: string, columns: 2 | 3 | 4) => Promise<boolean>;
   removeGroup: (id: string) => Promise<void>;
   mapSelection: WidgetMapSelection | null;
   startMapSelection: (selection: WidgetMapSelection) => void;
@@ -125,7 +125,7 @@ export const useWidgetSelection = create<WidgetState>()((set, get) => {
       );
     },
     setColumns: async (id, columns) => {
-      if (columns !== 2 && columns !== 4) return false;
+      if (columns !== 2 && columns !== 3 && columns !== 4) return false;
       return save(get().groups.map((group) => (group.id === id ? { ...group, columns } : group)));
     },
     removeGroup: async (id) => {
@@ -180,7 +180,7 @@ export const useWidgetSelection = create<WidgetState>()((set, get) => {
               id: group.id,
               title: group.title.trim().slice(0, 40),
               items: uniqueItems(group.items),
-              columns: 'columns' in group && group.columns === 2 ? 2 : 4,
+              columns: 'columns' in group && (group.columns === 2 || group.columns === 3) ? group.columns : 4,
             };
           });
           if ('activeGroupId' in saved && typeof saved.activeGroupId === 'string')

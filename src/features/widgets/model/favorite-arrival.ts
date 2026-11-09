@@ -47,6 +47,7 @@ export function buildFavoriteArrival(
   let remainingSeconds: number | null = null;
   let realtimeError = false;
   let statusMessage = time;
+  // 응답을 받은 순간에는 API의 ETA를 그대로 표시하고 이후 경과 시간만 뺀다.
   const eta = (seconds: number, fetchedAt: number, qualifier = '') => {
     const left = seconds - Math.max(0, now - fetchedAt) / 1000;
     const maxAge = qualifier.includes('배차') ? 86_400_000 : 90_000;
@@ -154,7 +155,7 @@ export function buildFavoriteArrival(
     const first = trains[0] ?? fallback[0];
     if (first) {
       direction = `${item.directionLabel} · ${first.destination.replace(/행$/, '')}행`;
-      const fetchedAt = fallback.length ? now : Date.parse(subway.data?.fetchedAt ?? '');
+      const fetchedAt = fallback.length ? now : subway.dataUpdatedAt;
       if (!Number.isFinite(fetchedAt) || now - fetchedAt >= 90_000) time = '도착정보 갱신 필요';
       else if (first.arrivalCode === '0') time = '진입';
       else if (first.arrivalCode === '1') time = '도착';
