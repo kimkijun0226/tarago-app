@@ -12,7 +12,7 @@ import { getSubwayArrivals } from '@/features/subway/api/get-subway-arrivals';
  */
 export function useSubwayArrivals(
   stationName: string,
-  target?: { lineId: string; direction: string; destination?: string; destinations?: string[] },
+  target?: { lineId: string; direction: string; destination?: string; destinations?: string[]; expressOnly?: boolean },
   enabled = true,
 ) {
   /** 현재 Router 화면의 포커스 여부다. 화면이 보일 때만 도착 Query를 활성화한다. */
@@ -34,6 +34,7 @@ export function useSubwayArrivals(
           target.direction,
           target.destination ?? '',
           target.destinations,
+          target.expressOnly === true,
         ]
       : ['subway', stationName, 'arrivals'],
     queryFn: ({ signal }) => getSubwayArrivals(stationName, signal, target),

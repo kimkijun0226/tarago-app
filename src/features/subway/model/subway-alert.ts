@@ -8,6 +8,7 @@ export interface SubwayAlertInput {
   lineId: string;
   lineName?: string;
   direction: string;
+  expressOnly?: boolean;
   destination?: string;
   /** 미지정이면 선택 방면의 모든 행선지, 배열이면 해당 행선지만 감시한다. */
   destinations?: string[];

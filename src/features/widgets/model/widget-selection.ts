@@ -59,6 +59,7 @@ export function isWidgetTarget(item: unknown): item is WidgetTarget {
     : value.transport === 'subway' &&
         typeof value.lineId === 'string' &&
         typeof value.direction === 'string' &&
+        (value.expressOnly === undefined || typeof value.expressOnly === 'boolean') &&
         (value.destination === undefined || typeof value.destination === 'string') &&
         (value.destinations === undefined ||
           (Array.isArray(value.destinations) &&

@@ -45,7 +45,7 @@ export interface SubwayArrivals {
 export async function getSubwayArrivals(
   stationName: string,
   signal?: AbortSignal,
-  target?: { lineId: string; direction: string; destination?: string; destinations?: string[] },
+  target?: { lineId: string; direction: string; destination?: string; destinations?: string[]; expressOnly?: boolean },
 ): Promise<SubwayArrivals> {
   /** HTTP 응답 래퍼에서 화면에 전달할 서버 본문만 꺼낸다. */
   const { data } = await apiClient.get<SubwayArrivals>(
@@ -56,6 +56,7 @@ export async function getSubwayArrivals(
         lineId: target?.lineId,
         direction: target?.direction,
         destination: target?.destination,
+        expressOnly: target?.expressOnly ? 'true' : undefined,
         destinations: target?.destinations ? JSON.stringify(target.destinations) : undefined,
       },
       signal,

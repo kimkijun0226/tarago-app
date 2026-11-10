@@ -18,6 +18,7 @@ export type WidgetTarget = {
       transport: 'subway';
       lineId: string;
       direction: string;
+      expressOnly?: boolean;
       destination?: string;
       destinations?: string[];
     }

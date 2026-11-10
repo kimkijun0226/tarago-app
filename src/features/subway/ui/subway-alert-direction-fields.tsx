@@ -2,7 +2,7 @@ import { useState, type Dispatch, type SetStateAction } from 'react';
 import { StyleSheet, View } from 'react-native';
 import { SubwayDestinationPicker } from './subway-destination-picker';
 import { useSubwayStation, useSubwayTimetable } from '../model/use-subway-station';
-import { subwayAlertOptions } from '../model/subway-direction';
+import { hasSubwayExpress, subwayAlertOptions } from '../model/subway-direction';
 import { useSubwayArrivals } from '../model/use-subway-arrivals';
 import type { SubwayAlertDraft } from '../model/use-subway-alert-screen';
 import { alertColors as c } from '@/features/bus-alert/ui/alert-design';
@@ -39,10 +39,11 @@ export function SubwayAlertDirectionFields({
         options={options}
         value={draft}
         disabled={disabled}
+        supportsExpress={(target) => hasSubwayExpress(line, live.data?.arrivals ?? [], timetable.data?.directions, target)}
         onChange={(next) =>
           setDraft(
             (current) =>
-              current && { ...current, destination: undefined, destinations: undefined, ...next },
+              current && { ...current, destination: undefined, destinations: undefined, expressOnly: undefined, ...next },
           )
         }
       />

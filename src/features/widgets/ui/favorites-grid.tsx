@@ -231,11 +231,9 @@ function HoldScale({ id, heldId, scale, children }: {
   return <Animated.View style={style}>{children}</Animated.View>;
 }
 function Arrival({ item, diameter }: { item: WidgetTarget; diameter: number }) {
-  const { direction, time, color, remainingSeconds, loading, realtimeError } = useWidgetArrival(
-    item,
-    true,
-  );
+  const { direction, time, color, remainingSeconds, loading, realtimeError } = useWidgetArrival(item);
   const showLoading = loading;
+  const title = item.transport === 'subway' && item.expressOnly ? `${item.title} · 급행` : item.title;
   const textScale = Math.max(1, Math.min(2, diameter / 80));
   const directionStyle = [s.direction, { fontSize: 7 * textScale, lineHeight: 9 * textScale }];
   const minutes = time.match(/\d+분/)?.[0];
@@ -249,7 +247,7 @@ function Arrival({ item, diameter }: { item: WidgetTarget; diameter: number }) {
     <Animated.View
       layout={LinearTransition.duration(280)}
       style={[s.ring, s.activeRing, { width: diameter }]}
-      accessibilityLabel={`${item.title} ${item.stationName} ${direction} ${time}`}
+      accessibilityLabel={`${title} ${item.stationName} ${direction} ${time}`}
     >
       <Image
         source={{ uri: ringImage(color, remainingSeconds, remainingSeconds === null) }}
@@ -298,7 +296,7 @@ function Arrival({ item, diameter }: { item: WidgetTarget; diameter: number }) {
               adjustsFontSizeToFit
               minimumFontScale={0.6}
             >
-              {item.title.replace(/번$/, '')}
+              {title.replace(/번$/, '')}
             </Text>
           </View>
           <Text
@@ -338,14 +336,12 @@ function Arrival({ item, diameter }: { item: WidgetTarget; diameter: number }) {
           pointerEvents="none"
           accessibilityLabel={showLoading ? '정보 가져오는 중' : time}
         >
-          {!showLoading && (
-            <Text
-              style={[s.title, { fontSize: 10 * textScale, lineHeight: 12 * textScale }]}
-              numberOfLines={1}
-            >
-              {item.title}
-            </Text>
-          )}
+          <Text
+            style={[s.title, { fontSize: 10 * textScale, lineHeight: 12 * textScale }]}
+            numberOfLines={1}
+          >
+            {title}
+          </Text>
           <Text
             style={[s.loadingText, { fontSize: 9 * textScale, lineHeight: 12 * textScale }]}
             numberOfLines={4}

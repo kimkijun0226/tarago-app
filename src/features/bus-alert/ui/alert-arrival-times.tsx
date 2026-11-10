@@ -14,6 +14,7 @@ import { useSubwayArrivals } from '@/features/subway/model/use-subway-arrivals';
 import { useSubwayStation, useSubwayTimetable } from '@/features/subway/model/use-subway-station';
 import { getServiceStatus } from '@/features/subway/model/subway-arrival-display';
 import {
+  isExpressTrain,
   matchesSubwayDestination,
   normalizeSubwayDirections,
   normalizeSubwayDirection,
@@ -173,6 +174,7 @@ function ActiveAlertArrivalTimes(props: Props & { active: boolean }) {
             train.lineId === alert.lineId &&
             (direction === 'all' || train.direction === direction) &&
             matchesSubwayDestination(alert, train.destination) &&
+            (!alert.expressOnly || isExpressTrain(train)) &&
             train.arrivalCode !== '2' &&
             train.etaSeconds !== null &&
             train.etaSeconds - Math.max(0, now - fetched) / 1000 >= -15,
@@ -194,7 +196,7 @@ function ActiveAlertArrivalTimes(props: Props & { active: boolean }) {
         .filter((entry) => direction === 'all' || entry.direction === direction)
         .map((entry) => {
           const trains = entry.trains.filter((train) =>
-            matchesSubwayDestination(alert, train.destination),
+            matchesSubwayDestination(alert, train.destination) && (!alert.expressOnly || train.isExpress),
           );
           return {
             ...entry,

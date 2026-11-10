@@ -1,9 +1,10 @@
 import { LINE_COLORS } from '@/features/subway/model/subway-line-colors';
 import { getBusRouteBadge } from '@/features/bus-stop/model/bus-arrival';
 import type { BusArrival } from '@/features/bus-stop/api/get-bus-arrivals';
-import type { SubwayArrivals } from '@/features/subway/api/get-subway-arrivals';
+import type { SubwayArrival, SubwayArrivals } from '@/features/subway/api/get-subway-arrivals';
 import type { SubwayStationLine, SubwayTimetable } from '@/features/subway/api/get-subway-station';
 import {
+  isExpressTrain,
   matchesSubwayDestination,
   normalizeSubwayDirections,
   normalizeSubwayDirection,
@@ -23,6 +24,19 @@ type ArrivalQuery<T> = {
   isError: boolean;
   isFetching: boolean;
 };
+
+export function matchesFavoriteSubwayTrain(
+  item: Pick<Extract<WidgetTarget, { transport: 'subway' }>, 'lineId' | 'expressOnly' | 'destination' | 'destinations'>,
+  direction: string,
+  train: SubwayArrival,
+) {
+  return (
+    train.lineId === item.lineId &&
+    (direction === 'all' || train.direction === direction) &&
+    matchesSubwayDestination(item, train.destination) &&
+    (!item.expressOnly || isExpressTrain(train))
+  );
+}
 
 /** 즐겨찾기 화면의 도착 예정 시각과 운행 상태를 공통 Query 결과로 계산한다. */
 export function buildFavoriteArrival(
@@ -123,10 +137,9 @@ export function buildFavoriteArrival(
       } else {
         time = statusMessage;
       }
-      if (first.recheckingArrival && !realtimeError) {
+      if (first.recheckingArrival && remainingSeconds === null && !realtimeError) {
         const end = Date.parse(first.serviceEndAt ?? '');
         time = Number.isFinite(end) && now >= end ? '운행 종료' : '도착시간 재조회 중';
-        remainingSeconds = null;
       }
     }
   } else if (item.transport === 'subway' && !query.isError) {
@@ -135,20 +148,13 @@ export function buildFavoriteArrival(
     const selectedDirection = normalizeSubwayDirection(currentLine, item.direction, source);
     const normalized = normalizeSubwayDirections(currentLine, source, timetable?.directions);
     const trains = getUpcomingTrains(
-      normalized.arrivals.filter(
-        (train) =>
-          train.lineId === item.lineId &&
-          (selectedDirection === 'all' || train.direction === selectedDirection) &&
-          matchesSubwayDestination(item, train.destination),
-      ),
+      normalized.arrivals.filter((train) => matchesFavoriteSubwayTrain(item, selectedDirection, train)),
     );
     const fallback =
       !trains.length && timetable
         ? getUpcomingTrains(
             getScheduledArrivals(normalized.scheduled, item.lineId, item.title, now).filter(
-              (train) =>
-                (selectedDirection === 'all' || train.direction === selectedDirection) &&
-                matchesSubwayDestination(item, train.destination),
+              (train) => matchesFavoriteSubwayTrain(item, selectedDirection, train),
             ),
           )
         : [];

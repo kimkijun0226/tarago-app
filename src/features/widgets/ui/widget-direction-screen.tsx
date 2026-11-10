@@ -9,7 +9,7 @@ import { appColors as c } from '@/shared/ui/theme';
 import { useRecoveryStore } from '@/shared/model/recovery-store';
 import { useSubwayStation, useSubwayTimetable } from '@/features/subway/model/use-subway-station';
 import { useSubwayArrivals } from '@/features/subway/model/use-subway-arrivals';
-import { subwayAlertOptions } from '@/features/subway/model/subway-direction';
+import { hasSubwayExpress, subwayAlertOptions } from '@/features/subway/model/subway-direction';
 import { SubwayDestinationPicker } from '@/features/subway/ui/subway-destination-picker';
 import { LINE_COLORS } from '@/features/subway/model/subway-line-colors';
 import { useWidgetSelection } from '../model/widget-selection';
@@ -53,13 +53,14 @@ export function WidgetDirectionScreen() {
     operation.current = true;
     try {
       const saved = await useWidgetSelection.getState().add({
-        id: `subway:${stationName}:${line.lineId}:${next.direction}${next.destinations ? `:${encodeURIComponent(JSON.stringify([...next.destinations].sort()))}` : ''}`,
+        id: `subway:${stationName}:${line.lineId}:${next.direction}${next.destinations ? `:${encodeURIComponent(JSON.stringify([...next.destinations].sort()))}` : ''}${next.expressOnly ? ':express' : ''}`,
         transport: 'subway',
         title: line.lineName,
         color: LINE_COLORS[line.lineName] ?? line.color,
         stationName,
         lineId: line.lineId,
         direction: next.direction,
+        expressOnly: next.expressOnly,
         destination: next.destination,
         destinations: next.destinations,
         directionLabel: next.nextStationName
@@ -108,6 +109,7 @@ export function WidgetDirectionScreen() {
             options={options}
             value={direction}
             onChange={setDirection}
+            supportsExpress={(target) => hasSubwayExpress(line, live.data?.arrivals ?? [], timetable.data?.directions, target)}
             disabled={busy || !hydrated}
           />
         )}

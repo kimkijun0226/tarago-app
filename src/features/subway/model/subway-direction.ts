@@ -103,6 +103,7 @@ export function subwayDirectionPresentation(
 
 export function subwayAlertSubtitle(alert: {
   lineName?: string;
+  expressOnly?: boolean;
   lineId: string;
   direction?: string;
   nextStationName?: string;
@@ -111,11 +112,12 @@ export function subwayAlertSubtitle(alert: {
   destinationNames?: string[];
 }) {
   if ('direction' in alert && alert.direction === 'all')
-    return `${alert.lineName ?? alert.lineId} · 방면 상관없음`;
+    return [alert.lineName ?? alert.lineId, '방면 상관없음', alert.expressOnly && '급행만'].filter(Boolean).join(' · ');
   const destinations = alert.destinations ?? (alert.destination ? [alert.destination] : []);
   const bounds = destinations.slice(0, 2).map(destinationLabel).join(' · ');
   return [
     alert.lineName ?? alert.lineId,
+    ...(alert.expressOnly ? ['급행만'] : []),
     alert.nextStationName ? `${stationLabel(alert.nextStationName)} 방면` : '방면 확인 중',
     bounds
       ? `${bounds}${destinations.length > 2 ? ` 외 ${destinations.length - 2}개` : ''}`
@@ -224,5 +226,29 @@ export function matchesSubwayDestination(
   const names = target.destinations ?? (target.destination ? [target.destination] : undefined);
   return (
     !names || names.some((name) => subwayDestinationKey(name) === subwayDestinationKey(destination))
+  );
+}
+
+export const isExpressTrain = (train: Pick<SubwayArrival, 'trainType'>) =>
+  /급행|특급/.test(train.trainType);
+
+/** 선택한 역·방면·행선지의 실시간 또는 공식 시간표에서 급행이 확인된 경우만 선택을 제공한다. */
+export function hasSubwayExpress(
+  line: SubwayStationLine | undefined,
+  arrivals: SubwayArrival[],
+  scheduled: SubwayTimetable['directions'] | undefined,
+  target: { direction: string; destination?: string; destinations?: string[] },
+) {
+  if (!line || !target.direction) return false;
+  const normalized = normalizeSubwayDirections(line, arrivals, scheduled);
+  const direction = normalizeSubwayDirection(line, target.direction, arrivals);
+  const matchesDirection = (value: string) => direction === 'all' || value === direction;
+  return normalized.arrivals.some((train) =>
+    train.lineId === line.lineId && matchesDirection(train.direction) &&
+    isExpressTrain(train) && matchesSubwayDestination(target, train.destination)
+  ) || normalized.scheduled.some((entry) =>
+    matchesDirection(entry.direction) && entry.trains.some((train) =>
+      train.isExpress && matchesSubwayDestination(target, train.destination)
+    )
   );
 }
