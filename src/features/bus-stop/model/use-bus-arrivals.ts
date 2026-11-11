@@ -2,6 +2,7 @@
 
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useEffect } from 'react';
+import { useIsFocused } from 'expo-router';
 import { isAxiosError } from 'axios';
 import type { BusStop } from '../api/get-nearby-bus-stops';
 
@@ -21,13 +22,16 @@ export const BUS_ARRIVALS_REFRESH_INTERVAL = 15_000;
 export function useBusArrivals(stationId: string, enabled = true) {
   /** 폐쇄 정류장을 지도 타일 캐시에서도 제거하기 위한 Query 클라이언트다. */
   const client = useQueryClient();
+  const focused = useIsFocused();
 
   /** 도착 목록과 요청 상태·재시도·폴링을 소유하는 Query 결과다. */
   const query = useQuery({
     queryKey: ['bus-stops', stationId, 'arrivals'],
     queryFn: ({ signal }) => getBusArrivals({ stationId, signal }),
-    enabled: Boolean(stationId) && enabled,
-    staleTime: 5_000,
+    enabled: Boolean(stationId) && enabled && focused,
+    staleTime: 0,
+    refetchOnWindowFocus: 'always',
+    refetchOnReconnect: 'always',
     retry: (count, error) =>
       !(isAxiosError(error) && [410, 429, 503].includes(error.response?.status ?? 0)) && count < 2,
     refetchInterval: (current) =>

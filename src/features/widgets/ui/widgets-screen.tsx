@@ -6,6 +6,7 @@ import {
   Modal,
   Platform,
   Pressable,
+  RefreshControl,
   ScrollView,
   useWindowDimensions,
   StyleSheet,
@@ -17,6 +18,7 @@ import Animated, { LinearTransition, useAnimatedRef } from 'react-native-reanima
 import { SymbolView } from 'expo-symbols';
 import { SafeAreaView } from 'react-native-screens/experimental';
 import { router } from 'expo-router';
+import { useQueryClient } from '@tanstack/react-query';
 import { AppHeader } from '@/shared/ui/app-header';
 import { appColors as c } from '@/shared/ui/theme';
 import { useWidgetSelection, type FavoriteGroup } from '../model/widget-selection';
@@ -26,6 +28,17 @@ import { FavoritesGrid } from './favorites-grid';
 
 export function WidgetsScreen() {
   const { groups, busy, hydrated, initialize, error, storageError } = useWidgetSelection();
+  const client = useQueryClient();
+  const [refreshing, setRefreshing] = useState(false);
+  const refresh = async () => {
+    setRefreshing(true);
+    try {
+      await client.refetchQueries({ type: 'active', predicate: ({ queryKey: key }) =>
+        (key[0] === 'bus-stops' && key[2] === 'arrivals') ||
+        (key[0] === 'subway' && (key[2] === 'arrivals' || key[2] === 'alert-arrivals')),
+      }, { cancelRefetch: false });
+    } finally { setRefreshing(false); }
+  };
   const scrollRef = useAnimatedRef<ScrollView>();
   const { width: screenWidth, height: screenHeight } = useWindowDimensions();
   const [menu, setMenu] = useState<{ group: FavoriteGroup; x: number; y: number } | null>(null);
@@ -118,6 +131,7 @@ export function WidgetsScreen() {
       </View>
       <Animated.ScrollView
         ref={scrollRef}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => void refresh()} />}
         contentInsetAdjustmentBehavior="never"
         contentContainerStyle={s.content}
         keyboardShouldPersistTaps="handled"

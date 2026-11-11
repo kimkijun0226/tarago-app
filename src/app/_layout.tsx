@@ -1,7 +1,8 @@
 import { useWidgetSelection } from '@/features/widgets/model/widget-selection';
 /** @fileoverview 앱 전체의 Provider와 최상위 Router를 연결하는 조립 지점. Query·알림 런타임·제스처를 한 번 설치한다. */
-import { focusManager, QueryClientProvider } from '@tanstack/react-query';
+import { focusManager, onlineManager, QueryClientProvider } from '@tanstack/react-query';
 import { DefaultTheme, Stack, ThemeProvider } from 'expo-router';
+import * as Network from 'expo-network';
 import * as SplashScreen from 'expo-splash-screen';
 import { useEffect } from 'react';
 import { AppState } from 'react-native';
@@ -40,7 +41,24 @@ export default function RootLayout() {
       focusManager.setFocused(state === 'active'),
     );
 
-    return () => subscription.remove();
+    const updateOnline = (state: Network.NetworkState) => {
+      if (state.isConnected === undefined && state.isInternetReachable === undefined) return;
+      onlineManager.setOnline(state.isConnected !== false && state.isInternetReachable !== false);
+    };
+    let receivedNetworkEvent = false;
+    const network = Network.addNetworkStateListener((state) => {
+      receivedNetworkEvent = true;
+      updateOnline(state);
+    });
+    let mounted = true;
+    void Network.getNetworkStateAsync().then((state) => {
+      if (mounted && !receivedNetworkEvent) updateOnline(state);
+    }).catch(() => {});
+    return () => {
+      mounted = false;
+      network.remove();
+      subscription.remove();
+    };
   }, []);
 
   return (

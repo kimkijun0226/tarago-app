@@ -53,6 +53,7 @@ export async function getSubwayArrivals(
     {
       params: {
         stationName,
+        fresh: 1,
         lineId: target?.lineId,
         direction: target?.direction,
         destination: target?.destination,
