@@ -3,7 +3,7 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useMemo } from 'react';
 import { useIsFocused } from 'expo-router';
-import { isAxiosError } from 'axios';
+import { isAxiosError, isCancel } from 'axios';
 import { mergeBusArrivals } from './merge-bus-arrivals';
 import type { BusStop } from '../api/get-nearby-bus-stops';
 
@@ -74,6 +74,7 @@ export function useBusArrivals(stationId: string, enabled = true) {
     dataUpdatedAt: official.data ? official.dataUpdatedAt : enriched.dataUpdatedAt,
     isPending: official.isPending && merged === undefined,
     isError: official.isError && (closed || !merged?.length),
-    refreshDelayed: official.isError && !closed,
+    refreshDelayed: official.isError && isAxiosError(official.error) &&
+      !isCancel(official.error) && !closed,
   };
 }
