@@ -74,7 +74,7 @@ export const MapView = forwardRef<MapViewRef, Props>(function MapView(
   const gestureActive = useRef(false);
   const [cameraZoom, setCameraZoom] = useState(initialCamera.zoom ?? 17);
   // 축소 상태에서만 확대하고 가까워지면 기본 크기로 되돌린다.
-  const symbolScale = subwaySelection ? 1 + 0.3 * Math.min(1, Math.max(0, 15 - cameraZoom)) : 1;
+  const symbolScale = 1 + 0.3 * Math.min(1, Math.max(0, 15 - cameraZoom));
   const subwayStyleId = process.env.EXPO_PUBLIC_SUBWAY_MAP_STYLE_ID?.trim();
 
   useImperativeHandle(
@@ -98,7 +98,7 @@ export const MapView = forwardRef<MapViewRef, Props>(function MapView(
           gestureActive.current = true;
           useAppStore.getState().collapseMapSheets();
         }
-        if (subwaySelection && zoom !== undefined && Number.isFinite(zoom)) {
+        if (zoom !== undefined && Number.isFinite(zoom)) {
           setCameraZoom(Math.round(zoom * 10) / 10);
         }
       }}
