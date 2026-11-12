@@ -19,7 +19,7 @@ export const BUS_ARRIVALS_REFRESH_INTERVAL = 15_000;
  * @param stationId 서버 DB의 정류장 UUID.
  * @returns 도착 목록, 조회·오류 상태, 수동 재조회 함수를 담은 Query 결과.
  */
-export function useBusArrivals(stationId: string, enabled = true) {
+export function useBusArrivals(stationId: string, enabled = true, showOfficialFirst = false) {
   /** 폐쇄 정류장을 지도 타일 캐시에서도 제거하기 위한 Query 클라이언트다. */
   const client = useQueryClient();
   const focused = useIsFocused();
@@ -38,6 +38,18 @@ export function useBusArrivals(stationId: string, enabled = true) {
       isAxiosError(current.state.error) && current.state.error.response?.status === 410
         ? false
         : BUS_ARRIVALS_REFRESH_INTERVAL,
+    refetchIntervalInBackground: false,
+  });
+
+  const official = useQuery({
+    queryKey: ['bus-stops', stationId, 'arrivals-official'],
+    queryFn: ({ signal }) => getBusArrivals({ stationId, signal, officialOnly: true }),
+    enabled: showOfficialFirst && Boolean(stationId) && enabled && focused,
+    staleTime: 0,
+    retry: false,
+    refetchOnWindowFocus: 'always',
+    refetchOnReconnect: 'always',
+    refetchInterval: BUS_ARRIVALS_REFRESH_INTERVAL,
     refetchIntervalInBackground: false,
   });
 
@@ -65,5 +77,23 @@ export function useBusArrivals(stationId: string, enabled = true) {
       stops?.filter((stop) => stop.id !== stationId),
     );
   }, [client, query.error, stationId]);
-  return query;
+  if (!showOfficialFirst) return query;
+  // 보완 조회가 실패해도 이번에 이미 받은 공식 시간은 유지한다.
+  const showOfficial = Boolean(official.data?.length) && official.dataUpdatedAt > query.dataUpdatedAt;
+  return {
+    ...query,
+    data: showOfficial ? official.data : query.data,
+    dataUpdatedAt: showOfficial ? official.dataUpdatedAt : query.dataUpdatedAt,
+    isPending: query.isPending && !showOfficial,
+    isFetching: query.isFetching || official.isFetching,
+    isError: query.isError && !showOfficial,
+    error: showOfficial ? null : query.error,
+    refetch: async (options?: Parameters<typeof query.refetch>[0]) => {
+      const [result] = await Promise.all([
+        query.refetch(options),
+        official.refetch({ cancelRefetch: false }),
+      ]);
+      return result;
+    },
+  };
 }

@@ -95,7 +95,7 @@ export const BusStopBottomSheet = memo(function BusStopBottomSheet({
     isFetching,
     isPending,
     refetch,
-  } = useBusArrivals(busStop.id, snap !== 'compact');
+  } = useBusArrivals(busStop.id, snap !== 'compact', true);
 
   /**
    * 공식 조회가 410으로 정차 노선 부재를 확인하면 시트를 닫고 이용자에게 알린다.

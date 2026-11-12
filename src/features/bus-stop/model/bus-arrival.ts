@@ -30,16 +30,18 @@ export function formatEta(
     'serviceEnded' | 'recheckingArrival' | 'realtimeError' | 'serviceEndAt'
   >,
 ) {
-  if (status?.realtimeError) return '조회 오류 · 의견 보내기';
-  if (status?.serviceEnded && etaSeconds === null) return '운행 종료';
-  if (status?.recheckingArrival)
-    return Date.parse(status.serviceEndAt ?? '') <= Date.now() ? '운행 종료' : '도착시간 재조회 중';
   if (etaSeconds === null) {
+    if (status?.realtimeError) return '조회 오류 · 의견 보내기';
+    if (status?.serviceEnded) return '운행 종료';
+    if (status?.recheckingArrival)
+      return Date.parse(status.serviceEndAt ?? '') <= Date.now() ? '운행 종료' : '도착시간 재조회 중';
     if (serviceStatus === 'turnaround_waiting') return '회차지 대기 중';
     if (serviceStatus === 'before_turnaround') return '운행정보 확인 중';
     if (serviceStatus === 'on_route') return '노선 운행 중';
     return '운행정보 확인 중';
   }
+  if (source === 'schedule_estimate')
+    return `배차 기준 예상 ${Math.max(1, Math.ceil(etaSeconds / 60))}분`;
   if (source === 'turnaround_estimate')
     return `예상 약 ${Math.max(1, Math.ceil(etaSeconds / 60))}분`;
   if (etaSeconds <= 60) return '곧 도착';
