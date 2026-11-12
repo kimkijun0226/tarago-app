@@ -16,9 +16,9 @@ test('keeps the official ETA and adds a distinct supplementary vehicle without a
 });
 
 test('uses a late supplier result and ages older supplementary readings', () => {
-  assert.deepEqual(mergeBusArrivals([bus(undefined, null)], 4_000, [bus('A', 80)], 1_000)
+  assert.deepEqual(mergeBusArrivals([bus(undefined, null)], 4_000, [{ ...bus('A', 80), etaSource: 'turnaround_estimate' }], 1_000)
     ?.map((row) => row.etaSeconds), [77]);
-  assert.deepEqual(mergeBusArrivals([bus(undefined, null)], 21_000, [bus('A', 80)], 1_000)
+  assert.deepEqual(mergeBusArrivals([bus(undefined, null)], 21_000, [{ ...bus('A', 80), etaSource: 'turnaround_estimate' }], 1_000)
     ?.map((row) => row.etaSeconds), [60]);
   assert.deepEqual(mergeBusArrivals([bus('A', 80)], 1_000, [bus('B', 120, '12')], 3_000)
     ?.map((row) => row.routeId), ['52', '12']);
@@ -29,4 +29,10 @@ test('never reuses expired data or supplements a different provider with the sam
   assert.deepEqual(mergeBusArrivals([official], 31_000, [bus('A', 80)], 1_000), [official]);
   const other = { ...bus('A', 80), routeSource: { provider: 'SEOUL' as const, stationId: 'stop' } };
   assert.deepEqual(mergeBusArrivals([official], 2_000, [other], 1_000), [official]);
+});
+
+test('a new schedule-confirmed end replaces an old official snapshot during an outage', () => {
+  const ended: BusArrival = { ...bus(undefined, null), serviceEnded: true, realtimeError: true };
+  assert.deepEqual(mergeBusArrivals([bus(undefined, null)], 1_000, [ended], 45_000), [ended]);
+  assert.deepEqual(mergeBusArrivals([bus(undefined, null)], 45_000, [ended], 1_000), [bus(undefined, null)]);
 });

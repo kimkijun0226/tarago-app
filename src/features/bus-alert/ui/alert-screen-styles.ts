@@ -29,7 +29,7 @@ export const createStyles = (colors: ReturnType<typeof useAppTheme>['colors']) =
       padding: 16,
       gap: 16,
     },
-    savedCard: { minHeight: 0 },
+    savedCard: { minHeight: 0, gap: 12, borderWidth: StyleSheet.hairlineWidth },
     stationCard: {
       backgroundColor: colors.surface,
       borderRadius: 16,

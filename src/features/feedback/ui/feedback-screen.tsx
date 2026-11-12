@@ -18,7 +18,7 @@ import type { ImagePickerAsset } from 'expo-image-picker';
 import { requireOptionalNativeModule } from 'expo';
 import { useMutation } from '@tanstack/react-query';
 import { isAxiosError } from 'axios';
-import { appColors as c } from '@/shared/ui/theme';
+import { appColors as c, appRadius, appSpacing } from '@/shared/ui/theme';
 import { sendFeedback } from '../api/send-feedback';
 
 /** 제목만으로도 보낼 수 있는 의견 작성 화면. 실패하면 작성 내용과 사진을 유지한다. */
@@ -170,17 +170,17 @@ export function FeedbackScreen() {
 }
 const s = StyleSheet.create({
   screen: { flex: 1, backgroundColor: c.background },
-  body: { paddingHorizontal: 16, gap: 16 },
-  field: { gap: 8 },
+  body: { paddingHorizontal: appSpacing.lg, gap: appSpacing.lg },
+  field: { gap: appSpacing.sm },
   label: { fontSize: 14, fontWeight: '600', color: c.text },
   required: { color: c.accent },
   input: {
     borderWidth: 1,
     borderColor: c.borderStrong,
     backgroundColor: c.surface,
-    borderRadius: 14,
-    paddingHorizontal: 16,
-    paddingVertical: 15,
+    borderRadius: appRadius.md,
+    paddingHorizontal: appSpacing.lg,
+    paddingVertical: appSpacing.md,
     color: c.text,
     fontSize: 15,
   },
@@ -188,7 +188,7 @@ const s = StyleSheet.create({
   attach: {
     width: 76,
     height: 76,
-    borderRadius: 14,
+    borderRadius: appRadius.md,
     backgroundColor: c.accentSurface,
     borderStyle: 'dashed',
     borderWidth: 1,
@@ -197,11 +197,11 @@ const s = StyleSheet.create({
     justifyContent: 'center',
   },
   preview: { width: 120, height: 120 },
-  image: { width: 120, height: 120, borderRadius: 14 },
-  remove: { position: 'absolute', top: 5, right: 5, backgroundColor: c.surface, borderRadius: 14 },
+  image: { width: 120, height: 120, borderRadius: appRadius.md },
+  remove: { position: 'absolute', top: 5, right: 5, backgroundColor: c.surface, borderRadius: appRadius.md },
   send: {
     minHeight: 48,
-    borderRadius: 14,
+    borderRadius: appRadius.md,
     backgroundColor: c.accent,
     alignItems: 'center',
     justifyContent: 'center',

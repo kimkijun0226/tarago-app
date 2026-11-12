@@ -29,7 +29,7 @@ export const appColors = {
 };
 
 /** 작은 여백부터 큰 여백까지 재사용하는 논리 픽셀 간격 토큰이다. */
-const spacing = { xs: 4, sm: 8, md: 12, lg: 16, xl: 20, xxl: 24 };
+export const appSpacing = { xs: 4, sm: 8, md: 12, lg: 16, xl: 20, xxl: 24 };
 
 /** 버튼·카드·시트 모서리 크기를 통일하는 토큰이다. */
 export const appRadius = { sm: 8, md: 14, lg: 16, sheet: 16 };
@@ -39,7 +39,7 @@ export const appShadows = { floating: '0px 3px 12px rgba(27, 45, 72, 0.07)' };
 const radius = appRadius;
 
 /** 제목·본문·설명의 글자 크기와 두께를 통일하는 텍스트 토큰이다. */
-const type = {
+export const appType = {
   largeTitle: { fontSize: 28, fontWeight: '600' as const, letterSpacing: -0.6 },
   title: { fontSize: 21, fontWeight: '600' as const },
   headline: { fontSize: 17, fontWeight: '600' as const },
@@ -56,5 +56,5 @@ const type = {
 export function useAppTheme() {
   /** 현재 공통 테마가 항상 라이트임을 알리는 고정 반환값이다. */
   const isDark = false;
-  return { colors: appColors, spacing, radius, type, isDark };
+  return { colors: appColors, spacing: appSpacing, radius, type: appType, isDark };
 }

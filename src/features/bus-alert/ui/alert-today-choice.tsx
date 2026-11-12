@@ -2,8 +2,8 @@ import { useEffect } from 'react';
 import { Pressable, StyleSheet, Text } from 'react-native';
 import Animated, { Easing, ReduceMotion, interpolateColor, useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated';
 
-export function AlertTodayChoice({ value, disabled, onChange }: {
-  value: boolean; disabled: boolean; onChange: (value: boolean) => void;
+export function AlertTodayChoice({ value, disabled, onChange, onLongPress }: {
+  value: boolean; disabled: boolean; onChange: (value: boolean) => void; onLongPress?: () => void;
 }) {
   const progress = useSharedValue(value ? 1 : 0);
   useEffect(() => {
@@ -19,6 +19,8 @@ export function AlertTodayChoice({ value, disabled, onChange }: {
       accessibilityState={{ disabled }}
       disabled={disabled}
       hitSlop={8}
+      onLongPress={onLongPress}
+      delayLongPress={300}
       onPress={() => {
         progress.set(withTiming(value ? 0 : 1, { duration: 180, easing: Easing.inOut(Easing.quad), reduceMotion: ReduceMotion.System }));
         onChange(!value);

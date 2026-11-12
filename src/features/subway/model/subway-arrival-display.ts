@@ -43,12 +43,9 @@ export function getScheduledArrivals(
   lineName: string,
   now: number,
 ): SubwayArrival[] {
-  const dayStart =
-    Math.floor((now + 9 * 3_600_000 - 3 * 3_600_000) / 86_400_000) * 86_400_000 - 9 * 3_600_000;
   return directions.flatMap((entry) =>
     entry.trains.flatMap((train, index) => {
-      const seconds = Number(train.departureTime.split(':')[2] ?? 0);
-      const departure = dayStart + (scheduleMinute(train.departureTime) * 60 + seconds) * 1000;
+      const departure = getScheduledDepartureAt(train.departureTime, now);
       if (!Number.isFinite(departure) || departure < now) return [];
       return [
         {
@@ -70,6 +67,17 @@ export function getScheduledArrivals(
       ];
     }),
   );
+}
+
+export function isUsableSubwayArrival(train: SubwayArrival, fetchedAt: number, now: number) {
+  const age = (now - fetchedAt) / 1000;
+  if (!Number.isFinite(age) || age < -30 || age >= 90 || train.arrivalCode === '2') return false;
+  const receipt = Date.parse((train.etaSource === 'estimated'
+    ? train.etaPositionReceivedAt : train.receivedAt) ?? '');
+  if (train.etaSource !== 'schedule' && Number.isFinite(receipt) && now - receipt > 120_000) return false;
+  if (train.arrivalCode === '0' || train.arrivalCode === '1') return age < 30;
+  return train.etaSeconds !== null && Number.isFinite(train.etaSeconds) &&
+    train.etaSeconds > 0 && train.etaSeconds >= Math.max(0, age) - 15;
 }
 
 /** 같은 방면의 일반·급행 후보를 실제 도착시간, 없으면 남은 역 수 순으로 정렬한다. */
@@ -97,6 +105,13 @@ function scheduleMinute(time: string) {
   /** 공식 시간표의 시·분을 숫자로 분리한다. 초 부분은 영업 상태의 분 단위 비교에 사용하지 않는다. */
   const [hour, minute] = time.split(':').map(Number);
   return hour * 60 + minute + (hour < 3 ? 1440 : 0);
+}
+
+/** Convert an official departure time to the current Korean service day's timestamp. */
+export function getScheduledDepartureAt(time: string, now: number) {
+  const dayStart = Math.floor((now + 6 * 3_600_000) / 86_400_000) * 86_400_000 - 9 * 3_600_000;
+  const seconds = Number(time.split(':')[2] ?? 0);
+  return dayStart + (scheduleMinute(time) * 60 + seconds) * 1000;
 }
 
 /**

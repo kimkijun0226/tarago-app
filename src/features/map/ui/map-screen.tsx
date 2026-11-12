@@ -1,3 +1,4 @@
+import { EdgeBack } from '@/shared/ui/edge-back';
 /**
  * @fileoverview 지도 탭과 즐겨찾기 전용 지도가 공유하는 화면. 선택 상태와 이동 경로는 mode별로 분리한다.
  * 데이터 조회와 선택 전환은 useMapController에 맡겨 화면 배치와 동작 규칙을 분리한다.
@@ -5,10 +6,11 @@
 import { BusRouteBottomSheet } from '@/features/bus-stop/ui/bus-route-bottom-sheet';
 import { BusStopBottomSheet } from '@/features/bus-stop/ui/bus-stop-bottom-sheet';
 import { MobilitySearch } from '@/features/mobility/ui/mobility-search';
+import { SubwayLineChoiceSheet } from './subway-line-choice-sheet';
 import { SubwayArrivalSheet } from '@/features/subway/ui/subway-arrival-sheet';
 import { mapUi } from '@/shared/ui/map-design-tokens';
 import { MapView } from '@/shared/ui/map/map-view';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { router, useFocusEffect } from 'expo-router';
 import { useWidgetSelection } from '@/features/widgets/model/widget-selection';
 import { useMapSelection, type MapSelectionMode } from '@/features/map/model/map-selection';
@@ -62,6 +64,8 @@ export default function MapScreen({ mode = 'map' }: { mode?: MapSelectionMode })
     onCameraIdle,
     onMarkerPress,
     onSymbolPress,
+    subwayLineChoices,
+    selectSubwayLineChoice,
     selectedRoute,
     configureRouteAlert,
     routeAlertReady,
@@ -114,7 +118,7 @@ export default function MapScreen({ mode = 'map' }: { mode?: MapSelectionMode })
   /** 정착 높이 상태 대신 시트의 UI 스레드 위치를 사용해 드래그 중에도 버튼을 동기화한다. */
   const sheetPosition = useSharedValue(screenHeight);
   const hasSheet = Boolean(
-    (alertSelection && !searchActive) || selectedBusStop || subwayStation || searchMapActive,
+    (alertSelection && !searchActive) || selectedBusStop || subwayStation || subwayLineChoices.length || searchMapActive,
   );
   useEffect(() => {
     if (!hasSheet) sheetPosition.value = withTiming(screenHeight, { duration: 180 });
@@ -143,6 +147,25 @@ export default function MapScreen({ mode = 'map' }: { mode?: MapSelectionMode })
     transform: [{ translateY: -8 * (1 - searchOpacity.value) }],
   }));
 
+  const searchBack = useRef<(() => void) | null>(null);
+  const subwayBack = useRef<(() => void) | null>(null);
+  const canGoBackInMap = Boolean(
+    mode === 'widget' || searchActive || alertSelection || selectedBusStop || subwayStation || subwayLineChoices.length || selectedPlace,
+  );
+  const goBackInMap = useCallback(() => {
+    if (subwayLineChoices.length) closeSubway();
+    else if (searchActive && !selectedBusStop && !subwayStation) searchBack.current?.();
+    else if (alertSelection) cancelAlertSelection();
+    else if (selectedRoute && showRouteSheet) closeRoute();
+    else if (selectedBusStop) closeBusStop();
+    else if (subwayStation) subwayBack.current?.();
+    else if (selectedPlace) searchBack.current?.();
+    else if (mode === 'widget') cancelAlertSelection();
+  }, [
+    alertSelection, cancelAlertSelection, closeBusStop, closeRoute, closeSubway, mode, searchActive, subwayLineChoices.length,
+    selectedBusStop, selectedPlace, selectedRoute, showRouteSheet, subwayStation,
+  ]);
+
   const alertBackButton = (
     <Pressable
       accessibilityRole="button"
@@ -161,6 +184,7 @@ export default function MapScreen({ mode = 'map' }: { mode?: MapSelectionMode })
   );
   if (!initialPosition)
     return (
+      <EdgeBack enabled={canGoBackInMap} onBack={goBackInMap}>
       <View
         style={styles.container}
         onLayout={(event) => setMapHeight(event.nativeEvent.layout.height)}
@@ -168,8 +192,10 @@ export default function MapScreen({ mode = 'map' }: { mode?: MapSelectionMode })
         <MapLocationGate preparing={preparingLocation} onRetry={prepareInitialPosition} />
         {alertSelection ? alertBackButton : null}
       </View>
+      </EdgeBack>
     );
   return (
+    <EdgeBack enabled={canGoBackInMap} onBack={goBackInMap}>
     <View
       style={styles.container}
       onLayout={(event) => setMapHeight(event.nativeEvent.layout.height)}
@@ -348,6 +374,7 @@ export default function MapScreen({ mode = 'map' }: { mode?: MapSelectionMode })
         ]}
       >
         <MobilitySearch
+          backRef={searchBack}
           key={alertSelection?.requestId ?? 'map-search'}
           position={position ?? initialPosition}
           top={insets.top + 12}
@@ -367,8 +394,18 @@ export default function MapScreen({ mode = 'map' }: { mode?: MapSelectionMode })
         />
       </Animated.View>
 
+      {!alertSelection && subwayLineChoices.length > 0 ? (
+        <SubwayLineChoiceSheet
+          stations={subwayLineChoices}
+          onClose={closeSubway}
+          onSelect={selectSubwayLineChoice}
+          onHeightChange={setSheetHeight}
+          animatedPosition={sheetPosition}
+        />
+      ) : null}
       {!alertSelection && subwayStation ? (
         <SubwayArrivalSheet
+          backRef={subwayBack}
           initialLineName={subwayLineName}
           stationName={subwayStation}
           snap={subwaySheetSnap}
@@ -397,5 +434,6 @@ export default function MapScreen({ mode = 'map' }: { mode?: MapSelectionMode })
         />
       ) : null}
     </View>
+    </EdgeBack>
   );
 }

@@ -65,15 +65,20 @@ export function useBusArrivals(stationId: string, enabled = true) {
   }, [client, official.error, stationId]);
 
   const closed = isAxiosError(official.error) && official.error.response?.status === 410;
+  const fallback = useMemo(() => enriched.isError ||
+      (official.isError && enriched.dataUpdatedAt < official.dataUpdatedAt)
+    ? enriched.data?.filter((arrival) => arrival.etaSeconds === null || arrival.etaSource)
+    : enriched.data, [enriched.data, enriched.dataUpdatedAt, enriched.isError, official.dataUpdatedAt, official.isError]);
   const merged = useMemo(() => closed ? undefined : mergeBusArrivals(
-    official.data, official.dataUpdatedAt, enriched.data, enriched.dataUpdatedAt,
-  ), [closed, official.data, official.dataUpdatedAt, enriched.data, enriched.dataUpdatedAt]);
+    official.isError ? undefined : official.data, official.dataUpdatedAt, fallback, enriched.dataUpdatedAt,
+  ), [closed, official.isError, official.data, official.dataUpdatedAt, fallback, enriched.dataUpdatedAt]);
   return {
     ...official,
     data: merged,
-    dataUpdatedAt: official.data ? official.dataUpdatedAt : enriched.dataUpdatedAt,
+    dataUpdatedAt: merged === fallback ? enriched.dataUpdatedAt : official.dataUpdatedAt,
     isPending: official.isPending && merged === undefined,
     isError: official.isError && (closed || !merged?.length),
+    isEnriching: enriched.isFetching,
     refreshDelayed: official.isError && isAxiosError(official.error) &&
       !isCancel(official.error) && !closed,
   };

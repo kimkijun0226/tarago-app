@@ -1,3 +1,4 @@
+import { EditableAlertList } from '@/features/bus-alert/ui/editable-alert-list';
 import { ListSkeleton } from '@/shared/ui/loading-skeleton';
 import { AlertArrivalTimes, AlertTodayControl } from '@/features/bus-alert/ui/alert-arrival-times';
 import {
@@ -18,9 +19,15 @@ import { SubwayAlertEditor } from './subway-alert-editor';
 export function SubwayAlertsPanel({
   state,
   all = false,
+  scrollableRef,
+  onDragActive,
+  dismissVersion,
 }: {
   state: ReturnType<typeof useSubwayAlertScreen>;
   all?: boolean;
+  scrollableRef?: import('react-native-reanimated').AnimatedRef<import('react-native').ScrollView>;
+  onDragActive?: (active: boolean) => void;
+  dismissVersion?: number;
 }) {
   const { draft, busy, list, kind: selectedKind } = state;
   const kind = selectedKind;
@@ -67,8 +74,8 @@ export function SubwayAlertsPanel({
         <ListSkeleton variant="alert" />
       ) : (
         <>
-          {visibleAlerts.length > 0 &&
-            visibleAlerts.map((alert) => {
+          {visibleAlerts.length > 0 && (
+            <EditableAlertList transport="subway" scrollableRef={scrollableRef} onDragActive={onDragActive} dismissVersion={dismissVersion} items={visibleAlerts} disabled={busy} render={(alert, editing, beginEditing) => {
               const kind = all
                 ? alert.scheduledEnabled !== false
                   ? 'time'
@@ -76,7 +83,8 @@ export function SubwayAlertsPanel({
                 : selectedKind;
               return (
                 <SubwaySavedCard
-                  key={alert.id}
+                  editing={editing}
+                  onLongPress={beginEditing}
                   compact={all}
                   alert={alert}
                   kind={kind}
@@ -94,7 +102,8 @@ export function SubwayAlertsPanel({
                   onDelete={() => state.deleteAlert(alert)}
                 />
               );
-            })}
+            }} />
+          )}
         </>
       )}
     </>
@@ -116,7 +125,7 @@ function SubwaySavedCard({
       transport="subway"
       mode={alert.scheduledEnabled && alert.proximityEnabled ? 'both' : kind}
       todayControl={
-        <AlertTodayControl transport="subway" alert={alert} kind={kind} busy={props.busy} />
+        <AlertTodayControl transport="subway" alert={alert} kind={kind} busy={props.busy} editing={props.editing} onLongPress={props.onLongPress} />
       }
       subtitle={subwayAlertSubtitle(presentation)}
       arrivals={<AlertArrivalTimes transport="subway" alert={alert} kind={kind} />}

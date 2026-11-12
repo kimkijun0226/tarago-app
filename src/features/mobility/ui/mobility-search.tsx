@@ -2,7 +2,7 @@
 import { MapBottomSheet, type MapSheetSnap } from '@/shared/ui/map-bottom-sheet';
 import { mapUi } from '@/shared/ui/map-design-tokens';
 import { isAxiosError } from 'axios';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useImperativeHandle, useRef, useState, type Ref } from 'react';
 import type { SharedValue } from 'react-native-reanimated';
 import { ActivityIndicator, BackHandler, Keyboard, Text, TextInput, View } from 'react-native';
 import type { Place, Point } from '../api/mobility';
@@ -15,6 +15,7 @@ import { PlaceDetail } from './place-detail';
 import { PlaceSearchResults } from './place-search-results';
 
 type Props = {
+  backRef?: Ref<() => void>;
   position: Point;
   top: number;
   left?: number;
@@ -34,6 +35,7 @@ type Props = {
 
 /** 알림 검색은 현재 교통수단으로 한정하고 선택 즉시 기존 알림 지도 패널로 연결한다. */
 export function MobilitySearch({
+  backRef,
   position,
   top,
   left = 16,
@@ -164,6 +166,8 @@ export function MobilitySearch({
     setSearchSnap('compact');
     setMapResults(true);
   }
+  useImperativeHandle(backRef, () => closeSearch);
+
   function closeSearch() {
     setText('');
     setQuery('');
@@ -229,7 +233,7 @@ export function MobilitySearch({
       ) : null}
       <View
         onLayout={(event) => setHeaderHeight(event.nativeEvent.layout.height)}
-        style={{ position: 'absolute', top, left, right: 16 }}
+        style={{ position: 'absolute', top, left, right: mapUi.horizontalInset }}
       >
         <MobilitySearchBar
           open={open}

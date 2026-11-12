@@ -1,16 +1,22 @@
-import { waitForForegroundRefresh } from '@/shared/api/foreground-refresh';
+import { EdgeBack } from '@/shared/ui/edge-back';
+import { ArrivalTimeRefresh } from '@/shared/ui/arrival-time-entrance';
+import { useBusArrivals } from '@/features/bus-stop/model/use-bus-arrivals';
+import { normalizeBusStopNumber } from '@/features/bus-stop/model/bus-stop-number';
+import type { BusAlert } from '../model/bus-alert';
+import { EditableAlertList } from '@/features/bus-alert/ui/editable-alert-list';
+import { isArrivalRefreshQuery, waitForForegroundRefresh } from '@/shared/api/foreground-refresh';
 import { ListSkeleton } from '@/shared/ui/loading-skeleton';
 import { TransportSelector } from '@/shared/ui/transport-selector';
 import { AlertKindSelector } from './alert-kind-selector';
 import { BrandLogo } from '@/shared/ui/brand-logo';
 import { AppHeader } from '@/shared/ui/app-header';
-import Animated, { Easing, ReduceMotion, useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated';
+import Animated, { Easing, ReduceMotion, useAnimatedRef, useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated';
 import { SymbolView } from 'expo-symbols';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { router, useFocusEffect } from 'expo-router';
 import { useQueryClient } from '@tanstack/react-query';
 import { useAppStore } from '@/shared/model/app-store';
-import { ActivityIndicator, BackHandler, Image, Pressable, RefreshControl, ScrollView, Text, View } from 'react-native';
+import { ActivityIndicator, BackHandler, Image, Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SubwayAlertsPanel } from '@/features/subway/ui/subway-alert-panel';
 import {
   useSubwayAlertScreen,
@@ -28,6 +34,7 @@ import {
   AlertPageHeader,
   AlertPrimaryButton,
   SavedAlertCard,
+  SavedAlertSecondaryText,
   EmptyAlertCard,
 } from './alert-components';
 
@@ -154,8 +161,12 @@ export function AlertsScreenContent({
   const [refreshing, setRefreshing] = useState(false);
   const refreshHeight = useSharedValue(0);
   const refreshSpace = useAnimatedStyle(() => ({ height: refreshHeight.get() }));
+  const scrollRef = useAnimatedRef<ScrollView>();
+  const [dismissVersion, setDismissVersion] = useState(0);
+  const alertDragActive = useRef(false);
+  const onDragActive = useCallback((active: boolean) => { alertDragActive.current = active; }, []);
   const refresh = async () => {
-    if (refreshing) return;
+    if (refreshing || alertDragActive.current) return;
     const startedAt = Date.now();
     setRefreshing(true);
     refreshHeight.set(44);
@@ -165,10 +176,8 @@ export function AlertsScreenContent({
         subway.list.refetch({ cancelRefetch: false }),
         client.refetchQueries({
           type: 'active',
-          predicate: ({ queryKey: key }) =>
-            (key[0] === 'bus-stops' && key[2] === 'arrivals') ||
-            (key[0] === 'subway' && key[2] === 'alert-arrivals'),
-        }, { cancelRefetch: false }),
+          predicate: isArrivalRefreshQuery,
+      }, { cancelRefetch: false }),
       ]));
     } finally {
       await new Promise<void>((resolve) => setTimeout(resolve, Math.max(0, 1000 - (Date.now() - startedAt))));
@@ -183,10 +192,19 @@ export function AlertsScreenContent({
   };
   const listPending = transport === 'bus' ? bus.isPending : subway.list.isPending;
   const listError = transport === 'bus' ? bus.isError : subway.list.isError;
-  if (!adding && !editing)
-    return (
+  const editorVisible = adding || editing;
+  const list = (
+    <View
+      style={styles.flex}
+      pointerEvents={editorVisible ? 'none' : 'auto'}
+      accessibilityElementsHidden={editorVisible}
+      importantForAccessibility={editorVisible ? 'no-hide-descendants' : 'auto'}
+    >
       <SafeAreaView
         style={styles.page}
+        onTouchStart={() => {
+          if (!alertDragActive.current) setDismissVersion((version) => version + 1);
+        }}
         edges={{ top: true, left: true, right: true, bottom: true }}
       >
         <View
@@ -204,7 +222,7 @@ export function AlertsScreenContent({
                   accessibilityRole="button"
                   accessibilityLabel={`${transport === 'bus' ? '버스' : '지하철'} 알림 생성`}
                   disabled={busy}
-                  onPress={() => setAdding(true)}
+                  onPress={() => { setDismissVersion((version) => version + 1); setAdding(true); }}
                   style={{ width: 44, height: 44, alignItems: 'center', justifyContent: 'center' }}
                 >
                   <SymbolView
@@ -220,7 +238,9 @@ export function AlertsScreenContent({
         <Animated.View style={[{ overflow: 'hidden', alignItems: 'center', justifyContent: 'center' }, refreshSpace]}>
           {refreshing && <ActivityIndicator color={colors.accent} accessibilityLabel="새로고침 중" />}
         </Animated.View>
-        <ScrollView
+        <ArrivalTimeRefresh refreshing={refreshing}>
+      <Animated.ScrollView
+          ref={scrollRef}
           style={styles.flex}
           alwaysBounceVertical
           bounces
@@ -240,7 +260,7 @@ export function AlertsScreenContent({
           keyboardDismissMode="on-drag"
         >
           <TransportSelector value={transport} onChange={setTransport} disabled={busy} />
-          {listError && (
+          {listError && !hasAlerts && (
             <Pressable
               accessibilityRole="button"
               onPress={() => void (transport === 'bus' ? bus.refetch() : subway.list.refetch())}
@@ -254,7 +274,7 @@ export function AlertsScreenContent({
             <Pressable
               accessibilityRole="button"
               accessibilityLabel={`${transport === 'bus' ? '버스' : '지하철'} 알림 생성`}
-              onPress={() => setAdding(true)}
+              onPress={() => { setDismissVersion((version) => version + 1); setAdding(true); }}
               style={({ pressed }) => ({
                 minHeight: 112,
                 borderRadius: 16,
@@ -302,29 +322,40 @@ export function AlertsScreenContent({
             <BusAlertsPanel
               state={{
                 ...bus,
+                draft: null,
                 edit: (alert) => {
                   setTransport('bus');
                   bus.edit(alert);
                 },
               }}
               all
+              scrollableRef={scrollRef}
+              onDragActive={onDragActive}
+              dismissVersion={dismissVersion}
             />
           ) : (
             <SubwayAlertsPanel
               state={{
                 ...subway,
+                draft: null,
                 edit: (alert) => {
                   setTransport('subway');
                   subway.edit(alert);
                 },
               }}
               all
+              scrollableRef={scrollRef}
+              onDragActive={onDragActive}
+              dismissVersion={dismissVersion}
             />
           )}
-        </ScrollView>
+        </Animated.ScrollView>
+      </ArrivalTimeRefresh>
       </SafeAreaView>
-    );
-  return (
+    </View>
+  );
+  const editor = (
+    <EdgeBack enabled={!stackEditor && !busy} onBack={closeEditor} revealBehind={!stackEditor}>
     <SafeAreaView style={styles.page} edges={{ top: true, left: true, right: true, bottom: true }}>
       <View style={{ paddingHorizontal: 16, paddingTop: 0 }}>
         <AlertPageHeader
@@ -383,21 +414,37 @@ export function AlertsScreenContent({
         )}
       </ScrollView>
     </SafeAreaView>
+    </EdgeBack>
+  );
+  if (stackEditor) return editorVisible ? editor : list;
+  return (
+    <View style={styles.flex}>
+      {list}
+      {editorVisible && <View style={[StyleSheet.absoluteFill, { zIndex: 1 }]}>{editor}</View>}
+    </View>
   );
 }
 
 function BusAlertsPanel({
   state,
   all = false,
+  scrollableRef,
+  onDragActive,
+  dismissVersion,
 }: {
   state: ReturnType<typeof useAlertScreen>;
   all?: boolean;
+  scrollableRef?: import('react-native-reanimated').AnimatedRef<ScrollView>;
+  onDragActive?: (active: boolean) => void;
+  dismissVersion?: number;
 }) {
   const { draft, kind: selectedKind, busy } = state;
   const kind = selectedKind;
-  const visibleAlerts = all
-    ? state.alerts.filter((alert) => !alert.monitoringSourceId)
-    : state.visibleAlerts;
+  const publicAlerts = useMemo(
+    () => state.alerts.filter((alert) => !alert.monitoringSourceId),
+    [state.alerts],
+  );
+  const visibleAlerts = all ? publicAlerts : state.visibleAlerts;
   const hasActiveAlerts = state.alerts.some(
     (a) => a.enabled && (a.scheduledEnabled || a.proximityEnabled),
   );
@@ -441,20 +488,22 @@ function BusAlertsPanel({
         <ListSkeleton variant="alert" />
       ) : (
         <>
-          {visibleAlerts.length > 0 &&
-            visibleAlerts.map((alert) => {
+          {visibleAlerts.length > 0 && (
+            <EditableAlertList transport="bus" scrollableRef={scrollableRef} onDragActive={onDragActive} dismissVersion={dismissVersion} items={visibleAlerts} disabled={busy} render={(alert, editing, beginEditing) => {
               const kind = all ? (alert.scheduledEnabled ? 'time' : 'location') : selectedKind;
               return (
                 <SavedAlertCard
-                  key={alert.id}
+                  editing={editing}
+                  onLongPress={beginEditing}
                   compact={all}
                   transport="bus"
                   mode={alert.scheduledEnabled && alert.proximityEnabled ? 'both' : kind}
                   todayControl={
-                    <AlertTodayControl transport="bus" alert={alert} kind={kind} busy={busy} />
+                    <AlertTodayControl transport="bus" alert={alert} kind={kind} busy={busy} editing={editing} onLongPress={beginEditing} />
                   }
                   title={`${alert.busNumber}번 버스`}
-                  subtitle={alert.stop.name}
+                  subtitle={[normalizeBusStopNumber(alert.stop.arsId), alert.stop.name].filter(Boolean).join(' · ')}
+                  direction={<SavedBusAlertDirection alert={alert} />}
                   arrivals={<AlertArrivalTimes transport="bus" alert={alert} kind={kind} />}
                   summary={
                     kind === 'time'
@@ -469,9 +518,20 @@ function BusAlertsPanel({
                   onDelete={() => state.removeAlert(alert)}
                 />
               );
-            })}
+            }} />
+          )}
         </>
       )}
     </>
   );
+}
+
+/** Read the matching route's direction from the existing shared arrivals cache. */
+function SavedBusAlertDirection({ alert }: { alert: BusAlert }) {
+  const { data } = useBusArrivals(alert.stationId, false);
+  const route = data?.find((arrival) => arrival.routeId === alert.routeId &&
+    (alert.stationSeq === undefined || arrival.stationSeq === alert.stationSeq) &&
+    (arrival.direction || arrival.nextStopName));
+  const direction = (route?.direction || route?.nextStopName)?.replace(/\s*방면$/, '').trim();
+  return direction ? <SavedAlertSecondaryText>{direction} 방면</SavedAlertSecondaryText> : null;
 }

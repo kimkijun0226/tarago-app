@@ -1,7 +1,7 @@
 import type { ReactNode } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { SymbolView } from 'expo-symbols';
-import { appColors as c } from './theme';
+import { appColors as c, appType } from './theme';
 
 /** 바깥 여백은 화면 본문에 맞추고, 뒤로가기 아이콘에는 추가 좌우 패딩을 넣지 않는다. */
 export function AppHeader({
@@ -53,14 +53,13 @@ export function AppHeader({
 const s = StyleSheet.create({
   row: { minHeight: 44, flexDirection: 'row', alignItems: 'center', gap: 10 },
   back: { width: 22, height: 44, alignItems: 'flex-start', justifyContent: 'center' },
-  titleArea: { flex: 1, minWidth: 0, height: 44, justifyContent: 'center' },
+  titleArea: { flex: 1, minWidth: 0, minHeight: 44, justifyContent: 'center' },
   title: {
-    fontSize: 21,
+    ...appType.title,
     lineHeight: 28,
-    fontWeight: '600',
     color: c.text,
     includeFontPadding: false,
     textAlignVertical: 'center',
   },
-  large: { fontSize: 28, lineHeight: 34 },
+  large: { ...appType.largeTitle, lineHeight: 34 },
 });

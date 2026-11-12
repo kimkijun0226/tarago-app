@@ -72,7 +72,7 @@ export default function RootLayout() {
               headerShown: false,
               animation: 'default',
               gestureEnabled: true,
-              fullScreenGestureEnabled: true,
+              fullScreenGestureEnabled: false,
             }}
           >
             <Stack.Screen name="(tabs)" />
@@ -81,7 +81,7 @@ export default function RootLayout() {
             <Stack.Screen name="notification-history" />
             <Stack.Screen name="widget-add" />
             <Stack.Screen name="widget-direction" />
-            <Stack.Screen name="widget-map" />
+            <Stack.Screen name="widget-map" options={{ gestureEnabled: false }} />
           </Stack>
           <RecoveryOverlay />
         </ThemeProvider>

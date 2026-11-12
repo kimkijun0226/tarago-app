@@ -1,3 +1,4 @@
+import { EdgeBack } from '@/shared/ui/edge-back';
 import { TransportIcon } from '@/shared/ui/transport-icon';
 /** @fileoverview 인접역 이동, 가로 노선도와 전체 역 목록을 제공한다. 역 선택 상태와 모달 표시 여부는 부모가 소유한다. */
 
@@ -173,6 +174,7 @@ export function SubwayNetworkModal({
   return (
     <Modal visible={visible} animationType="slide" onRequestClose={onClose}>
       <SafeAreaProvider>
+        <EdgeBack onBack={onClose}>
         <SafeAreaView style={{ flex: 1, backgroundColor: 'white' }}>
           <View style={[s.fullToolbar, { paddingHorizontal: 18 }]}>
             <Pressable
@@ -213,6 +215,7 @@ export function SubwayNetworkModal({
             )}
           />
         </SafeAreaView>
+      </EdgeBack>
       </SafeAreaProvider>
     </Modal>
   );

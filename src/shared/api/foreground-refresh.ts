@@ -10,3 +10,9 @@ export async function waitForForegroundRefresh(request: Promise<unknown>) {
     if (timer !== undefined) clearTimeout(timer);
   }
 }
+
+/** Live arrival and active timetable queries rendered by the arrival lists. */
+export function isArrivalRefreshQuery({ queryKey: key }: { queryKey: readonly unknown[] }) {
+  return (key[0] === 'bus-stops' && key[2] === 'arrivals') ||
+    (key[0] === 'subway' && (key[2] === 'arrivals' || key[2] === 'alert-arrivals' || key[3] === 'timetable'));
+}

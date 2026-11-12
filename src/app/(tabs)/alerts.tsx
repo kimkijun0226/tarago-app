@@ -1,3 +1,4 @@
+import { ArrivalTimeEntrance } from '@/shared/ui/arrival-time-entrance';
 import { useState } from 'react';
 import { useLocalSearchParams } from 'expo-router';
 import { useAlerts } from '@/features/bus-alert/model/use-alerts';
@@ -33,6 +34,7 @@ export default function AlertsScreen() {
     routeKind(params.alertKind) ?? (savedAlert ? resolveAlertKind(savedAlert) : undefined);
 
   return (
+    <ArrivalTimeEntrance>
     <AlertsScreenContent
       key={`${params.requestId ?? ''}:${params.alertId ?? ''}:${transport ?? ''}:${kind ?? ''}:${Boolean(saved || savedSubway)}`}
       returnToMap={params.returnTo === 'map'}
@@ -43,5 +45,6 @@ export default function AlertsScreen() {
       initialTransport={transport}
       initialKind={kind}
     />
+    </ArrivalTimeEntrance>
   );
 }

@@ -1,4 +1,6 @@
-import { waitForForegroundRefresh } from '@/shared/api/foreground-refresh';
+import { EdgeBack } from '@/shared/ui/edge-back';
+import { ArrivalTimeRefresh } from '@/shared/ui/arrival-time-entrance';
+import { isArrivalRefreshQuery, waitForForegroundRefresh } from '@/shared/api/foreground-refresh';
 import { MotionModal } from '@/shared/ui/motion';
 import { ListSkeleton } from '@/shared/ui/loading-skeleton';
 import { useEffect, useRef, useState } from 'react';
@@ -44,14 +46,12 @@ export function WidgetsScreen() {
   const refreshHeight = useSharedValue(0);
   const refreshSpace = useAnimatedStyle(() => ({ height: refreshHeight.get() }));
   const refresh = async () => {
-    if (refreshing) return;
+    if (refreshing || editingItems) return;
     const startedAt = Date.now();
     setRefreshing(true);
     refreshHeight.set(44);
     try {
-      await waitForForegroundRefresh(client.refetchQueries({ type: 'active', predicate: ({ queryKey: key }) =>
-        (key[0] === 'bus-stops' && key[2] === 'arrivals') ||
-        (key[0] === 'subway' && (key[2] === 'arrivals' || key[2] === 'alert-arrivals')),
+      await waitForForegroundRefresh(client.refetchQueries({ type: 'active', predicate: isArrivalRefreshQuery,
       }, { cancelRefetch: false }));
     } finally {
       await new Promise<void>((resolve) => setTimeout(resolve, Math.max(0, 1000 - (Date.now() - startedAt))));
@@ -111,6 +111,7 @@ export function WidgetsScreen() {
     ]);
   };
   return (
+    <EdgeBack enabled={editingItems && !busy} onBack={() => setEditingItems(false)}>
     <SafeAreaView
       style={s.page}
       edges={{ top: true, left: true, right: true, bottom: true }}
@@ -133,27 +134,24 @@ export function WidgetsScreen() {
       <View style={s.header}>
         <AppHeader
           title="즐겨찾기"
-          titleVisual={
-            <Text accessibilityRole="header" style={s.pageTitle}>
-              즐겨찾기
-            </Text>
-          }
+          large
+          right={editingItems ? (
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="즐겨찾기 수정 완료"
+              onPress={() => setEditingItems(false)}
+              style={s.editDone}
+            >
+              <Text style={s.action}>완료</Text>
+            </Pressable>
+          ) : undefined}
         />
-        {editingItems && (
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel="즐겨찾기 수정 완료"
-            onPress={() => setEditingItems(false)}
-            style={s.editDone}
-          >
-            <Text style={s.action}>완료</Text>
-          </Pressable>
-        )}
       </View>
       {/* 기본 컨트롤은 제스처만 감지하고, 이 영역이 로딩 표시와 목록 위치를 유지한다. */}
       <Animated.View style={[s.refreshSpace, refreshSpace]}>
         {refreshing && <ActivityIndicator color={c.accent} accessibilityLabel="새로고침 중" />}
       </Animated.View>
+      <ArrivalTimeRefresh refreshing={refreshing}>
       <Animated.ScrollView
         ref={scrollRef}
         style={s.scroll}
@@ -163,6 +161,7 @@ export function WidgetsScreen() {
         refreshControl={
           <RefreshControl
             refreshing={false}
+            enabled={!editingItems}
             onRefresh={() => void refresh()}
             tintColor="transparent"
             colors={['transparent']}
@@ -269,6 +268,7 @@ export function WidgetsScreen() {
           </Pressable>
         )}
       </Animated.ScrollView>
+      </ArrivalTimeRefresh>
       <Modal
         transparent
         visible={menu !== null}
@@ -329,6 +329,7 @@ export function WidgetsScreen() {
         </View>
       </Modal>
       <MotionModal
+        edgeBack={false}
         visible={editing !== null}
         onRequestClose={() => {
           if (!busy) setEditing(null);
@@ -384,19 +385,11 @@ export function WidgetsScreen() {
         </KeyboardAvoidingView>
       </MotionModal>
     </SafeAreaView>
+    </EdgeBack>
   );
 }
 const s = StyleSheet.create({
   refreshSpace: { overflow: 'hidden', alignItems: 'center', justifyContent: 'center' },
-  pageTitle: {
-    width: '100%',
-    textAlign: 'center',
-    fontSize: 21,
-    lineHeight: 26,
-    fontWeight: '600',
-    includeFontPadding: false,
-    color: c.text,
-  },
   dropdown: {
     position: 'absolute',
     width: 208,
@@ -427,9 +420,6 @@ const s = StyleSheet.create({
   menuText: { fontSize: 14, color: c.text },
   page: { flex: 1, backgroundColor: c.background },
   editDone: {
-    position: 'absolute',
-    right: 16,
-    top: 4,
     minWidth: 44,
     height: 44,
     alignItems: 'flex-end',
@@ -439,17 +429,14 @@ const s = StyleSheet.create({
     paddingHorizontal: 16,
     paddingTop: 4,
     paddingBottom: 4,
-    backgroundColor: c.surface,
-    borderBottomWidth: 1,
-    borderBottomColor: c.separator,
   },
   scroll: { flex: 1 },
   content: { flexGrow: 1, paddingHorizontal: 16, paddingTop: 16, paddingBottom: 24, gap: 16 },
   group: {
-    gap: 4,
+    gap: 8,
     paddingHorizontal: 16,
-    paddingTop: 12,
-    paddingBottom: 8,
+    paddingTop: 8,
+    paddingBottom: 12,
     borderRadius: 16,
     borderWidth: 1,
     borderColor: c.separator,
@@ -460,8 +447,7 @@ const s = StyleSheet.create({
     alignItems: 'center',
     gap: 8,
     paddingBottom: 8,
-    marginBottom: 4,
-    borderBottomWidth: 1,
+    borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: c.separator,
   },
   groupTitleButton: { flex: 1, minHeight: 36, justifyContent: 'center' },
@@ -472,7 +458,7 @@ const s = StyleSheet.create({
     fontWeight: '600',
     color: c.text,
   },
-  menu: { width: 36, height: 36, alignItems: 'flex-end', justifyContent: 'center' },
+  menu: { width: 44, height: 44, alignItems: 'flex-end', justifyContent: 'center' },
   error: { color: c.danger, fontSize: 13, lineHeight: 18, paddingVertical: 8 },
   retry: { minHeight: 44, justifyContent: 'center' },
   action: { color: c.accent, fontSize: 15, fontWeight: '600' },

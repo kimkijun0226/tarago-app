@@ -47,9 +47,6 @@ export function SetupHeader({
       </Animated.View>
       <Animated.Text entering={fadeIn.delay(60)}
         accessibilityRole="header"
-        numberOfLines={1}
-        adjustsFontSizeToFit
-        minimumFontScale={0.7}
         style={s.title}
       >
         {title}
@@ -60,7 +57,7 @@ export function SetupHeader({
 const s = StyleSheet.create({
   container: { gap: 4, paddingBottom: 0 },
   navigationTitle: { fontSize: 16, lineHeight: 24, fontWeight: '500', color: c.bodyText },
-  steps: { flexDirection: 'row', alignItems: 'center' },
+  steps: { flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', rowGap: 4 },
   step: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   number: {
     width: 20,

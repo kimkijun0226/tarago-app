@@ -12,15 +12,15 @@ test('도착까지 1분 이하면 곧 도착으로 표시한다', () => {
 });
 
 test('회차 대기 차량에는 추측한 도착시간 대신 상태를 표시한다', () => {
-  assert.equal(formatEta(null, 'turnaround_waiting'), '회차지 대기 중');
+  assert.equal(formatEta(null, 'turnaround_waiting'), '—');
 });
 
 test('회차 전 차량은 분 단위 ETA를 만들지 않고 운행 상태를 표시한다', () => {
-  assert.equal(formatEta(null, 'before_turnaround'), '운행정보 확인 중');
+  assert.equal(formatEta(null, 'before_turnaround'), '—');
 });
 
 test('차량이 아직 공급자에 나타나지 않아도 노선을 숨기지 않고 확인 중으로 표시한다', () => {
-  assert.equal(formatEta(null), '운행정보 확인 중');
+  assert.equal(formatEta(null), '—');
 });
 
 test('10분 이하는 초까지, 초과하면 올림한 분으로 표시한다', () => {

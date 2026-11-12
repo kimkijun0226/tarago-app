@@ -15,7 +15,7 @@ test('접근 알림에는 설정한 노선뿐 아니라 정류소 전체 버스�
   assert.equal(proximityMessage([
     { routeId: '12', busNumber: '12', routeType: '일반', etaSeconds: 120, remainingStops: 2, vehicleType: '' },
     { routeId: '52', busNumber: '52', routeType: '일반', etaSeconds: null, remainingStops: null, vehicleType: '' },
-  ]), '12번 2분 0초 · 52번 운행정보 확인 중');
+  ]), '12번 2분 0초 · 52번 —');
 });
 test('조회된 차량이 없어도 임의 ETA를 만들지 않는다', () => {
   assert.equal(proximityMessage([]), '현재 도착정보가 없습니다. 알림을 눌러 다시 확인하세요.');

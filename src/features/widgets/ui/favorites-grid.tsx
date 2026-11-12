@@ -1,6 +1,8 @@
+import { ArrivalTimeIndicator, useArrivalTimeEntering, useArrivalTimeRefreshing } from '@/shared/ui/arrival-time-entrance';
+import { EditWiggle } from '@/shared/ui/edit-wiggle';
 import { useCallback, useMemo, useRef, useState } from 'react';
 import Sortable, { type SortableGridRenderItem } from 'react-native-sortables';
-import Animated, { LinearTransition, FadeOut, useSharedValue, useAnimatedStyle, withTiming, withSpring, withDelay, Easing, ReduceMotion, type SharedValue, type AnimatedRef } from 'react-native-reanimated';
+import Animated, { LinearTransition, FadeOut, useSharedValue, useAnimatedStyle, withTiming, withSpring, ReduceMotion, type AnimatedRef } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
 import { Image } from 'expo-image';
 import { Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
@@ -64,14 +66,9 @@ export function FavoritesGrid({
   } | null>(null);
   const ordered = pendingOrder?.source === items ? pendingOrder.items : items;
   const dragging = useRef(false);
+  const lastLift = useRef(0);
   const suppressTapUntil = useRef(0);
   const lastMoveFeedback = useRef(0);
-  const heldId = useSharedValue<string | null>(null);
-  const holdScale = useSharedValue(1);
-  const holdOrigin = useRef({ x: 0, y: 0 });
-  const resetHold = useCallback(() => {
-    holdScale.set(withSpring(1, { damping: 24, stiffness: 360, mass: 0.7, overshootClamping: true }));
-  }, [holdScale]);
   const columnGap = columns === 2 ? 20 : columns === 3 ? 16 : 12;
   const diameter = Math.max(1, (width - columnGap * (columns - 1)) / columns);
   const cells = useMemo<Cell[]>(
@@ -87,67 +84,44 @@ export function FavoritesGrid({
   const addScale = useSharedValue(1);
   const addMotion = useAnimatedStyle(() => ({ transform: [{ scale: addScale.get() }] }));
 
+  const beginEditing = useCallback(() => {
+    if (!disabled && !editing && Date.now() - lastLift.current >= 700) {
+      lastLift.current = Date.now();
+      feedback('lift');
+      onEdit();
+    }
+  }, [disabled, editing, onEdit]);
+
   const renderItem = useCallback<SortableGridRenderItem<Cell>>(
-    ({ item }) => (
+    ({ item, index }) => (
       <Animated.View
         style={{ width: diameter, height: diameter }}
       >
-        {item.target && !editing ? (
-          <Pressable
-            disabled={disabled}
-            accessibilityRole="button"
-            accessibilityLabel={`${item.target.title} ${item.target.stationName} 상세 보기`}
-            accessibilityHint="길게 누르면 즐겨찾기를 수정할 수 있어요"
-            onPress={() => {
-              if (item.target && Date.now() > suppressTapUntil.current) onOpen(item.target);
-            }}
-            delayLongPress={400}
-            onLongPress={() => {
-              feedback('lift');
-              onEdit();
-            }}
-          >
-            <Arrival item={item.target} diameter={diameter} />
-          </Pressable>
-        ) : item.target ? (
-          <View
-            onTouchStart={(event) => {
-              event.stopPropagation();
-              holdOrigin.current = { x: event.nativeEvent.pageX, y: event.nativeEvent.pageY };
-            }}
-            onTouchMove={(event) => {
-              if (!dragging.current && Math.hypot(event.nativeEvent.pageX - holdOrigin.current.x, event.nativeEvent.pageY - holdOrigin.current.y) > 10)
-                resetHold();
-            }}
-            onTouchCancel={resetHold}
-          >
+        {item.target ? (
+          <View onTouchStart={(event) => event.stopPropagation()}>
             <Sortable.Handle>
               <Sortable.Touchable
-                onTouchesDown={() => {
-                  if (!disabled && !editing) {
-                    heldId.set(item.id);
-                    holdScale.set(1);
-                    holdScale.set(withDelay(80, withTiming(1.07, { duration: 320, easing: Easing.inOut(Easing.cubic) })));
-                  }
-                }}
-                onTouchesUp={resetHold}
+                gestureMode="simultaneous"
+                onLongPress={beginEditing}
                 onTap={() => {
-                  if (
-                    !disabled &&
-                    !editing &&
-                    !dragging.current &&
-                    Date.now() > suppressTapUntil.current &&
-                    item.target
-                  )
+                  if (!disabled && !editing && !dragging.current && Date.now() > suppressTapUntil.current && item.target)
                     onOpen(item.target);
                 }}
+                accessible
                 accessibilityRole="button"
+                accessibilityState={{ disabled }}
+                accessibilityActions={editing ? [] : [{ name: 'activate' }, { name: 'edit', label: '즐겨찾기 편집' }]}
+                onAccessibilityAction={({ nativeEvent }) => {
+                  if (disabled || editing || !item.target) return;
+                  if (nativeEvent.actionName === 'activate') onOpen(item.target);
+                  if (nativeEvent.actionName === 'edit') onEdit();
+                }}
                 accessibilityLabel={`${item.target.title} ${item.target.stationName}${editing ? ' 순서 변경' : ' 상세 보기'}`}
-                accessibilityHint="길게 누르면 수정 모드에서 순서를 바꾸고 삭제할 수 있어요"
+                accessibilityHint="길게 누른 채 움직이면 순서를 바꿀 수 있어요"
               >
-                <HoldScale id={item.id} heldId={heldId} scale={holdScale}>
+                <EditWiggle active={editing} index={index}>
                   <Arrival item={item.target} diameter={diameter} />
-                </HoldScale>
+                </EditWiggle>
               </Sortable.Touchable>
             </Sortable.Handle>
             {editing && (
@@ -188,7 +162,7 @@ export function FavoritesGrid({
         )}
       </Animated.View>
     ),
-    [addMotion, addScale, diameter, disabled, editing, onOpen, onRemove, onAdd, onCancelEdit, onEdit, heldId, holdScale, resetHold],
+    [addMotion, addScale, beginEditing, diameter, disabled, editing, onOpen, onRemove, onAdd, onCancelEdit, onEdit],
   );
   return (
     <View style={s.grid} onLayout={(event) => setWidth(event.nativeEvent.layout.width)}>
@@ -201,10 +175,15 @@ export function FavoritesGrid({
         columnGap={columnGap}
         strategy="insert"
         scrollableRef={scrollableRef}
-        sortEnabled={editing && !disabled}
+        sortEnabled={!disabled}
+        dragActivationDelay={editing ? 0 : 400}
+        dragActivationFailOffset={editing ? 24 : 5}
+        autoScrollEnabled
+        autoScrollActivationOffset={88}
+        autoScrollMaxOverscroll={0}
         enableActiveItemSnap={false}
         activationAnimationDuration={100}
-        dropAnimationDuration={160}
+        dropAnimationDuration={0}
         activeItemScale={1}
         inactiveItemOpacity={0.85}
         dimensionsAnimationType="worklet"
@@ -212,10 +191,8 @@ export function FavoritesGrid({
         itemExiting={FadeOut.duration(150)}
         onDragStart={() => {
           dragging.current = true;
-          resetHold();
           lastMoveFeedback.current = Date.now();
-          onEdit();
-          feedback('lift');
+          beginEditing();
         }}
         onOrderChange={() => {
           const now = Date.now();
@@ -244,18 +221,13 @@ export function FavoritesGrid({
   );
 }
 /** 확대 값은 그리드에서 공유해 드래그 포털로 옮겨질 때도 복귀 애니메이션을 이어간다. */
-function HoldScale({ id, heldId, scale, children }: {
-  id: string;
-  heldId: SharedValue<string | null>;
-  scale: SharedValue<number>;
-  children: React.ReactNode;
-}) {
-  const style = useAnimatedStyle(() => ({ transform: [{ scale: heldId.value === id ? scale.value : 1 }] }));
-  return <Animated.View style={style}>{children}</Animated.View>;
-}
 function Arrival({ item, diameter }: { item: WidgetTarget; diameter: number }) {
   const { direction, time, color, remainingSeconds, loading } = useWidgetArrival(item);
-  const showLoading = loading;
+  const entering = useArrivalTimeEntering();
+  const refreshing = useArrivalTimeRefreshing();
+  const showLoading = entering || refreshing || (
+    loading && remainingSeconds === null && time !== '운행 종료' && !time.startsWith('첫차')
+  );
   const title = item.transport === 'subway' && item.expressOnly ? `${item.title} · 급행` : item.title;
   const textScale = Math.max(1, Math.min(2, diameter / 80));
   const directionStyle = [s.direction, { fontSize: 7 * textScale, lineHeight: 9 * textScale }];
@@ -266,14 +238,14 @@ function Arrival({ item, diameter }: { item: WidgetTarget; diameter: number }) {
       : null;
   const label = timer ?? minutes ?? time;
   const firstDeparture = time.startsWith('첫차 출발 전') ? time.match(/\b\d{2}:\d{2}\b/)?.[0] : undefined;
-  const displayTime = showLoading && remainingSeconds === null ? '조회 중' :
+  const displayTime = time === '운행 종료' ? time : showLoading && remainingSeconds === null ? '조회 중' :
     remainingSeconds !== null ? label : firstDeparture ? `첫차 ${firstDeparture}` :
       /오류|갱신/.test(time) ? '갱신 지연' : time.split('\n')[0];
   return (
     <Animated.View
       layout={LinearTransition.duration(280)}
       style={[s.ring, s.activeRing, { width: diameter }]}
-      accessibilityLabel={`${title} ${item.stationName} ${direction} ${time}`}
+      accessibilityLabel={`${title} ${item.stationName} ${direction} ${showLoading ? '조회 중' : time}`}
     >
       <Image
         source={{ uri: ringImage(color, remainingSeconds, remainingSeconds === null) }}
@@ -284,9 +256,11 @@ function Arrival({ item, diameter }: { item: WidgetTarget; diameter: number }) {
         accessible={false}
       />
       {(
-        <View style={[s.timeCover, { maxWidth: diameter * 0.78 }]}>
+        <View style={[s.timeCover, { maxWidth: diameter * 0.78, minWidth: Math.min(36, diameter * 0.78) }]}>
           <Text
-            style={[s.time, { fontSize: 11 * textScale, lineHeight: 13 * textScale }]}
+            style={[s.time, { fontSize: 11 * textScale, lineHeight: 13 * textScale, opacity: showLoading ? 0 : 1 }]}
+            accessibilityElementsHidden={showLoading}
+            importantForAccessibility={showLoading ? 'no' : 'auto'}
             numberOfLines={1}
             ellipsizeMode="tail"
             adjustsFontSizeToFit
@@ -294,6 +268,11 @@ function Arrival({ item, diameter }: { item: WidgetTarget; diameter: number }) {
           >
             {displayTime}
           </Text>
+          {showLoading && (
+            <View pointerEvents="none" style={[StyleSheet.absoluteFill, s.timeLoader]}>
+              <ArrivalTimeIndicator />
+            </View>
+          )}
         </View>
       )}
       {(
@@ -415,6 +394,7 @@ const s = StyleSheet.create({
   empty: { borderColor: '#EAF0F7' },
 
 
+  timeLoader: { alignItems: 'center', justifyContent: 'center' },
   timeCover: {
     position: 'absolute',
     top: -5,

@@ -94,6 +94,7 @@ export const BusStopBottomSheet = memo(function BusStopBottomSheet({
     isError,
     error,
     isFetching,
+    isEnriching,
     refreshDelayed,
     isPending,
     refetch,
@@ -193,7 +194,7 @@ export const BusStopBottomSheet = memo(function BusStopBottomSheet({
               contentContainerStyle={styles.arrivalList}
               showsVerticalScrollIndicator={true}
               renderItem={({ item: group }) => (
-                <BusArrivalRow group={group} onSelectRoute={onSelectRoute} />
+                <BusArrivalRow group={group} onSelectRoute={onSelectRoute} fetching={isFetching || isEnriching} />
               )}
             />
             {snap !== 'compact' ? (

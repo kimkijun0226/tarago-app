@@ -1,3 +1,4 @@
+import { selectMapSubwayStation } from '@/features/subway/model/select-map-subway-station';
 import { parseSubwaySymbolCaption, normalizeSubwayLineName, resolveSubwaySymbolLine } from '@/features/subway/model/subway-symbol-caption';
 import { normalizeBusStopNumber } from '@/features/bus-stop/model/bus-stop-number';
 import { getMapSelection, useMapSelection, type MapSelectionMode } from './map-selection';
@@ -69,6 +70,7 @@ export function useMapController(mode: MapSelectionMode = 'map') {
   const selectionZoom = 16;
 
   /** 선택한 지하철 역 이름과 변경 함수다. null이면 지하철 시트를 닫는다. */
+  const [subwayLineChoices, setSubwayLineChoices] = useState<SubwayMapStation[]>([]);
   const [subwayStation, setSubwayStation] = useState<string | null>(null);
 
   /** 같은 역의 환승 노선을 구분하는 선택 호선과 변경 함수다. */
@@ -499,6 +501,7 @@ export function useMapController(mode: MapSelectionMode = 'map') {
 
   /** 검색 시작 시 기존 정류장·노선·지하철 시트를 정리한다. 하위 검색 화면에 동일한 콜백을 전달한다. */
   const activateSearch = useCallback(() => {
+    setSubwayLineChoices([]);
     setSubwayStation(null);
     setSelectedPlace(null);
     setSelectedSearchResultId(null);
@@ -790,6 +793,7 @@ export function useMapController(mode: MapSelectionMode = 'map') {
 
   /** 지하철 선택 요청을 무효화하고 지하철 시트와 하단 지도 여백을 닫는다. */
   const closeSubway = useCallback(() => {
+    setSubwayLineChoices([]);
     selectionRequest.current++;
     setSubwayStation(null);
     setSelectedPlace((place) => (place?.id.startsWith('subway:') ? null : place));
@@ -810,7 +814,7 @@ export function useMapController(mode: MapSelectionMode = 'map') {
       }
       try {
         /** 역 장소 검색의 거리 기준점이다. 선택 장소가 없으면 최초 현재 위치를 사용한다. */
-        const near = selectedPlace ?? initialPosition;
+        const near = point ?? selectedPlace ?? initialPosition;
         if (!near) return;
 
         /** 역 좌표가 직접 제공되지 않을 때 Query로 검색한 장소 후보 목록이다. */
@@ -1117,12 +1121,12 @@ export function useMapController(mode: MapSelectionMode = 'map') {
       if (request !== selectionRequest.current) return;
       const caption = symbol.caption.replace(/\s/g, '');
       const parsedCaption = parseSubwaySymbolCaption(caption, stationsData.map((station) => station.lineName));
-      const explicitLine = resolveSubwaySymbolLine(symbol, stationsData);
+      const explicitLine = parsedCaption.lineName;
       const stationCaption = parsedCaption.stationName;
       const candidates = stationsData
         .filter(
           (station) =>
-            stationCaption === station.name.replace(/역$/, '') &&
+            (stationCaption === station.name.replace(/역$/, '') || (!stationCaption && explicitLine)) &&
             (!explicitLine || normalizeSubwayLineName(station.lineName) === explicitLine),
         )
         .map((station) => ({
@@ -1132,31 +1136,28 @@ export function useMapController(mode: MapSelectionMode = 'map') {
             (station.longitude - symbol.longitude) * Math.cos((symbol.latitude * Math.PI) / 180),
           ),
         }))
-        .filter((item) => item.distance < 0.003)
+        .filter((item) => item.distance < (stationCaption ? 0.003 : 0.001))
         .sort((a, b) => a.distance - b.distance);
       if (!candidates.length) {
         if (explicitLine) return;
         void selectBusStopSymbol(symbol);
         return;
       }
-      const stations = [...new Map(candidates.map(({ station }) => [station.lineName, station])).values()];
-      const choose = (station: SubwayMapStation) => {
-        void selectSubwayStation(station.name, normalizeSubwayLineName(station.lineName), {
-          latitude: symbol.latitude,
-          longitude: symbol.longitude,
-        });
-      };
-      if (!explicitLine && stations.length > 1) {
-        // 호선을 구분할 수 없는 심벌도 기존 바텀시트로 바로 연결한다.
-        void selectSubwayStation(stations[0].name, '', {
-          latitude: symbol.latitude,
-          longitude: symbol.longitude,
-        });
+      const stations = candidates.map(({ station }) => station);
+      const choices = [...new Map(stations.map(station => [station.lineName, station])).values()];
+      const distinctSymbols = new Set([symbol, ...symbol.peers].map(busSymbolKey)).size;
+      if (!alertSelection && !explicitLine && (directionCamera?.zoom ?? Infinity) < 16 &&
+          choices.length > 1 && distinctSymbols < choices.length) {
+        activateSearch();
+        setSubwayLineChoices(choices);
         return;
       }
-      const station = stations[0];
-      if (station) choose(station);
-      else if (!explicitLine) void selectBusStopSymbol(symbol);
+      const station = (explicitLine ? undefined : selectMapSubwayStation(symbol, stations, symbol.peers))
+        ?? stations[0];
+      void selectSubwayStation(station.name, normalizeSubwayLineName(station.lineName), {
+        latitude: symbol.latitude,
+        longitude: symbol.longitude,
+      });
     },
     [
       subwayStops,
@@ -1166,8 +1167,28 @@ export function useMapController(mode: MapSelectionMode = 'map') {
       mapSearchResults,
       searchSymbolPositions,
       selectSearchResult,
+      activateSearch,
+      alertSelection,
+      directionCamera?.zoom,
     ],
   );
+
+  const selectSubwayLineChoice = useCallback((station: SubwayMapStation) => {
+    const name = station.name.replace(/역$/, '');
+    const line = normalizeSubwayLineName(station.lineName);
+    const matchingSymbols = visibleMapSymbols
+      .filter(symbol => {
+        const caption = parseSubwaySymbolCaption(symbol.caption, [line]);
+        return caption.lineName === line && caption.stationName === name;
+      })
+      .map(symbol => ({
+        symbol,
+        distance: Math.hypot(symbol.latitude - station.latitude, symbol.longitude - station.longitude),
+      }))
+      .filter(({ distance }) => distance < 0.001)
+      .sort((a, b) => a.distance - b.distance);
+    void selectSubwayStation(station.name, line, matchingSymbols[0]?.symbol ?? station);
+  }, [selectSubwayStation, visibleMapSymbols]);
 
   /** 선택 핀을 다시 누르면 현재 노선 문맥을 유지해 정류장 목록을 연다. */
   const onMarkerPress = useCallback(
@@ -1245,6 +1266,8 @@ export function useMapController(mode: MapSelectionMode = 'map') {
     onCameraIdle,
     onMarkerPress,
     onSymbolPress,
+    subwayLineChoices,
+    selectSubwayLineChoice,
     selectedRoute,
     configureRouteAlert,
     routeAlertReady: Boolean(routeDetail && selectedRoute && selectedBusStop),

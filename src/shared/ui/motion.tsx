@@ -1,3 +1,4 @@
+import { EdgeBack } from './edge-back';
 import { useEffect, useState, type ReactNode } from 'react';
 import { Modal, StyleSheet, View } from 'react-native';
 import Animated, {
@@ -12,11 +13,12 @@ export const fadeIn = FadeIn.duration(motionIn.duration).easing(motionIn.easing)
 export const fadeOut = FadeOut.duration(motionOut.duration).easing(motionOut.easing).reduceMotion(ReduceMotion.System);
 
 /** Keep the native modal mounted while its dimmer and panel finish their exit. */
-export function MotionModal({ visible, onRequestClose, children, kind = 'popup' }: {
+export function MotionModal({ visible, onRequestClose, children, kind = 'popup', edgeBack = true }: {
   visible: boolean;
   onRequestClose: () => void;
   children: ReactNode;
   kind?: 'popup' | 'sheet';
+  edgeBack?: boolean;
 }) {
   const [mounted, setMounted] = useState(false);
   if (visible && !mounted) setMounted(true);
@@ -43,12 +45,14 @@ export function MotionModal({ visible, onRequestClose, children, kind = 'popup' 
 
   return (
     <Modal transparent visible animationType="none" onRequestClose={onRequestClose}>
+      <EdgeBack enabled={visible && edgeBack} onBack={onRequestClose}>
       <View style={styles.modal}>
         <Animated.View pointerEvents="none" style={[StyleSheet.absoluteFill, styles.dimmer, dimmer]} />
         <Animated.View pointerEvents={visible ? 'auto' : 'none'} style={[styles.panel, panel]}>
           {children}
         </Animated.View>
       </View>
+      </EdgeBack>
     </Modal>
   );
 }

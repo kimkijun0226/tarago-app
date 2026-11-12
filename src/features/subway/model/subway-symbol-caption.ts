@@ -19,9 +19,9 @@ export function parseSubwaySymbolCaption(caption: string, lineNames: string[] = 
     ),
   ].sort((a, b) => b.length - a.length);
   const token =
-    names.find((name) => compact.includes(name)) ?? compact.match(/(?:수도권)?\d+호선/)?.[0];
+    names.find((name) => compact.includes(name)) ?? compact.match(/(?:수도권)?\d+호선/)?.[0] ?? compact.match(/^\d{1,2}$/)?.[0];
   return {
-    lineName: token ? normalizeSubwayLineName(token) : undefined,
+    lineName: token ? normalizeSubwayLineName(/^\d+$/.test(token) ? `${token}호선` : token) : undefined,
     stationName: compact
       .replace(token ?? '', '')
       .replace(/수도권/g, '')

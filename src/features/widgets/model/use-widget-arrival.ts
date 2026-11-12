@@ -36,7 +36,8 @@ export function useWidgetArrival(item: WidgetTarget) {
   const needsSchedule =
     item.transport === 'subway' &&
     !subway.isPending &&
-    getFavoriteLiveTrains(item, liveTrains, subway.dataUpdatedAt, now, line).length === 0;
+    !getFavoriteLiveTrains(item, liveTrains, Date.parse(subway.data?.fetchedAt ?? ''), now, line)
+      .some((train) => train.etaSource !== 'estimated' && train.etaSource !== 'schedule');
   const day = new Date(now + 6 * 3_600_000).getUTCDay();
   const timetable = useSubwayTimetable(
     item.transport === 'subway' ? item.stationName : '',
@@ -55,6 +56,5 @@ export function useWidgetArrival(item: WidgetTarget) {
   return {
     ...result,
     loading: result.loading || (needsSchedule && timetable.isPending && focused),
-    time: needsSchedule && timetable.isError && !timetable.data ? '갱신 지연' : result.time,
   };
 }

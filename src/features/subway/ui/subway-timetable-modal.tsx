@@ -1,3 +1,4 @@
+import { EdgeBack } from '@/shared/ui/edge-back';
 import { ListSkeleton } from '@/shared/ui/loading-skeleton';
 /** @fileoverview 선택 역·노선·요일의 전체 시간표 또는 첫차·막차를 가상 목록으로 표시한다. */
 
@@ -59,6 +60,7 @@ export function SubwayTimetableModal({
   return (
     <Modal visible={mode !== 'live'} animationType="slide" onRequestClose={onClose}>
       <SafeAreaProvider>
+        <EdgeBack onBack={onClose}>
         <SafeAreaView style={s.screen}>
           <View style={s.header}>
             <Pressable
@@ -171,6 +173,7 @@ export function SubwayTimetableModal({
           )}
           <Text style={s.note}>24시 이후 시각은 해당 영업일의 다음 날 운행입니다.</Text>
         </SafeAreaView>
+      </EdgeBack>
       </SafeAreaProvider>
     </Modal>
   );

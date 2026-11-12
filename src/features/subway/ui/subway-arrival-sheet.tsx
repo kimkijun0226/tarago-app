@@ -7,7 +7,7 @@ import type { SharedValue } from 'react-native-reanimated';
 import { TransitAlertAction } from '@/shared/ui/transit-alert-action';
 import { SheetToolbar } from '@/shared/ui/sheet-toolbar';
 
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useImperativeHandle, useState, type Ref } from 'react';
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SymbolView } from 'expo-symbols';
 import { BottomSheetScrollView } from '@gorhom/bottom-sheet';
@@ -21,6 +21,7 @@ import { router } from 'expo-router';
 import {
   getScheduledArrivals,
   getServiceStatus,
+  isUsableSubwayArrival,
 } from '@/features/subway/model/subway-arrival-display';
 import { useSubwayArrivals } from '@/features/subway/model/use-subway-arrivals';
 import {
@@ -46,6 +47,7 @@ const BLUE = mapUi.blue,
  * @returns 역 상세 시트와 시간표·노선도 모달. 초 단위 시각에 의존하는 값은 직접 계산하며 측정 없이 메모화를 추가하지 않는다.
  */
 export function SubwayArrivalSheet({
+  backRef,
   stationName,
   initialLineName,
   onClose,
@@ -55,6 +57,7 @@ export function SubwayArrivalSheet({
   onChangeSnap,
   onSelectStation,
 }: {
+  backRef?: Ref<() => void>;
   stationName: string;
   initialLineName?: string;
   onClose: () => void;
@@ -83,15 +86,21 @@ export function SubwayArrivalSheet({
   /** 실시간 표시와 전체 시간표·첫차/막차 모달 중 현재 모드를 선택한다. */
   const [tab, setTab] = useState<'live' | 'timetable'>('live');
   const [timetableMode, setTimetableMode] = useState<'live' | 'timetable' | 'firstLast'>('live');
+  const closeTimetable = useCallback(() => setTimetableMode('live'), []);
 
   /** 상세 열차 목록을 펼칠 방면 이름이다. 빈 문자열이면 모든 방면의 요약을 표시한다. */
   const [detailDirection, setDetailDirection] = useState('');
+  useImperativeHandle(backRef, () => () => {
+    if (detailDirection) setDetailDirection('');
+    else onClose();
+  }, [detailDirection, onClose]);
 
   /** 시간표 모달에서 사용자가 고른 영업일 유형이다. null이면 현재 영업일 유형을 따른다. */
   const [chosenDay, setChosenDay] = useState<SubwayDayType | null>(null);
 
   /** 전체 역 목록 노선도 모달의 표시 여부다. */
   const [showNetwork, setShowNetwork] = useState(false);
+  const closeNetwork = useCallback(() => setShowNetwork(false), []);
 
   /** 부모가 snap을 제어하지 않을 때 사용할 시트 높이 단계다. */
   const [localSnap, setLocalSnap] = useState<MapSheetSnap>('half');
@@ -134,8 +143,8 @@ export function SubwayArrivalSheet({
 
   /** 지도와 상세 카드가 같은 선택값을 사용해 이전 호선 선택이 되살아나지 않게 한다. */
   const lineName = initial
-    ? lines.some(([name]) => name === initial) ? initial : ''
-    : station.isSuccess && lines.length === 1 ? lines[0][0] : '';
+    ? lines.find(([name]) => normalizeSubwayLineName(name) === initial)?.[0] ?? initial
+    : lines[0]?.[0] ?? '';
 
   /** 선택한 노선명에 해당하는 공식 역간·종착역 정보다. */
   const line = station.data?.lines.find((item) => item.lineName === lineName);
@@ -167,10 +176,13 @@ export function SubwayArrivalSheet({
   );
 
   const normalized = normalizeSubwayDirections(line, arrivals, timetable.data?.directions);
-  const lineArrivals = normalized.arrivals.filter((arrival) => arrival.lineName === lineName);
+  const fetchedAt = Date.parse(query.data?.fetchedAt ?? '');
+  const lineArrivals = normalized.arrivals.filter((arrival) =>
+    arrival.lineName === lineName && isUsableSubwayArrival(arrival, fetchedAt, now),
+  );
   const scheduled = normalized.scheduled;
   const usingTimetable =
-    tab === 'timetable' || (!query.isPending && !query.isError && lineArrivals.length === 0);
+    tab === 'timetable' || (!query.isPending && lineArrivals.length === 0);
 
   /** 현재 노선 실시간 열차에 등장한 방면 이름을 중복 제거한 목록이다. */
   const liveDirections = [...new Set(lineArrivals.map((arrival) => arrival.direction))];
@@ -190,13 +202,15 @@ export function SubwayArrivalSheet({
     ? scheduledDirections
     : scheduledDirections.length && sameDirectionNames
       ? scheduledDirections
-      : liveDirections.length
-        ? liveDirections
-        : scheduledDirections;
+      : [...new Set([...liveDirections, ...scheduledDirections])];
 
-  const shownArrivals = usingTimetable
-    ? getScheduledArrivals(scheduled, line?.lineId ?? '', lineName, now)
-    : lineArrivals;
+  const scheduleArrivals = getScheduledArrivals(scheduled, line?.lineId ?? '', lineName, now);
+  const shownArrivals = usingTimetable ? scheduleArrivals : directions.flatMap((direction) => {
+    const live = lineArrivals.filter((train) => train.direction === direction);
+    const official = live.filter((train) => train.etaSource !== 'estimated' && train.etaSource !== 'schedule');
+    const fallback = scheduleArrivals.filter((train) => train.direction === direction);
+    return official.length ? official : fallback.length ? fallback : live;
+  });
   const loadingArrivals = Boolean(lineName) &&
     (station.isPending || (usingTimetable ? Boolean(line?.lineId) && timetable.isPending : query.isPending));
 
@@ -398,7 +412,6 @@ export function SubwayArrivalSheet({
         <View style={s.sheetContent}>
           <BottomSheetScrollView contentContainerStyle={s.content}>
             <View style={s.arrivalSection}>
-              {!lineName ? lineSelector : null}
               {!detailDirection && Boolean(lineName) && (
                 <>
                   <SubwayStationRail
@@ -448,7 +461,7 @@ export function SubwayArrivalSheet({
                 </>
               )}
               <>
-                {tab === 'live' && query.isError ? (
+                {tab === 'live' && query.isError && !shownArrivals.length && !timetable.data ? (
                   <Text style={s.error}>{errorMessage}</Text>
                 ) : null}
                 {lineName && usingTimetable && timetable.isError ? (
@@ -461,9 +474,9 @@ export function SubwayArrivalSheet({
                       key={direction}
                       arrivals={shownArrivals.filter((arrival) => arrival.direction === direction)}
                       label={directionLabel(direction)}
-                      status={getServiceStatus(direction, scheduled, currentServiceMinute)}
+                      status={timetable.data?.stale ? '—' : getServiceStatus(direction, scheduled, currentServiceMinute)}
                       now={now}
-                      elapsed={usingTimetable ? 0 : elapsed}
+                      elapsed={elapsed}
                       detailed={Boolean(detailDirection)}
                       onDetail={() => setDetailDirection(direction)}
                     />
@@ -588,7 +601,7 @@ export function SubwayArrivalSheet({
         lineName={lineName}
         dayType={dayType}
         mode={timetableMode}
-        onClose={() => setTimetableMode('live')}
+        onClose={closeTimetable}
         onDayChange={setChosenDay}
       />
       <SubwayNetworkModal
@@ -596,7 +609,7 @@ export function SubwayArrivalSheet({
         line={line}
         lineName={lineName}
         color={color}
-        onClose={() => setShowNetwork(false)}
+        onClose={closeNetwork}
         onSelectStation={onSelectStation}
       />
     </>

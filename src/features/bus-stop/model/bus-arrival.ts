@@ -22,23 +22,25 @@ export type BusArrivalGroup = {
  */
 export function formatEta(
   etaSeconds: number | null,
-  serviceStatus?: BusArrival['serviceStatus'],
+  _serviceStatus?: BusArrival['serviceStatus'],
   precision?: BusArrival['etaPrecision'],
   source?: BusArrival['etaSource'],
   status?: Pick<
     BusArrival,
-    'serviceEnded' | 'recheckingArrival' | 'realtimeError' | 'serviceEndAt'
+    'serviceEnded' | 'nextDepartureAt' | 'scheduleError' | 'recheckingArrival' | 'realtimeError' | 'serviceEndAt'
   >,
 ) {
   if (etaSeconds === null) {
-    if (status?.realtimeError) return '조회 오류 · 의견 보내기';
-    if (status?.serviceEnded) return '운행 종료';
-    if (status?.recheckingArrival)
-      return Date.parse(status.serviceEndAt ?? '') <= Date.now() ? '운행 종료' : '도착시간 재조회 중';
-    if (serviceStatus === 'turnaround_waiting') return '회차지 대기 중';
-    if (serviceStatus === 'before_turnaround') return '운행정보 확인 중';
-    if (serviceStatus === 'on_route') return '노선 운행 중';
-    return '운행정보 확인 중';
+    const departure = Date.parse(status?.nextDepartureAt ?? '');
+    if (status?.serviceEnded && !status.scheduleError &&
+        (!Number.isFinite(departure) || departure > Date.now())) return '운행 종료';
+    if (Number.isFinite(departure) && departure > Date.now()) {
+      const time = new Intl.DateTimeFormat('ko-KR', {
+        timeZone: 'Asia/Seoul', hour: '2-digit', minute: '2-digit', hourCycle: 'h23',
+      }).format(departure);
+      return `첫차 ${time}`;
+    }
+    return '—';
   }
   if (source === 'schedule_estimate')
     return `배차 기준 예상 ${Math.max(1, Math.ceil(etaSeconds / 60))}분`;

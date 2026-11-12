@@ -1,3 +1,4 @@
+import { ArrivalTimeIndicator, ArrivalTimeSlot } from '@/shared/ui/arrival-time-entrance';
 /** @fileoverview 노선 번호 아래에 최대 두 차량의 도착정보를 두 줄의 간결한 행으로 표시한다. */
 
 import type { BusArrival } from '../api/get-bus-arrivals';
@@ -8,11 +9,12 @@ import { formatEta, getBusRouteBadge, type BusArrivalGroup } from '../model/bus-
 
 type Props = {
   group: BusArrivalGroup;
+  fetching?: boolean;
   onSelectRoute: (routeId: string, stationSeq: number, source?: BusArrival['routeSource']) => void;
 };
 
 /** 지도 이동에 따른 부모 갱신을 memo로 차단한다. 서버가 주지 않는 방면·혼잡도는 추정하지 않는다. */
-export const BusArrivalRow = memo(function BusArrivalRow({ group, onSelectRoute }: Props) {
+export const BusArrivalRow = memo(function BusArrivalRow({ group, onSelectRoute, fetching }: Props) {
   /** 해당 노선 유형의 배지 이름과 색상이다. */
   const badge = getBusRouteBadge(group.routeType);
   const direction = (group.first.direction || group.first.nextStopName || '').replace(
@@ -23,6 +25,7 @@ export const BusArrivalRow = memo(function BusArrivalRow({ group, onSelectRoute 
   return (
     <Pressable
       accessibilityRole="button"
+      accessibilityState={{ busy: Boolean(fetching) }}
       accessibilityLabel={`${group.busNumber}번 노선 상세 보기`}
       onPress={() => onSelectRoute(group.routeId, group.stationSeq ?? 0, group.first.routeSource)}
       style={styles.row}
@@ -49,6 +52,11 @@ export const BusArrivalRow = memo(function BusArrivalRow({ group, onSelectRoute 
           </>
         ) : null}
       </View>
+      {fetching && (
+        <View pointerEvents="none" style={styles.loading} accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
+          <ArrivalTimeIndicator />
+        </View>
+      )}
     </Pressable>
   );
 });
@@ -64,6 +72,7 @@ function ArrivalTime({
   return (
     <View style={styles.arrivalTime}>
       {next && <Text style={styles.nextLabel}>다음</Text>}
+      <ArrivalTimeSlot>
       <Text
         numberOfLines={1}
         style={[
@@ -80,6 +89,7 @@ function ArrivalTime({
           arrival,
         )}
       </Text>
+      </ArrivalTimeSlot>
       {arrival.remainingStops !== null && arrival.remainingStops > 0 ? (
         <Text numberOfLines={1} style={styles.remainingStops}>
           {arrival.remainingStops}정류장
@@ -92,7 +102,7 @@ function ArrivalTime({
 /** 정적인 스타일은 모듈에서 한 번 생성하므로 useMemo가 필요 없다. */
 const styles = StyleSheet.create({
   row: {
-    paddingHorizontal: 0,
+    paddingRight: 24,
     paddingTop: 9,
     paddingBottom: 9,
     borderBottomWidth: 1,
@@ -102,6 +112,7 @@ const styles = StyleSheet.create({
     marginVertical: 0,
     backgroundColor: '#FFFFFF',
   },
+  loading: { position: 'absolute', right: 0, top: 0, bottom: 0, justifyContent: 'center' },
   badge: {
     paddingHorizontal: 5,
     height: 18,

@@ -1,3 +1,4 @@
+import { ArrivalTimeSlot } from '@/shared/ui/arrival-time-entrance';
 /** @fileoverview 한 방면의 실시간 도착 열차와 운행 상태·알림 설정 진입을 표시한다. */
 
 import { Pressable, StyleSheet, Text, View } from 'react-native';
@@ -34,7 +35,7 @@ export function SubwayDirectionCard({
   /** 공식 운행 종료 상태이고 유효한 최근 열차도 없는 방면인지 판단한다. */
   const ended =
     status === '운행종료' &&
-    !arrivals.some((arrival) => !getArrivalTime(arrival, now, elapsed).stale);
+    !arrivals.some((arrival) => !getArrivalTime(arrival, now, arrival.etaSource === 'schedule' && arrival.id.startsWith('schedule:') ? 0 : elapsed).stale);
 
   /** 운행 종료가 확정된 경우 오래된 열차를 숨기고 그 외에는 서버 열차를 유지한다. */
   const trains = ended ? [] : getUpcomingTrains(arrivals);
@@ -43,7 +44,7 @@ export function SubwayDirectionCard({
       <Text style={s.directionLabel}>{label}</Text>
       {(detailed ? trains : trains.slice(0, 2)).map((arrival) => {
         /** 현재 시각에 맞춰 계산한 도착 문구와 수신 지연 여부다. */
-        const time = getArrivalTime(arrival, now, elapsed);
+        const time = getArrivalTime(arrival, now, arrival.etaSource === 'schedule' && arrival.id.startsWith('schedule:') ? 0 : elapsed);
         const isExpress = /급행|특급/.test(arrival.trainType);
         return (
           <Pressable
@@ -59,14 +60,16 @@ export function SubwayDirectionCard({
               {arrival.isLastTrain ? ' · 막차' : ''}
             </Text>
             {time.text ? (
+              <ArrivalTimeSlot>
               <Text style={s.trainTime} numberOfLines={1} ellipsizeMode="tail">
                 {time.text}
               </Text>
+              </ArrivalTimeSlot>
             ) : null}
           </Pressable>
         );
       })}
-      {!trains.length ? <Text style={s.serviceStatus}>{status}</Text> : null}
+      {!trains.length ? <Text style={s.serviceStatus}>{status === '운행종료' ? '운행 종료' : '—'}</Text> : null}
     </View>
   );
 }

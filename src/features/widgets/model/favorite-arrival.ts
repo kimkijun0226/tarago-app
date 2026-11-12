@@ -12,7 +12,9 @@ import {
 import {
   getArrivalTime,
   getScheduledArrivals,
+  getScheduledDepartureAt,
   getUpcomingTrains,
+  isUsableSubwayArrival,
 } from '@/features/subway/model/subway-arrival-display';
 import type { WidgetTarget } from './widget-configuration';
 
@@ -45,14 +47,11 @@ export function getFavoriteLiveTrains(
   now: number,
   line?: Pick<SubwayStationLine, 'lineId' | 'stationNumber'>,
 ) {
-  if (!Number.isFinite(fetchedAt) || now - fetchedAt >= 90_000) return [];
   const currentLine = line ?? { lineId: item.lineId, stationNumber: '' };
   const direction = normalizeSubwayDirection(currentLine, item.direction, source);
-  const elapsed = Math.max(0, now - fetchedAt) / 1_000;
   return getUpcomingTrains(normalizeSubwayDirections(currentLine, source).arrivals.filter((train) =>
     matchesFavoriteSubwayTrain(item, direction, train) &&
-    (train.etaSeconds !== null && Number.isFinite(train.etaSeconds) && train.etaSeconds >= elapsed - 15 ||
-      (train.arrivalCode === '0' || train.arrivalCode === '1') && elapsed < 30),
+    isUsableSubwayArrival(train, fetchedAt, now),
   ));
 }
 
@@ -69,25 +68,18 @@ export function buildFavoriteArrival(
   let color =
     item.color ?? (item.transport === 'subway' ? LINE_COLORS[item.title] : undefined) ?? '#2869DB';
   let direction = item.directionLabel;
-  let time = query.isPending
-    ? '조회 중'
-    : query.isError
-      ? '조회 오류 · 의견 보내기'
-      : item.transport === 'bus'
-        ? '도착시간 미제공'
-        : '조회된 도착 열차 없음';
+  let time = '—';
   let remainingSeconds: number | null = null;
   let realtimeError = false;
-  let statusMessage = time;
   // 응답을 받은 순간에는 API의 ETA를 그대로 표시하고 이후 경과 시간만 뺀다.
   const eta = (seconds: number, fetchedAt: number, qualifier = '') => {
     const left = seconds - Math.max(0, now - fetchedAt) / 1000;
     const maxAge = qualifier.includes('배차') ? 86_400_000 : 90_000;
     if (now - fetchedAt < maxAge && left >= -15) remainingSeconds = Math.max(0, left);
     return now - fetchedAt >= maxAge
-      ? '도착정보 갱신 필요'
+      ? '—'
       : left < -15
-        ? '예정 시각 지남'
+        ? '—'
         : left <= 60
           ? `${qualifier}곧 도착`
           : `${qualifier}${Math.ceil(left / 60)}분`;
@@ -103,14 +95,6 @@ export function buildFavoriteArrival(
     const first = arrivals[0];
     if (first) {
       realtimeError = first.realtimeError ?? false;
-      statusMessage =
-        first.serviceStatus === 'turnaround_waiting'
-          ? '회차지에서 출발 전'
-          : first.serviceStatus === 'on_route'
-            ? '운행 중 · 도착시간 미제공'
-            : first.serviceStatus === 'before_turnaround'
-              ? '회차 전 · 도착시간 미제공'
-              : '도착시간 미제공';
       color = getBusRouteBadge(first.routeType)?.color ?? color;
       direction =
         first.direction || (first.nextStopName ? `${first.nextStopName} 방면` : direction);
@@ -147,38 +131,53 @@ export function buildFavoriteArrival(
                   month: 'numeric',
                   day: 'numeric',
                 }).format(departure);
-        time = first.serviceEnded
+        time = first.serviceEnded && !first.scheduleError
           ? now >= departure
-            ? '도착시간 재조회 중'
+            ? '—'
             : '운행 종료'
           : `첫차 출발 전\n${date} ${clock}\n${first.departureStopName ?? '기점'} 출발 예정`;
       } else {
-        time = statusMessage;
+        time = first.serviceEnded && !first.scheduleError ? '운행 종료' : '—';
       }
-      if (first.recheckingArrival && remainingSeconds === null && !realtimeError) {
-        const end = Date.parse(first.serviceEndAt ?? '');
-        time = Number.isFinite(end) && now >= end ? '운행 종료' : '도착시간 재조회 중';
-      }
+
     }
   } else if (item.transport === 'subway' && (subway.data !== undefined || timetable !== undefined)) {
     const source = subway.data?.arrivals ?? [];
     const currentLine = line ?? { lineId: item.lineId, stationNumber: '' };
     const selectedDirection = normalizeSubwayDirection(currentLine, item.direction, source);
     const normalized = normalizeSubwayDirections(currentLine, source, timetable?.directions);
-    const trains = getFavoriteLiveTrains(item, source, subway.dataUpdatedAt, now, line);
+    const liveFetchedAt = Date.parse(subway.data?.fetchedAt ?? '');
+    const trains = getFavoriteLiveTrains(item, source, liveFetchedAt, now, line);
     const fallback =
-      !trains.length && timetable
+      !trains.some((train) => train.etaSource !== 'estimated' && train.etaSource !== 'schedule') && timetable
         ? getUpcomingTrains(
             getScheduledArrivals(normalized.scheduled, item.lineId, item.title, now).filter(
               (train) => matchesFavoriteSubwayTrain(item, selectedDirection, train),
             ),
           )
         : [];
-    const first = trains[0] ?? fallback[0];
+    const official = trains.find((train) => train.etaSource !== 'estimated' && train.etaSource !== 'schedule');
+    const first = official ?? fallback[0] ?? trains[0];
+    if (!first && timetable && !timetable.stale) {
+      const matching = normalized.scheduled
+        .filter((entry) => selectedDirection === 'all' || entry.direction === selectedDirection)
+        .flatMap((entry) => {
+          const filtered = entry.trains.filter((train) =>
+            matchesSubwayDestination(item, train.destination) && (!item.expressOnly || train.isExpress),
+          );
+          const lastTrain = filtered.at(-1) ?? (
+            !item.destination && !item.destinations?.length && !item.expressOnly ? entry.lastTrain : null
+          );
+          return lastTrain ? [{ ...entry, lastTrain }] : [];
+        });
+      if (matching.length && matching.every((entry) =>
+        now > getScheduledDepartureAt(entry.lastTrain.departureTime, now),
+      )) time = '운행 종료';
+    }
     if (first) {
       direction = `${item.directionLabel} · ${first.destination.replace(/행$/, '')}행`;
-      const fetchedAt = fallback.length ? now : subway.dataUpdatedAt;
-      if (!Number.isFinite(fetchedAt) || now - fetchedAt >= 90_000) time = '도착정보 갱신 필요';
+      const fetchedAt = first === fallback[0] ? now : liveFetchedAt;
+      if (!Number.isFinite(fetchedAt) || now - fetchedAt >= 90_000) time = '—';
       else if (first.arrivalCode === '0') time = '진입';
       else if (first.arrivalCode === '1') time = '도착';
       else if (first.etaSeconds !== null && first.etaSeconds > 0)
@@ -193,20 +192,20 @@ export function buildFavoriteArrival(
         );
       else
         time =
-          getArrivalTime(first, now, Math.max(0, now - fetchedAt) / 1000).text || '도착시간 미제공';
+          getArrivalTime(first, now, Math.max(0, now - fetchedAt) / 1000).text || '—';
     }
   }
   const loading =
     query.isPending ||
     (query.isFetching &&
-      ['도착정보 갱신 필요', '조회 오류 · 의견 보내기', '예정 시각 지남'].includes(time));
+      time === '—');
   return {
     direction,
     time,
     color,
     remainingSeconds,
     loading,
-    reportProblem: (query.isError && remainingSeconds === null && time === '조회 오류 · 의견 보내기') || realtimeError,
+    reportProblem: (query.isError && remainingSeconds === null && time === '—') || realtimeError,
     realtimeError,
   };
 }

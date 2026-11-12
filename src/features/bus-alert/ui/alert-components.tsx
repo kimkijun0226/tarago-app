@@ -8,7 +8,7 @@ import Animated, {
 } from 'react-native-reanimated';
 import { SetupHeader } from '@/shared/ui/setup-header';
 import { useRecoveryStore } from '@/shared/model/recovery-store';
-import Swipeable from 'react-native-gesture-handler/ReanimatedSwipeable';
+import Sortable from 'react-native-sortables';
 import { AlertSetupPreview } from './alert-setup-preview';
 import { TransportIcon } from '@/shared/ui/transport-icon';
 import { useEffect, useRef, useState, type ComponentProps, type ReactNode } from 'react';
@@ -341,9 +341,16 @@ export function AlertNotice({
 }
 
 /** 버스·지하철 목록이 공유하는 카드. 실제 저장과 삭제는 각 도메인 훅이 수행한다. */
+export function SavedAlertSecondaryText({ children }: { children: ReactNode }) {
+  return <Text numberOfLines={2} style={{ fontSize: 13, lineHeight: 18, color: colors.secondaryText }}>{children}</Text>;
+}
+
 export function SavedAlertCard({
+  editing = false,
+  onLongPress,
   title,
   subtitle,
+  direction,
   summary,
   detail,
   arrivals,
@@ -357,9 +364,12 @@ export function SavedAlertCard({
   onDelete,
 }: {
   compact?: boolean;
+  editing?: boolean;
+  onLongPress?: () => void;
   transport: 'bus' | 'subway';
   title: string;
   subtitle: string;
+  direction?: ReactNode;
   summary: string;
   detail: string;
   arrivals: ReactNode;
@@ -372,42 +382,19 @@ export function SavedAlertCard({
   onDelete: () => void;
 }) {
   return (
+    <View style={{ position: 'relative' }}>
+    <Sortable.Handle>
+    <Sortable.Touchable gestureMode="simultaneous" onLongPress={onLongPress}>
     <View style={{ borderRadius: 16, backgroundColor: colors.surface, shadowColor: "#203550", shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.045, shadowRadius: 5, elevation: 1 }}>
-    <Swipeable
-      enabled={!busy}
-      friction={1.5}
-      rightThreshold={44}
-      overshootRight={false}
-      containerStyle={{ borderRadius: 16, overflow: 'hidden', backgroundColor: '#E5484D' }}
-      renderRightActions={() => (
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel={`${title} 알림 삭제`}
-          disabled={busy}
-          onPress={onDelete}
-          style={{
-            width: 88,
-            alignItems: 'center',
-            justifyContent: 'center',
-            gap: 8,
-            backgroundColor: '#E5484D',
-          }}
-        >
-          <SymbolView
-            name={{ ios: 'trash', android: 'delete_outline' }}
-            size={22}
-            tintColor="#FFFFFF"
-          />
-          <Text style={{ color: '#FFFFFF', fontSize: 14, fontWeight: '600' }}>삭제</Text>
-        </Pressable>
-      )}
-    >
-      <View style={[styles.card, styles.savedCard, { padding: 16, gap: 14 }]}>
+      <View style={[styles.card, styles.savedCard]}>
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
           <Pressable
             accessibilityRole="button"
-            accessibilityLabel={`${title} 알림 수정`}
+            accessibilityLabel={`${title} ${mode === 'both' ? '예약 및 위치' : mode === 'time' ? '예약' : '위치'} 알림 수정`}
+            onLongPress={onLongPress}
+            delayLongPress={300}
             onPress={onEdit}
+            disabled={editing || busy}
             style={{ flex: 1, flexDirection: 'row', alignItems: 'center', gap: 12 }}
           >
             <View style={{ width: 42, height: 42, borderRadius: 12, backgroundColor: colors.secondarySurface, alignItems: 'center', justifyContent: 'center' }}>
@@ -421,28 +408,37 @@ export function SavedAlertCard({
                   minimumFontScale={0.8}
                   style={{ flexShrink: 1, fontSize: 18, fontWeight: '600', color: colors.text }}
                 >
-                  {title} {mode === 'both' ? '예약·위치 알림' : mode === 'time' ? '예약 알림' : '위치 알림'}
+                  {title}
                 </Text>
-                {mode !== 'location' && <SymbolView name={{ ios: 'clock', android: 'schedule' }} size={20} tintColor={colors.accent} />}
-                {mode !== 'time' && <SymbolView name={{ ios: 'location', android: 'near_me' }} size={20} tintColor={colors.accent} />}
+                {mode !== 'location' && <SymbolView name={{ ios: 'clock', android: 'schedule' }} size={15} tintColor={colors.accent} />}
+                {mode !== 'time' && <SymbolView name={{ ios: 'location', android: 'near_me' }} size={15} tintColor={colors.accent} />}
               </View>
-              <Text style={{ fontSize: 13, lineHeight: 18, color: colors.secondaryText }}>
-                {subtitle}
-              </Text>
+              <View>
+                {direction}
+                <SavedAlertSecondaryText>{subtitle}</SavedAlertSecondaryText>
+              </View>
             </View>
           </Pressable>
+          {editing ? (
+            <View style={{ width: 60, height: 44 }} />
+          ) : (
           <AlertToggle
             label={`${title} ${subtitle} 전체 알림 활성화`}
             disabled={busy}
             value={enabled}
             onChange={onToggle}
             color={colors.brand}
+            onLongPress={onLongPress}
           />
+          )}
         </View>
         <Pressable
           accessibilityRole="button"
-          accessibilityLabel={`${title} 알림 수정`}
+          accessibilityLabel={`${title} ${mode === 'both' ? '예약 및 위치' : mode === 'time' ? '예약' : '위치'} 알림 수정`}
           onPress={onEdit}
+          onLongPress={onLongPress}
+          delayLongPress={300}
+          disabled={editing || busy}
           style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}
         >
           <View style={{ flex: 1, gap: 5 }}>
@@ -461,23 +457,41 @@ export function SavedAlertCard({
             {detail}
           </Text>
           </View>
-          <View style={{ width: '43%' }}>{arrivals}</View>
+          <View style={{ flexBasis: '42%', flexShrink: 0 }}>{arrivals}</View>
         </Pressable>
-        <View
-          style={{
-            flexDirection: 'row',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-            borderTopWidth: 1,
-            borderTopColor: colors.separator,
-            paddingTop: 8,
-            gap: 12,
-          }}
-        >
-          {todayControl}
+        <View style={{
+          position: 'relative', marginHorizontal: -16, marginBottom: -16,
+          paddingHorizontal: 16, paddingBottom: 16,
+        }}>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={`${title} 알림 수정`}
+            onPress={onEdit}
+            onLongPress={onLongPress}
+            delayLongPress={300}
+            disabled={editing || busy}
+            style={{ position: 'absolute', top: 0, right: 0, bottom: 0, left: 0 }}
+          />
+          <View pointerEvents="box-none" style={{
+            flexDirection: 'row', borderTopWidth: 1, borderTopColor: colors.separator, paddingTop: 8,
+          }}>
+            {todayControl}
+          </View>
         </View>
       </View>
-    </Swipeable>
+    </View>
+    </Sortable.Touchable>
+    </Sortable.Handle>
+    {editing && (
+            <Pressable accessibilityRole="button" accessibilityLabel={`${title} 알림 삭제`}
+              disabled={busy} onPress={onDelete} onLongPress={onLongPress}
+              style={{ position: 'absolute', top: 16, right: 16, zIndex: 2, width: 44, height: 44, alignItems: 'flex-end', justifyContent: 'center' }}>
+              <View style={{ width: 32, height: 32, borderRadius: 16, alignItems: 'center', justifyContent: 'center',
+                backgroundColor: colors.secondarySurface }}>
+                <SymbolView name={{ ios: 'xmark', android: 'close' }} size={15} tintColor={colors.danger} />
+              </View>
+            </Pressable>
+    )}
     </View>
   );
 }

@@ -1,3 +1,4 @@
+import { ArrivalTimeSlot, useArrivalTimeRefreshing } from '@/shared/ui/arrival-time-entrance';
 import { useAppStore } from '@/shared/model/app-store';
 import { AlertTodayChoice } from './alert-today-choice';
 import { notificationPause } from '../model/notification-actions';
@@ -11,7 +12,7 @@ import { useBusArrivals } from '@/features/bus-stop/model/use-bus-arrivals';
 import { formatEta, groupBusArrivals } from '@/features/bus-stop/model/bus-arrival';
 import { useSubwayArrivals } from '@/features/subway/model/use-subway-arrivals';
 import { useSubwayStation, useSubwayTimetable } from '@/features/subway/model/use-subway-station';
-import { getServiceStatus } from '@/features/subway/model/subway-arrival-display';
+import { getScheduledArrivals, getScheduledDepartureAt, isUsableSubwayArrival } from '@/features/subway/model/subway-arrival-display';
 import {
   isExpressTrain,
   matchesSubwayDestination,
@@ -33,6 +34,7 @@ export function AlertArrivalTimes(props: Props) {
 
 /** 비활성화 시 구독을 해제해 다른 활성 카드의 공유 Query는 유지한다. */
 function ActiveAlertArrivalTimes(props: Props & { active: boolean }) {
+  const refreshing = useArrivalTimeRefreshing();
   const [focused, setFocused] = useState(false);
   const [now, setNow] = useState(Date.now);
   useEffect(() => {
@@ -63,45 +65,13 @@ function ActiveAlertArrivalTimes(props: Props & { active: boolean }) {
     day === 0 ? 'holiday' : day === 6 ? 'saturday' : 'weekday',
     props.active && focused,
   );
-  const busKey =
-    props.transport === 'bus'
-      ? `${props.alert.stationId}:${props.alert.routeId}:${props.alert.stationSeq ?? ''}`
-      : '';
-  const [recentBus, setRecentBus] = useState<{
-    key: string;
-    at: number;
-    data: NonNullable<typeof bus.data>;
-  }>();
-  if (
-    props.transport === 'bus' &&
-    bus.data &&
-    (recentBus?.key !== busKey || recentBus.at !== bus.dataUpdatedAt)
-  ) {
-    const { alert } = props;
-    const hasTime = bus.data.some(
-      (arrival) =>
-        arrival.routeId === alert.routeId &&
-        (alert.stationSeq === undefined || arrival.stationSeq === alert.stationSeq) &&
-        arrival.etaSeconds !== null,
-    );
-    if (hasTime) setRecentBus({ key: busKey, at: bus.dataUpdatedAt, data: bus.data });
-  }
   const query = props.transport === 'bus' ? bus : subway;
   let times: string[] = [];
   if (props.transport === 'bus') {
     const { alert } = props;
     const seen = new Set<string>();
-    const matches = (arrival: NonNullable<typeof bus.data>[number]) =>
-      arrival.routeId === alert.routeId &&
-      (alert.stationSeq === undefined || arrival.stationSeq === alert.stationSeq);
-    const hasCurrent = bus.data?.some(
-      (arrival) =>
-        matches(arrival) &&
-        (arrival.etaSeconds !== null || arrival.serviceEnded || arrival.recheckingArrival),
-    );
-    const recent = recentBus?.key === busKey && now - recentBus.at < 90_000 ? recentBus : undefined;
-    const data = hasCurrent ? bus.data : (recent?.data ?? bus.data);
-    const observedAt = hasCurrent ? bus.dataUpdatedAt : (recent?.at ?? bus.dataUpdatedAt);
+    const data = bus.data;
+    const observedAt = bus.dataUpdatedAt;
     const selected = (data ?? []).filter((arrival) => {
       if (
         arrival.routeId !== alert.routeId ||
@@ -158,71 +128,47 @@ function ActiveAlertArrivalTimes(props: Props & { active: boolean }) {
     const normalized = normalizeSubwayDirections(line, source, timetable.data?.directions);
     const direction = normalizeSubwayDirection(line, alert.direction, source);
     const fetched = Date.parse(subway.data?.fetchedAt ?? '');
-    if (Number.isFinite(fetched) && now - fetched < 90_000 && fetched - now < 30_000) {
-      times = normalized.arrivals
-        .filter(
-          (train) =>
-            train.lineId === alert.lineId &&
-            (direction === 'all' || train.direction === direction) &&
-            matchesSubwayDestination(alert, train.destination) &&
-            (!alert.expressOnly || isExpressTrain(train)) &&
-            train.arrivalCode !== '2' &&
-            train.etaSeconds !== null &&
-            train.etaSeconds - Math.max(0, now - fetched) / 1000 >= -15,
-        )
-        .sort((a, b) => a.etaSeconds! - b.etaSeconds!)
-        .filter(
-          (train, index, trains) =>
-            !train.trainId ||
-            trains.findIndex((other) => other.trainId === train.trainId) === index,
-        )
-        .slice(0, 2)
-        .map(
-          (train) =>
-            `${train.etaSource === 'schedule' ? '시간표 기준 · ' : train.etaSource === 'estimated' ? '예상 ' : ''}${formatEta(Math.max(0, train.etaSeconds! - Math.max(0, now - fetched) / 1000))}${train.destination ? ` · ${train.destination.replace(/행$/, '')}행` : ''}`,
-        );
-    }
-    if (!times.length && !subway.isPending && !subway.isError && !timetable.isError) {
-      const schedules = normalized.scheduled
+    const matches = (train: (typeof source)[number]) =>
+      train.lineId === alert.lineId &&
+      (direction === 'all' || train.direction === direction) &&
+      matchesSubwayDestination(alert, train.destination) &&
+      (!alert.expressOnly || isExpressTrain(train));
+    const live = normalized.arrivals.filter((train) => matches(train) && isUsableSubwayArrival(train, fetched, now));
+    const official = live.filter((train) => train.etaSource !== 'estimated' && train.etaSource !== 'schedule');
+    const scheduled = getScheduledArrivals(normalized.scheduled, alert.lineId, alert.lineName ?? alert.lineId, now)
+      .filter(matches);
+    const candidates = official.length ? official : scheduled.length ? scheduled : live;
+    times = candidates
+      .sort((a, b) => (a.etaSeconds ?? 0) - (b.etaSeconds ?? 0))
+      .filter((train, index, rows) => !train.trainId || rows.findIndex((row) => row.trainId === train.trainId) === index)
+      .slice(0, 2)
+      .map((train) => {
+        const elapsed = train.etaSource === 'schedule' && candidates === scheduled ? 0 : Math.max(0, now - fetched) / 1000;
+        const prefix = train.etaSource === 'schedule' ? '시간표 기준 · ' : train.etaSource === 'estimated' ? '예상 ' : '';
+        const time = train.etaSeconds === null ? '곧 도착' : formatEta(Math.max(0, train.etaSeconds - elapsed));
+        return `${prefix}${time}${train.destination ? ` · ${train.destination.replace(/행$/, '')}행` : ''}`;
+      });
+    if (!times.length && timetable.data && !timetable.data.stale) {
+      const lastTrains = normalized.scheduled
         .filter((entry) => direction === 'all' || entry.direction === direction)
-        .map((entry) => {
-          const trains = entry.trains.filter((train) =>
-            matchesSubwayDestination(alert, train.destination) && (!alert.expressOnly || train.isExpress),
-          );
-          return {
-            ...entry,
-            trains,
-            firstTrain: trains[0] ?? null,
-            lastTrain: trains.at(-1) ?? null,
-          };
-        })
-        .filter((entry) => entry.trains.length > 0);
-      const local = new Date(now + 9 * 3_600_000);
-      const hour = local.getUTCHours();
-      const serviceMinute = (hour < 3 ? hour + 24 : hour) * 60 + local.getUTCMinutes();
-      if (
-        schedules.length &&
-        schedules.every(
-          (entry) => getServiceStatus(entry.direction, schedules, serviceMinute) === '운행종료',
-        )
-      ) {
-        times = ['운행 종료', '운행 종료'];
+        .flatMap((entry) => entry.trains.filter((train) =>
+          matchesSubwayDestination(alert, train.destination) && (!alert.expressOnly || train.isExpress),
+        ).slice(-1));
+      if (lastTrains.length && lastTrains.every((train) => now > getScheduledDepartureAt(train.departureTime, now))) {
+        times = ['운행 종료'];
       }
     }
   }
   return (
     <View style={{ gap: 6 }}>
       {[0, 1].map((index) => (
-        <View key={index} style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-          <Text style={{ color: colors.secondaryText, fontSize: 10 }}>
-            {index ? '두 번째' : '첫 번째'}
-          </Text>
+          <ArrivalTimeSlot key={index} indicator alignRight animateEntrance={props.active && Boolean(times[index]) && times[index] !== '운행 종료'}
+            pending={props.active && (refreshing || (!times[index] && query.isFetching))}>
           <Text
             numberOfLines={1}
             adjustsFontSizeToFit
             minimumFontScale={0.85}
             style={{
-              flex: 1,
               textAlign: 'right',
               color: times[index] && /분|초|곧 도착/.test(times[index]) && !/시간표|예상|배차|재조회/.test(times[index])
                 ? '#E5484D' : colors.secondaryText,
@@ -231,16 +177,16 @@ function ActiveAlertArrivalTimes(props: Props & { active: boolean }) {
               fontVariant: ['tabular-nums'],
             }}
           >
-            {times[index] ?? (!props.active ? '꺼짐' : index ? '—' : query.isFetching ? '조회 중' : query.isError ? '갱신 지연' : '도착 정보 없음')}
+            {times[index] ?? (!props.active ? '꺼짐' : '—')}
           </Text>
-        </View>
+          </ArrivalTimeSlot>
       ))}
     </View>
   );
 }
 
 /** 예약 자체를 유지한 채 오늘 받을 알림만 제어한다. */
-export function AlertTodayControl(props: Props & { busy: boolean }) {
+export function AlertTodayControl(props: Props & { busy: boolean; editing?: boolean; onLongPress?: () => void }) {
   const { alert } = props;
   const client = useQueryClient();
   const setError = useAppStore((state) => state.setAlertRuntimeError);
@@ -276,9 +222,10 @@ export function AlertTodayControl(props: Props & { busy: boolean }) {
   const paused = Boolean(notificationPause(alert.notificationControl, props.kind, now));
   return (
     <AlertTodayChoice
-      disabled={!alert.enabled || props.busy || control.isPending}
+      disabled={!alert.enabled || props.busy || props.editing || control.isPending}
       value={alert.enabled && !paused}
       onChange={(active) => control.mutate(!active)}
+      onLongPress={props.onLongPress}
     />
   );
 }

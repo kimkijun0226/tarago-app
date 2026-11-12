@@ -1,7 +1,7 @@
 /** @fileoverview 제목·카드·하단 설명으로 설정 항목을 묶는 공통 레이아웃. */
 import type { PropsWithChildren } from 'react';
 import { Text, View } from 'react-native';
-import { useAppTheme } from './theme';
+import { useAppTheme, appSpacing, appRadius, appType } from './theme';
 
 /**
  * 전달받은 설정 UI를 같은 여백과 배경으로 묶는다. 데이터 조회나 상태 변경은 하지 않는다.
@@ -16,7 +16,7 @@ export function AppSection({
   /** 섹션 제목·카드 배경·설명에 적용할 공통 팔레트다. */
   const { colors } = useAppTheme();
   return (
-    <View style={{ gap: 8 }}>
+    <View style={{ gap: appSpacing.sm }}>
       {title ? (
         <Text
           accessibilityRole="header"
@@ -28,11 +28,11 @@ export function AppSection({
       <View
         style={{
           backgroundColor: colors.surface,
-          borderRadius: 16,
+          borderRadius: appRadius.lg,
           borderWidth: 1,
           borderColor: colors.separator,
-          padding: 16,
-          gap: 12,
+          padding: appSpacing.lg,
+          gap: appSpacing.md,
         }}
       >
         {children}
@@ -41,8 +41,7 @@ export function AppSection({
         <Text
           style={{
             color: colors.secondaryText,
-            fontSize: 13,
-            lineHeight: 19,
+            ...appType.footnote,
             paddingHorizontal: 0,
           }}
         >

@@ -3,13 +3,14 @@ import { Pressable, StyleSheet, Text } from 'react-native';
 import Animated, { Easing, ReduceMotion, interpolateColor, useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated';
 
 /** 손잡이와 상태 색을 함께 전환하며 서버 저장 중에도 크기를 유지한다. */
-export function AlertToggle({ value, onChange, disabled, label, color, compact = false }: {
+export function AlertToggle({ value, onChange, disabled, label, color, compact = false, onLongPress }: {
   value: boolean;
   onChange: (value: boolean) => void;
   disabled?: boolean;
   label: string;
   color: string;
   compact?: boolean;
+  onLongPress?: () => void;
 }) {
   const progress = useSharedValue(value ? 1 : 0);
   useEffect(() => {
@@ -25,6 +26,8 @@ export function AlertToggle({ value, onChange, disabled, label, color, compact =
       accessibilityLabel={label}
       accessibilityState={{ checked: value, disabled }}
       disabled={disabled}
+      onLongPress={onLongPress}
+      delayLongPress={300}
       onPress={() => {
         progress.set(withTiming(value ? 0 : 1, { duration: 180, easing: Easing.inOut(Easing.quad), reduceMotion: ReduceMotion.System }));
         onChange(!value);
