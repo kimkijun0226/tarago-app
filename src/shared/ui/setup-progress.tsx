@@ -1,4 +1,6 @@
-import { StyleSheet, Text, View } from 'react-native';
+import Animated from 'react-native-reanimated';
+import { fadeIn } from './motion';
+import { StyleSheet, View } from 'react-native';
 import { appColors as c } from '@/shared/ui/theme';
 
 /** 단계는 상단 진행 막대와 큰 제목으로 표현한다. 지도에서는 기존 선택 제목과 조립한다. */
@@ -26,13 +28,13 @@ export function SetupProgress({
           <View key={label} style={[s.segment, index <= current && s.complete]} />
         ))}
       </View>
-      <Text style={s.step}>
+      <Animated.Text entering={fadeIn} style={s.step}>
         {compact ? `${current + 1}. ${labels[current]}` : `${current + 1} / 3 단계`}
-      </Text>
+      </Animated.Text>
       {showTitle && (
-        <Text accessibilityRole="header" style={s.title}>
+        <Animated.Text entering={fadeIn.delay(60)} accessibilityRole="header" style={s.title}>
           {title ?? labels[current]}
-        </Text>
+        </Animated.Text>
       )}
     </View>
   );

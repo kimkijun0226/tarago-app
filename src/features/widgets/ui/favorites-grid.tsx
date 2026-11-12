@@ -1,6 +1,6 @@
 import { useCallback, useMemo, useRef, useState } from 'react';
 import Sortable, { type SortableGridRenderItem } from 'react-native-sortables';
-import Animated, { LinearTransition, FadeOut, useSharedValue, useAnimatedStyle, withTiming, withSpring, withDelay, Easing, type SharedValue, type AnimatedRef } from 'react-native-reanimated';
+import Animated, { LinearTransition, FadeOut, useSharedValue, useAnimatedStyle, withTiming, withSpring, withDelay, Easing, ReduceMotion, type SharedValue, type AnimatedRef } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
 import { Image } from 'expo-image';
 import { Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
@@ -84,6 +84,9 @@ export function FavoritesGrid({
     ],
     [ordered, columns],
   );
+  const addScale = useSharedValue(1);
+  const addMotion = useAnimatedStyle(() => ({ transform: [{ scale: addScale.get() }] }));
+
   const renderItem = useCallback<SortableGridRenderItem<Cell>>(
     ({ item }) => (
       <Animated.View
@@ -167,21 +170,25 @@ export function FavoritesGrid({
           </View>
         ) : (
           <Sortable.Handle mode="fixed-order">
+            <Animated.View style={addMotion}>
             <Pressable
               disabled={disabled}
               accessibilityRole="button"
               accessibilityLabel={editing ? '즐겨찾기 수정 취소' : '즐겨찾기 추가'}
               onTouchStart={(event) => event.stopPropagation()}
+              onPressIn={() => addScale.set(withTiming(0.93, { duration: 200, reduceMotion: ReduceMotion.System }))}
+              onPressOut={() => addScale.set(withSpring(1, { damping: 12, stiffness: 320, reduceMotion: ReduceMotion.System }))}
               onPress={editing ? onCancelEdit : onAdd}
               style={[s.add, { width: diameter, opacity: editing ? 0.35 : 1 }]}
             >
               <Text style={s.plus}>+</Text>
             </Pressable>
+            </Animated.View>
           </Sortable.Handle>
         )}
       </Animated.View>
     ),
-    [diameter, disabled, editing, onOpen, onRemove, onAdd, onCancelEdit, onEdit, heldId, holdScale, resetHold],
+    [addMotion, addScale, diameter, disabled, editing, onOpen, onRemove, onAdd, onCancelEdit, onEdit, heldId, holdScale, resetHold],
   );
   return (
     <View style={s.grid} onLayout={(event) => setWidth(event.nativeEvent.layout.width)}>
@@ -247,7 +254,7 @@ function HoldScale({ id, heldId, scale, children }: {
   return <Animated.View style={style}>{children}</Animated.View>;
 }
 function Arrival({ item, diameter }: { item: WidgetTarget; diameter: number }) {
-  const { direction, time, color, remainingSeconds, loading, realtimeError } = useWidgetArrival(item);
+  const { direction, time, color, remainingSeconds, loading } = useWidgetArrival(item);
   const showLoading = loading;
   const title = item.transport === 'subway' && item.expressOnly ? `${item.title} · 급행` : item.title;
   const textScale = Math.max(1, Math.min(2, diameter / 80));
@@ -258,7 +265,10 @@ function Arrival({ item, diameter }: { item: WidgetTarget; diameter: number }) {
       ? `${Math.floor(remainingSeconds / 60)}:${String(Math.floor(remainingSeconds % 60)).padStart(2, '0')}`
       : null;
   const label = timer ?? minutes ?? time;
-  const statusOnly = remainingSeconds === null && !['진입', '도착'].includes(time);
+  const firstDeparture = time.startsWith('첫차 출발 전') ? time.match(/\b\d{2}:\d{2}\b/)?.[0] : undefined;
+  const displayTime = showLoading && remainingSeconds === null ? '조회 중' :
+    remainingSeconds !== null ? label : firstDeparture ? `첫차 ${firstDeparture}` :
+      /오류|갱신/.test(time) ? '갱신 지연' : time.split('\n')[0];
   return (
     <Animated.View
       layout={LinearTransition.duration(280)}
@@ -273,7 +283,7 @@ function Arrival({ item, diameter }: { item: WidgetTarget; diameter: number }) {
         transition={150}
         accessible={false}
       />
-      {!showLoading && !statusOnly && (
+      {(
         <View style={[s.timeCover, { maxWidth: diameter * 0.78 }]}>
           <Text
             style={[s.time, { fontSize: 11 * textScale, lineHeight: 13 * textScale }]}
@@ -282,11 +292,11 @@ function Arrival({ item, diameter }: { item: WidgetTarget; diameter: number }) {
             adjustsFontSizeToFit
             minimumFontScale={0.7}
           >
-            {label}
+            {displayTime}
           </Text>
         </View>
       )}
-      {!showLoading && !statusOnly && (
+      {(
         <View
           style={[
             s.identity,
@@ -343,31 +353,6 @@ function Arrival({ item, diameter }: { item: WidgetTarget; diameter: number }) {
               : ''}
           </Text>
           {time.includes('배차') && <Text style={directionStyle}>배차 기준 예상</Text>}
-          {realtimeError && <Text style={directionStyle}>실시간 오류 · 의견 보내기</Text>}
-        </View>
-      )}
-      {(showLoading || statusOnly) && (
-        <View
-          style={s.loadingOverlay}
-          pointerEvents="none"
-          accessibilityLabel={showLoading ? '정보 가져오는 중' : time}
-        >
-          <Text
-            style={[s.title, { fontSize: 10 * textScale, lineHeight: 12 * textScale }]}
-            numberOfLines={1}
-          >
-            {title}
-          </Text>
-          <Text
-            style={[s.loadingText, { fontSize: 9 * textScale, lineHeight: 12 * textScale }]}
-            numberOfLines={4}
-            adjustsFontSizeToFit
-          >
-            {showLoading ? '정보\n가져오는 중' : label}
-          </Text>
-          {!showLoading && realtimeError && (
-            <Text style={directionStyle}>실시간 오류 · 의견 보내기</Text>
-          )}
         </View>
       )}
     </Animated.View>
@@ -428,24 +413,8 @@ const s = StyleSheet.create({
   },
   activeRing: { borderWidth: 0 },
   empty: { borderColor: '#EAF0F7' },
-  loadingOverlay: {
-    position: 'absolute',
-    top: 0,
-    bottom: 0,
-    left: 0,
-    right: 0,
-    borderRadius: 999,
-    backgroundColor: 'transparent',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  loadingText: {
-    color: c.secondaryText,
-    fontSize: 8,
-    fontWeight: '500',
-    textAlign: 'center',
-    maxWidth: '72%',
-  },
+
+
   timeCover: {
     position: 'absolute',
     top: -5,

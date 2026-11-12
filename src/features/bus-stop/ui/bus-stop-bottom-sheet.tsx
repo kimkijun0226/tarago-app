@@ -1,3 +1,4 @@
+import { useCurrentBusArrivals } from '../model/use-current-bus-arrivals';
 import { ListSkeleton } from '@/shared/ui/loading-skeleton';
 /** @fileoverview 선택 정류장의 도착 목록·새로고침·노선 및 알림 진입 UI를 구성한다. 서버 상태는 Query 훅이 소유한다. */
 import type { SharedValue } from 'react-native-reanimated';
@@ -93,9 +94,10 @@ export const BusStopBottomSheet = memo(function BusStopBottomSheet({
     isError,
     error,
     isFetching,
+    refreshDelayed,
     isPending,
     refetch,
-  } = useBusArrivals(busStop.id, snap !== 'compact', true);
+  } = useBusArrivals(busStop.id, snap !== 'compact');
 
   /**
    * 공식 조회가 410으로 정차 노선 부재를 확인하면 시트를 닫고 이용자에게 알린다.
@@ -117,8 +119,8 @@ export const BusStopBottomSheet = memo(function BusStopBottomSheet({
       ? error.response.data.message
       : '도착정보를 불러오지 못했습니다.';
 
-  /** 응답 배열이 바뀔 때만 다시 묶는 노선·경유 순번별 최대 두 차량 목록이다. */
-  const arrivalGroups = useMemo(() => groupBusArrivals(arrivals), [arrivals]);
+  const currentArrivals = useCurrentBusArrivals(arrivals, dataUpdatedAt, snap !== 'compact');
+  const arrivalGroups = useMemo(() => groupBusArrivals(currentArrivals), [currentArrivals]);
 
   /** 첫 차량이 60초 안에 도착하는 노선 그룹이며 그룹 변경 시에만 다시 계산한다. */
   const soonGroups = useMemo(
@@ -168,11 +170,6 @@ export const BusStopBottomSheet = memo(function BusStopBottomSheet({
         {/* 캐시된 목록은 유지하고 공통 시트의 높이·클리핑으로만 가려 드래그 중 바로 드러나게 한다. */}
         <View style={styles.sheetContent}>
           <SoonBusArrivals groups={soonGroups} onSelectRoute={onSelectRoute} />
-          {isError && arrivalGroups.length > 0 ? (
-            <Text accessibilityRole="alert" style={styles.retryText}>
-              {errorMessage}
-            </Text>
-          ) : null}
           <View style={styles.list}>
             <FlatList<BusArrivalGroup>
               style={styles.list}
@@ -203,6 +200,7 @@ export const BusStopBottomSheet = memo(function BusStopBottomSheet({
               <ArrivalRefreshButton
                 updatedAt={dataUpdatedAt}
                 fetching={isFetching}
+                delayed={refreshDelayed}
                 onRefresh={() => void refetch()}
               />
             ) : null}

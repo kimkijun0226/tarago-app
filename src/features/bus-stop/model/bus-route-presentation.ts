@@ -1,4 +1,4 @@
-import { normalizeBusStopNumber } from './bus-stop-number';
+import { normalizeBusStopNumber } from './bus-stop-number.ts';
 /** @fileoverview 노선 시트 높이 전환과 왕복 경유 정류장 식별에 필요한 순수 화면 계산을 제공한다. */
 
 type RouteStopCoordinate = {

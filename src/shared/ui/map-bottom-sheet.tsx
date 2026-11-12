@@ -3,7 +3,7 @@ import BottomSheet, {
   BottomSheetHandle,
   type BottomSheetHandleProps,
   type BottomSheetBackgroundProps,
-  useBottomSheetSpringConfigs,
+  useBottomSheetTimingConfigs,
 } from '@gorhom/bottom-sheet';
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import {
@@ -20,10 +20,10 @@ import Animated, {
   useAnimatedStyle,
   interpolate,
   Extrapolation,
-  FadeOut,
   withTiming,
 } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { motionIn, motionOut, fadeOut } from './motion';
 import { useAppTheme } from './theme';
 import { useSingleStepSheetGesture } from './use-single-step-sheet-gesture';
 import { useAppStore } from '@/shared/model/app-store';
@@ -84,12 +84,7 @@ export function MapBottomSheet({
   topInset,
   surfaceStyle,
 }: MapBottomSheetProps) {
-  const animationConfigs = useBottomSheetSpringConfigs({
-    damping: 28,
-    stiffness: 260,
-    mass: 0.8,
-    overshootClamping: true,
-  });
+  const animationConfigs = useBottomSheetTimingConfigs(motionIn);
   /** 시트 배경과 핸들 색상, 모서리에 적용할 공통 테마다. */
   const { colors } = useAppTheme();
 
@@ -152,7 +147,7 @@ export function MapBottomSheet({
     const t = Math.max(0, Math.min(1, animatedIndex.value - 1));
     return {
       initialValues: { opacity: 0.24 * t * t * (3 - 2 * t) },
-      animations: { opacity: withTiming(0, { duration: 180 }) },
+      animations: { opacity: withTiming(0, motionOut) },
     };
   }, [animatedIndex]);
 
@@ -268,7 +263,7 @@ export function MapBottomSheet({
         style={[StyleSheet.absoluteFill, { backgroundColor: '#000000', zIndex: 20 }, dimStyle]}
       />
       <Animated.View
-        exiting={FadeOut.duration(180)}
+        exiting={fadeOut}
         pointerEvents="box-none"
         style={[
           {

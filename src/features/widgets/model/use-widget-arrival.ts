@@ -1,9 +1,8 @@
-import { buildFavoriteArrival, matchesFavoriteSubwayTrain } from './favorite-arrival';
+import { buildFavoriteArrival, getFavoriteLiveTrains } from './favorite-arrival';
 import { useCallback, useEffect, useState } from 'react';
 import { useFocusEffect } from 'expo-router';
 import { useBusArrivals } from '@/features/bus-stop/model/use-bus-arrivals';
 import { useSubwayStation, useSubwayTimetable } from '@/features/subway/model/use-subway-station';
-import { normalizeSubwayDirection, normalizeSubwayDirections } from '@/features/subway/model/subway-direction';
 import { useSubwayArrivals } from '@/features/subway/model/use-subway-arrivals';
 import type { WidgetTarget } from './widget-configuration';
 
@@ -37,16 +36,7 @@ export function useWidgetArrival(item: WidgetTarget) {
   const needsSchedule =
     item.transport === 'subway' &&
     !subway.isPending &&
-    !subway.isError &&
-    !(item.expressOnly
-      ? normalizeSubwayDirections(line, liveTrains).arrivals.some(
-          (train) => train.arrivalCode !== '2' && matchesFavoriteSubwayTrain(
-            item,
-            normalizeSubwayDirection(line, item.direction, liveTrains),
-            train,
-          ),
-        )
-      : liveTrains.some((train) => train.lineId === item.lineId));
+    getFavoriteLiveTrains(item, liveTrains, subway.dataUpdatedAt, now, line).length === 0;
   const day = new Date(now + 6 * 3_600_000).getUTCDay();
   const timetable = useSubwayTimetable(
     item.transport === 'subway' ? item.stationName : '',
@@ -65,6 +55,6 @@ export function useWidgetArrival(item: WidgetTarget) {
   return {
     ...result,
     loading: result.loading || (needsSchedule && timetable.isPending && focused),
-    time: needsSchedule && timetable.isError ? '시간표 조회 오류 · 의견 보내기' : result.time,
+    time: needsSchedule && timetable.isError && !timetable.data ? '갱신 지연' : result.time,
   };
 }

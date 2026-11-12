@@ -5,10 +5,10 @@ import { SymbolView } from 'expo-symbols';
 import { mapUi } from '@/shared/ui/map-design-tokens';
 import { BUS_ARRIVALS_REFRESH_INTERVAL } from '../model/use-bus-arrivals';
 
-type Props = { updatedAt: number; fetching: boolean; onRefresh: () => void };
+type Props = { updatedAt: number; fetching: boolean; delayed?: boolean; onRefresh: () => void };
 
 /** 초 단위 표시만 이 버튼 안에서 갱신해 버스 목록 전체를 매초 다시 그리지 않는다. */
-export function ArrivalRefreshButton({ updatedAt, fetching, onRefresh }: Props) {
+export function ArrivalRefreshButton({ updatedAt, fetching, delayed, onRefresh }: Props) {
   /** 카운트다운 표시용 시각이다. 서버 데이터나 새로고침 타이머 역할을 하지 않는다. */
   const [now, setNow] = useState(Date.now);
 
@@ -34,7 +34,7 @@ export function ArrivalRefreshButton({ updatedAt, fetching, onRefresh }: Props) 
     <View pointerEvents="box-none" style={styles.container}>
       <Pressable
         accessibilityRole="button"
-        accessibilityLabel={`버스 도착정보 새로고침${updatedAt ? `, ${remaining}초 후 자동 갱신` : ''}`}
+        accessibilityLabel={`버스 도착정보 새로고침${delayed ? ', 갱신 지연' : updatedAt ? `, ${remaining}초 후 자동 갱신` : ''}`}
         accessibilityState={{ busy: fetching, disabled: fetching }}
         disabled={fetching}
         onPress={onRefresh}
@@ -50,7 +50,7 @@ export function ArrivalRefreshButton({ updatedAt, fetching, onRefresh }: Props) 
           />
         )}
         <Text style={styles.updatedAt}>
-          {fetching ? '조회 중' : updatedAt ? `${remaining}초` : '—'}
+          {fetching ? '조회 중' : delayed ? '지연' : updatedAt ? `${remaining}초` : '—'}
         </Text>
       </Pressable>
     </View>

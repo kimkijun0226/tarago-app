@@ -30,9 +30,9 @@ test('10분 이하는 초까지, 초과하면 올림한 분으로 표시한다',
   assert.equal(formatEta(480, undefined, 'minutes'), '약 8분');
 });
 
-test('회차 전 차량은 추정 출처와 분·초를 함께 표시한다', () => {
-  assert.equal(formatEta(793, undefined, undefined, 'turnaround_estimate'), '예상 13분 13초');
-  assert.equal(formatEta(50, undefined, undefined, 'turnaround_estimate'), '예상 0분 50초');
+test('회차 전 차량은 추정 출처와 올림한 분을 표시한다', () => {
+  assert.equal(formatEta(793, undefined, undefined, 'turnaround_estimate'), '예상 약 14분');
+  assert.equal(formatEta(50, undefined, undefined, 'turnaround_estimate'), '예상 약 1분');
 });
 
 test('남은 정류장 수를 정류장 문구로 표시한다', () => {

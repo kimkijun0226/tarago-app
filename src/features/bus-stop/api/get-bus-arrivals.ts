@@ -56,7 +56,7 @@ export async function getBusArrivals({
   /** 공유 HTTP 클라이언트의 응답이며 호출자에게 본문 데이터만 전달한다. */
   const response = await apiClient.get<BusArrival[]>(`/bus/stations/${stationId}/arrivals`, {
     signal,
-    params: { fresh: 1, officialOnly: officialOnly ? 1 : undefined },
+    params: { fresh: 1, officialOnly: officialOnly ? 1 : undefined, display: officialOnly ? undefined : 1 },
   });
 
   return response.data;

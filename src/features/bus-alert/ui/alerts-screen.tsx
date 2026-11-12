@@ -1,3 +1,4 @@
+import { waitForForegroundRefresh } from '@/shared/api/foreground-refresh';
 import { ListSkeleton } from '@/shared/ui/loading-skeleton';
 import { TransportSelector } from '@/shared/ui/transport-selector';
 import { AlertKindSelector } from './alert-kind-selector';
@@ -159,7 +160,7 @@ export function AlertsScreenContent({
     setRefreshing(true);
     refreshHeight.set(44);
     try {
-      await Promise.all([
+      await waitForForegroundRefresh(Promise.allSettled([
         bus.refetch({ cancelRefetch: false }),
         subway.list.refetch({ cancelRefetch: false }),
         client.refetchQueries({
@@ -168,7 +169,7 @@ export function AlertsScreenContent({
             (key[0] === 'bus-stops' && key[2] === 'arrivals') ||
             (key[0] === 'subway' && key[2] === 'alert-arrivals'),
         }, { cancelRefetch: false }),
-      ]);
+      ]));
     } finally {
       await new Promise<void>((resolve) => setTimeout(resolve, Math.max(0, 1000 - (Date.now() - startedAt))));
       await new Promise<void>((resolve) => setTimeout(resolve, 100));

@@ -1,3 +1,4 @@
+import { useCurrentBusArrivals } from '../model/use-current-bus-arrivals';
 import { ListSkeleton } from '@/shared/ui/loading-skeleton';
 /** @fileoverview 노선 경유 목록과 차량 위치를 표시하고 시트 높이에 맞춰 선택 정류장의 스크롤을 조정한다. */
 import type { SharedValue } from 'react-native-reanimated';
@@ -76,7 +77,7 @@ export const BusRouteBottomSheet = memo(function BusRouteBottomSheet({
   } = useBusRouteDetail(stationId, routeId, stationSeq, true, source);
 
   /** 선택 정류장의 도착 응답과 수동 재조회 함수를 읽는다. 응답은 Query가 소유한다. */
-  const { data: arrivals = EMPTY_ARRIVALS, refetch: refetchArrivals } = useBusArrivals(stationId);
+  const { data: arrivals = EMPTY_ARRIVALS, dataUpdatedAt, isFetching: fetchingArrivals, refetch: refetchArrivals } = useBusArrivals(stationId);
 
   /** 통과 지점은 경로 계산에만 남기고 승하차할 수 있는 정류장 목록에서는 제외한다. */
   const visibleStops = useMemo(() => data?.stops.filter(isBoardingRouteStop) ?? [], [data?.stops]);
@@ -134,9 +135,10 @@ export const BusRouteBottomSheet = memo(function BusRouteBottomSheet({
   );
 
   /** 선택 노선과 경유 순번의 도착 차량 두 대이며 응답·선택 조건이 바뀔 때 다시 계산한다. */
+  const currentArrivals = useCurrentBusArrivals(arrivals, dataUpdatedAt);
   const arriving = useMemo(
-    () => selectRouteArrivals(arrivals, routeId, data?.selectedStationSeq ?? stationSeq),
-    [arrivals, routeId, stationSeq, data?.selectedStationSeq],
+    () => selectRouteArrivals(currentArrivals, routeId, data?.selectedStationSeq ?? stationSeq),
+    [currentArrivals, routeId, stationSeq, data?.selectedStationSeq],
   );
 
   /** 차량 응답이 바뀔 때만 재계산하는 경유 순번별 차량 색인이다. */
@@ -182,7 +184,7 @@ export const BusRouteBottomSheet = memo(function BusRouteBottomSheet({
               arriving[0].etaSource,
               arriving[0],
             )
-          : '도착정보 확인 중'}
+          : fetchingArrivals ? '도착정보 조회 중' : '도착 정보 없음'}
       </Text>
     ) : isPending ? (
       <ListSkeleton variant="route" rows={5} inset={16} />

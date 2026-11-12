@@ -1,8 +1,10 @@
 import { router } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, Modal, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Modal, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useRecoveryStore } from '@/shared/model/recovery-store';
+import Animated from 'react-native-reanimated';
+import { fadeIn, fadeOut, MotionSpinner } from './motion';
 import { appColors as colors } from './theme';
 
 /** 실제 복구 중에만 조작을 막고, 실패하면 조작 가능한 토스트로 전환한다. */
@@ -43,23 +45,22 @@ export function RecoveryOverlay() {
     return () => { runId.current = id + 1; if (timer) clearTimeout(timer); };
   }, [notice]);
 
-  if (!notice) return null;
-  const content = (
+  const content = notice ? (
       <View style={[styles.overlay, { paddingTop: insets.top + 12 }]} pointerEvents="box-none">
         {busy && <View style={styles.scrim} />}
-        <View style={styles.toast} accessibilityLiveRegion="polite">
-          {busy && <ActivityIndicator color={colors.accent} />}
+        <Animated.View entering={fadeIn} exiting={fadeOut} style={styles.toast} accessibilityLiveRegion="polite">
+          {busy && <MotionSpinner color={colors.accent} />}
           <Text style={styles.text}>
             {busy ? '연결을 다시 확인하고 있어요' : `오류 · ${notice.message}${failed ? '\n문제가 계속되면 문의해주세요.' : ''}`}
           </Text>
           {!busy && notice.retry && <Pressable accessibilityRole="button" onPress={() => retry.current()}><Text style={styles.action}>{notice.action ?? '재시도'}</Text></Pressable>}
           {!busy && <Pressable accessibilityRole="button" onPress={() => router.push('/(tabs)/feedback')}><Text style={styles.action}>문의하기</Text></Pressable>}
-        </View>
+        </Animated.View>
       </View>
-  );
-  return busy ? (
+  ) : null;
+  return notice && busy ? (
     <Modal transparent visible animationType="fade" onRequestClose={() => {}}>{content}</Modal>
-  ) : content;
+  ) : <View pointerEvents="box-none" style={StyleSheet.absoluteFill}>{content}</View>;
 }
 
 const styles = StyleSheet.create({

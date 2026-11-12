@@ -5,10 +5,9 @@ import { notificationPause } from '../model/notification-actions';
 import { useCallback, useEffect, useState } from 'react';
 import { useFocusEffect } from 'expo-router';
 import { AppState, Text, View } from 'react-native';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { setNotificationPause } from '../api/alerts';
-import { BUS_ARRIVALS_REFRESH_INTERVAL } from '@/features/bus-stop/model/use-bus-arrivals';
-import { getBusArrivals } from '@/features/bus-stop/api/get-bus-arrivals';
+import { useBusArrivals } from '@/features/bus-stop/model/use-bus-arrivals';
 import { formatEta, groupBusArrivals } from '@/features/bus-stop/model/bus-arrival';
 import { useSubwayArrivals } from '@/features/subway/model/use-subway-arrivals';
 import { useSubwayStation, useSubwayTimetable } from '@/features/subway/model/use-subway-station';
@@ -48,15 +47,7 @@ function ActiveAlertArrivalTimes(props: Props & { active: boolean }) {
     }, []),
   );
   const stationId = props.transport === 'bus' ? props.alert.stationId : '';
-  const bus = useQuery({
-    queryKey: ['bus-stops', stationId, 'arrivals'],
-    queryFn: ({ signal }) => getBusArrivals({ stationId, signal }),
-    enabled: props.active && focused && Boolean(stationId),
-    staleTime: 5_000,
-    retry: false,
-    refetchInterval: BUS_ARRIVALS_REFRESH_INTERVAL,
-    refetchIntervalInBackground: false,
-  });
+  const bus = useBusArrivals(stationId, props.active && focused);
   const subway = useSubwayArrivals(
     props.transport === 'subway' ? props.alert.stationName : '',
     props.transport === 'subway' ? props.alert : undefined,
@@ -233,13 +224,14 @@ function ActiveAlertArrivalTimes(props: Props & { active: boolean }) {
             style={{
               flex: 1,
               textAlign: 'right',
-              color: times[index] ? '#E5484D' : colors.secondaryText,
+              color: times[index] && /분|초|곧 도착/.test(times[index]) && !/시간표|예상|배차|재조회/.test(times[index])
+                ? '#E5484D' : colors.secondaryText,
               fontSize: 14,
               fontWeight: '600',
               fontVariant: ['tabular-nums'],
             }}
           >
-            {times[index] ?? (!props.active ? '꺼짐' : query.isPending ? '조회 중' : '확인 중')}
+            {times[index] ?? (!props.active ? '꺼짐' : index ? '—' : query.isFetching ? '조회 중' : query.isError ? '갱신 지연' : '도착 정보 없음')}
           </Text>
         </View>
       ))}

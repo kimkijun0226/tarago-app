@@ -1,3 +1,5 @@
+import { waitForForegroundRefresh } from '@/shared/api/foreground-refresh';
+import { MotionModal } from '@/shared/ui/motion';
 import { ListSkeleton } from '@/shared/ui/loading-skeleton';
 import { useEffect, useRef, useState } from 'react';
 import {
@@ -47,10 +49,10 @@ export function WidgetsScreen() {
     setRefreshing(true);
     refreshHeight.set(44);
     try {
-      await client.refetchQueries({ type: 'active', predicate: ({ queryKey: key }) =>
+      await waitForForegroundRefresh(client.refetchQueries({ type: 'active', predicate: ({ queryKey: key }) =>
         (key[0] === 'bus-stops' && key[2] === 'arrivals') ||
         (key[0] === 'subway' && (key[2] === 'arrivals' || key[2] === 'alert-arrivals')),
-      }, { cancelRefetch: false });
+      }, { cancelRefetch: false }));
     } finally {
       await new Promise<void>((resolve) => setTimeout(resolve, Math.max(0, 1000 - (Date.now() - startedAt))));
       await new Promise<void>((resolve) => setTimeout(resolve, 100));
@@ -326,10 +328,8 @@ export function WidgetsScreen() {
           )}
         </View>
       </Modal>
-      <Modal
-        transparent
+      <MotionModal
         visible={editing !== null}
-        animationType="fade"
         onRequestClose={() => {
           if (!busy) setEditing(null);
         }}
@@ -382,7 +382,7 @@ export function WidgetsScreen() {
             </View>
           </View>
         </KeyboardAvoidingView>
-      </Modal>
+      </MotionModal>
     </SafeAreaView>
   );
 }
@@ -488,7 +488,6 @@ const s = StyleSheet.create({
   },
   scrim: {
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.35)',
     justifyContent: 'center',
     paddingHorizontal: 24,
   },

@@ -1,3 +1,4 @@
+import { MotionCheck } from '@/shared/ui/motion';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { subwayDestinationKey, type subwayAlertOptions } from '../model/subway-direction';
 import { alertColors as c } from '@/features/bus-alert/ui/alert-design';
@@ -98,6 +99,7 @@ export function SubwayDestinationPicker({
             style={[s.row, all && s.selectedRow]}
           >
             <Text style={[s.label, all && s.activeText]}>상관없음 · 전체</Text>
+            <MotionCheck checked={all} color={c.accent} />
           </Pressable>
           {trains.map((option) => {
             const checked =
@@ -128,6 +130,7 @@ export function SubwayDestinationPicker({
                 }}
               >
                 <Text style={[s.label, checked && s.activeText]}>{option.title}</Text>
+                <MotionCheck checked={checked} color={c.accent} />
               </Pressable>
             );
           })}

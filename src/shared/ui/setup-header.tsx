@@ -1,3 +1,5 @@
+import Animated from 'react-native-reanimated';
+import { fadeIn } from './motion';
 import type { ReactNode } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import { AppHeader } from './app-header';
@@ -30,7 +32,7 @@ export function SetupHeader({
         disabled={disabled}
         right={right}
       />
-      <View style={s.steps} accessibilityLabel={`${current + 1} / 3 단계, ${labels[current]}`}>
+      <Animated.View entering={fadeIn} style={s.steps} accessibilityLabel={`${current + 1} / 3 단계, ${labels[current]}`}>
         {labels.map((label, index) => (
           <View key={label} style={s.step}>
             <View style={[s.number, index <= current && s.activeNumber]}>
@@ -42,8 +44,8 @@ export function SetupHeader({
             {index < 2 && <View style={s.connector} />}
           </View>
         ))}
-      </View>
-      <Text
+      </Animated.View>
+      <Animated.Text entering={fadeIn.delay(60)}
         accessibilityRole="header"
         numberOfLines={1}
         adjustsFontSizeToFit
@@ -51,7 +53,7 @@ export function SetupHeader({
         style={s.title}
       >
         {title}
-      </Text>
+      </Animated.Text>
     </View>
   );
 }

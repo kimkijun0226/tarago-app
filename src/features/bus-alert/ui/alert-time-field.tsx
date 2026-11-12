@@ -1,6 +1,7 @@
+import { MotionModal } from '@/shared/ui/motion';
 import { DateTimePicker } from '@expo/ui/community/datetime-picker';
 import { useState } from 'react';
-import { Modal, Platform, Pressable, Text, View } from 'react-native';
+import { Platform, Pressable, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { AlertIconButton } from './alert-components';
 import { alertColors as colors } from './alert-design';
@@ -92,10 +93,8 @@ export function AlertTimeRange({
         ))}
       </View>
       {Platform.OS === 'ios' ? (
-        <Modal
+        <MotionModal kind="sheet"
           visible={active !== null && !disabled}
-          transparent
-          animationType="slide"
           onRequestClose={close}
         >
           <View style={{ flex: 1, justifyContent: 'flex-end' }}>
@@ -106,7 +105,6 @@ export function AlertTimeRange({
                 left: 0,
                 right: 0,
                 bottom: 0,
-                backgroundColor: 'rgba(0,0,0,0.2)',
               }}
               accessibilityRole="button"
               accessibilityLabel="시간 선택 닫기"
@@ -141,7 +139,7 @@ export function AlertTimeRange({
               {picker}
             </View>
           </View>
-        </Modal>
+        </MotionModal>
       ) : (
         picker
       )}
