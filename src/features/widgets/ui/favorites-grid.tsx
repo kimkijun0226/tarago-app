@@ -89,7 +89,24 @@ export function FavoritesGrid({
       <Animated.View
         style={{ width: diameter, height: diameter }}
       >
-        {item.target ? (
+        {item.target && !editing ? (
+          <Pressable
+            disabled={disabled}
+            accessibilityRole="button"
+            accessibilityLabel={`${item.target.title} ${item.target.stationName} 상세 보기`}
+            accessibilityHint="길게 누르면 즐겨찾기를 수정할 수 있어요"
+            onPress={() => {
+              if (item.target && Date.now() > suppressTapUntil.current) onOpen(item.target);
+            }}
+            delayLongPress={400}
+            onLongPress={() => {
+              feedback('lift');
+              onEdit();
+            }}
+          >
+            <Arrival item={item.target} diameter={diameter} />
+          </Pressable>
+        ) : item.target ? (
           <View
             onTouchStart={(event) => {
               event.stopPropagation();
@@ -164,7 +181,7 @@ export function FavoritesGrid({
         )}
       </Animated.View>
     ),
-    [diameter, disabled, editing, onOpen, onRemove, onAdd, onCancelEdit, heldId, holdScale, resetHold],
+    [diameter, disabled, editing, onOpen, onRemove, onAdd, onCancelEdit, onEdit, heldId, holdScale, resetHold],
   );
   return (
     <View style={s.grid} onLayout={(event) => setWidth(event.nativeEvent.layout.width)}>
@@ -177,8 +194,7 @@ export function FavoritesGrid({
         columnGap={columnGap}
         strategy="insert"
         scrollableRef={scrollableRef}
-        sortEnabled={!disabled}
-        dragActivationDelay={editing ? 0 : 400}
+        sortEnabled={editing && !disabled}
         enableActiveItemSnap={false}
         activationAnimationDuration={100}
         dropAnimationDuration={160}

@@ -1,6 +1,7 @@
 import { ListSkeleton } from '@/shared/ui/loading-skeleton';
 import { useEffect, useRef, useState } from 'react';
 import {
+  ActivityIndicator,
   Alert,
   KeyboardAvoidingView,
   Modal,
@@ -14,7 +15,15 @@ import {
   TextInput,
   View,
 } from 'react-native';
-import Animated, { LinearTransition, useAnimatedRef } from 'react-native-reanimated';
+import Animated, {
+  Easing,
+  LinearTransition,
+  useAnimatedRef,
+  useAnimatedStyle,
+  useSharedValue,
+  ReduceMotion,
+  withTiming,
+} from 'react-native-reanimated';
 import { SymbolView } from 'expo-symbols';
 import { SafeAreaView } from 'react-native-screens/experimental';
 import { router } from 'expo-router';
@@ -30,14 +39,24 @@ export function WidgetsScreen() {
   const { groups, busy, hydrated, initialize, error, storageError } = useWidgetSelection();
   const client = useQueryClient();
   const [refreshing, setRefreshing] = useState(false);
+  const refreshHeight = useSharedValue(0);
+  const refreshSpace = useAnimatedStyle(() => ({ height: refreshHeight.get() }));
   const refresh = async () => {
+    if (refreshing) return;
+    const startedAt = Date.now();
     setRefreshing(true);
+    refreshHeight.set(44);
     try {
       await client.refetchQueries({ type: 'active', predicate: ({ queryKey: key }) =>
         (key[0] === 'bus-stops' && key[2] === 'arrivals') ||
         (key[0] === 'subway' && (key[2] === 'arrivals' || key[2] === 'alert-arrivals')),
       }, { cancelRefetch: false });
-    } finally { setRefreshing(false); }
+    } finally {
+      await new Promise<void>((resolve) => setTimeout(resolve, Math.max(0, 1000 - (Date.now() - startedAt))));
+      await new Promise<void>((resolve) => setTimeout(resolve, 100));
+      refreshHeight.set(withTiming(0, { duration: 220, easing: Easing.out(Easing.cubic), reduceMotion: ReduceMotion.System }));
+      setRefreshing(false);
+    }
   };
   const scrollRef = useAnimatedRef<ScrollView>();
   const { width: screenWidth, height: screenHeight } = useWindowDimensions();
@@ -129,9 +148,25 @@ export function WidgetsScreen() {
           </Pressable>
         )}
       </View>
+      {/* 기본 컨트롤은 제스처만 감지하고, 이 영역이 로딩 표시와 목록 위치를 유지한다. */}
+      <Animated.View style={[s.refreshSpace, refreshSpace]}>
+        {refreshing && <ActivityIndicator color={c.accent} accessibilityLabel="새로고침 중" />}
+      </Animated.View>
       <Animated.ScrollView
         ref={scrollRef}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => void refresh()} />}
+        style={s.scroll}
+        alwaysBounceVertical
+        bounces
+        scrollEnabled={!refreshing}
+        refreshControl={
+          <RefreshControl
+            refreshing={false}
+            onRefresh={() => void refresh()}
+            tintColor="transparent"
+            colors={['transparent']}
+            progressBackgroundColor="transparent"
+          />
+        }
         contentInsetAdjustmentBehavior="never"
         contentContainerStyle={s.content}
         keyboardShouldPersistTaps="handled"
@@ -352,6 +387,7 @@ export function WidgetsScreen() {
   );
 }
 const s = StyleSheet.create({
+  refreshSpace: { overflow: 'hidden', alignItems: 'center', justifyContent: 'center' },
   pageTitle: {
     width: '100%',
     textAlign: 'center',
@@ -407,7 +443,8 @@ const s = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: c.separator,
   },
-  content: { paddingHorizontal: 16, paddingTop: 16, paddingBottom: 24, gap: 16 },
+  scroll: { flex: 1 },
+  content: { flexGrow: 1, paddingHorizontal: 16, paddingTop: 16, paddingBottom: 24, gap: 16 },
   group: {
     gap: 4,
     paddingHorizontal: 16,

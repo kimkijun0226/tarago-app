@@ -3,11 +3,13 @@ import { TransportSelector } from '@/shared/ui/transport-selector';
 import { AlertKindSelector } from './alert-kind-selector';
 import { BrandLogo } from '@/shared/ui/brand-logo';
 import { AppHeader } from '@/shared/ui/app-header';
+import Animated, { Easing, ReduceMotion, useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated';
 import { SymbolView } from 'expo-symbols';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { router, useFocusEffect } from 'expo-router';
+import { useQueryClient } from '@tanstack/react-query';
 import { useAppStore } from '@/shared/model/app-store';
-import { BackHandler, Image, Pressable, ScrollView, Text, View } from 'react-native';
+import { ActivityIndicator, BackHandler, Image, Pressable, RefreshControl, ScrollView, Text, View } from 'react-native';
 import { SubwayAlertsPanel } from '@/features/subway/ui/subway-alert-panel';
 import {
   useSubwayAlertScreen,
@@ -147,6 +149,37 @@ export function AlertsScreenContent({
     transport === 'bus'
       ? bus.alerts.some((alert) => !alert.monitoringSourceId)
       : (subway.list.data?.length ?? 0) > 0;
+  const client = useQueryClient();
+  const [refreshing, setRefreshing] = useState(false);
+  const refreshHeight = useSharedValue(0);
+  const refreshSpace = useAnimatedStyle(() => ({ height: refreshHeight.get() }));
+  const refresh = async () => {
+    if (refreshing) return;
+    const startedAt = Date.now();
+    setRefreshing(true);
+    refreshHeight.set(44);
+    try {
+      await Promise.all([
+        bus.refetch({ cancelRefetch: false }),
+        subway.list.refetch({ cancelRefetch: false }),
+        client.refetchQueries({
+          type: 'active',
+          predicate: ({ queryKey: key }) =>
+            (key[0] === 'bus-stops' && key[2] === 'arrivals') ||
+            (key[0] === 'subway' && key[2] === 'alert-arrivals'),
+        }, { cancelRefetch: false }),
+      ]);
+    } finally {
+      await new Promise<void>((resolve) => setTimeout(resolve, Math.max(0, 1000 - (Date.now() - startedAt))));
+      await new Promise<void>((resolve) => setTimeout(resolve, 100));
+      refreshHeight.set(withTiming(0, {
+        duration: 220,
+        easing: Easing.out(Easing.cubic),
+        reduceMotion: ReduceMotion.System,
+      }));
+      setRefreshing(false);
+    }
+  };
   const listPending = transport === 'bus' ? bus.isPending : subway.list.isPending;
   const listError = transport === 'bus' ? bus.isError : subway.list.isError;
   if (!adding && !editing)
@@ -183,10 +216,25 @@ export function AlertsScreenContent({
             }
           />
         </View>
+        <Animated.View style={[{ overflow: 'hidden', alignItems: 'center', justifyContent: 'center' }, refreshSpace]}>
+          {refreshing && <ActivityIndicator color={colors.accent} accessibilityLabel="새로고침 중" />}
+        </Animated.View>
         <ScrollView
           style={styles.flex}
+          alwaysBounceVertical
+          bounces
+          scrollEnabled={!refreshing}
+          refreshControl={
+            <RefreshControl
+              refreshing={false}
+              onRefresh={() => void refresh()}
+              tintColor="transparent"
+              colors={['transparent']}
+              progressBackgroundColor="transparent"
+            />
+          }
           contentInsetAdjustmentBehavior="never"
-          contentContainerStyle={styles.content}
+          contentContainerStyle={[styles.content, { flexGrow: 1 }]}
           keyboardShouldPersistTaps="handled"
           keyboardDismissMode="on-drag"
         >
