@@ -1,11 +1,10 @@
 import Constants from 'expo-constants';
 import { Platform } from 'react-native';
 
-/** 개발 중에는 메트로 호스트의 3000번 포트로 연결한다. */
+/** 설정된 API를 우선 사용하고, 개발 주소가 없으면 Metro 호스트의 로컬 서버에 연결한다. */
 function getApiBaseUrl() {
-  if (!__DEV__) {
-    return process.env.EXPO_PUBLIC_API_BASE_URL;
-  }
+  const configured = process.env.EXPO_PUBLIC_API_BASE_URL;
+  if (configured || !__DEV__) return configured;
 
   const hostUri = Constants.expoConfig?.hostUri;
 
