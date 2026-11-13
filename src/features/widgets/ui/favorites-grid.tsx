@@ -256,7 +256,7 @@ function Arrival({ item, diameter }: { item: WidgetTarget; diameter: number }) {
         accessible={false}
       />
       {(
-        <View style={[s.timeCover, { maxWidth: diameter * 0.78, minWidth: Math.min(36, diameter * 0.78) }]}>
+        <View style={s.timeCover}>
           <Text
             style={[s.time, { fontSize: 11 * textScale, lineHeight: 13 * textScale, opacity: showLoading ? 0 : 1 }]}
             accessibilityElementsHidden={showLoading}
@@ -398,12 +398,14 @@ const s = StyleSheet.create({
   timeCover: {
     position: 'absolute',
     top: -5,
-    alignSelf: 'center',
+    left: '11%',
+    right: '11%',
     backgroundColor: 'transparent',
     borderRadius: 7,
     overflow: 'hidden',
   },
   time: {
+    textAlign: 'center',
     color: c.text,
     fontSize: 11,
     lineHeight: 13,

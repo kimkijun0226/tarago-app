@@ -25,6 +25,7 @@ export function useWidgetArrival(item: WidgetTarget) {
   const bus = useBusArrivals(
     item.transport === 'bus' ? item.stationId : '',
     focused && item.transport === 'bus',
+    item.transport === 'bus' ? item.routeId : undefined,
   );
   const subway = useSubwayArrivals(item.transport === 'subway' ? item.stationName : '');
   const station = useSubwayStation(item.transport === 'subway' ? item.stationName : '');

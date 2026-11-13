@@ -49,7 +49,7 @@ function ActiveAlertArrivalTimes(props: Props & { active: boolean }) {
     }, []),
   );
   const stationId = props.transport === 'bus' ? props.alert.stationId : '';
-  const bus = useBusArrivals(stationId, props.active && focused);
+  const bus = useBusArrivals(stationId, props.active && focused, props.transport === 'bus' ? props.alert.routeId : undefined);
   const subway = useSubwayArrivals(
     props.transport === 'subway' ? props.alert.stationName : '',
     props.transport === 'subway' ? props.alert : undefined,

@@ -528,7 +528,7 @@ function BusAlertsPanel({
 
 /** Read the matching route's direction from the existing shared arrivals cache. */
 function SavedBusAlertDirection({ alert }: { alert: BusAlert }) {
-  const { data } = useBusArrivals(alert.stationId, false);
+  const { data } = useBusArrivals(alert.stationId, false, alert.routeId);
   const route = data?.find((arrival) => arrival.routeId === alert.routeId &&
     (alert.stationSeq === undefined || arrival.stationSeq === alert.stationSeq) &&
     (arrival.direction || arrival.nextStopName));
